@@ -1,7 +1,7 @@
 import streamlit as st
 import requests
 import pandas as pd
-from datetime import datetime
+from datetime import datetime, date 
 from supabase import create_client
 import plotly.express as px
 
@@ -50,7 +50,8 @@ with tabs[0]:
     st.header("📬 Register a New User")
     with st.form("register_form"):
         name = st.text_input("Full Name")
-        dob = st.date_input("Date of Birth")
+        #dob = st.date_input("Date of Birth") - Missing value issue 
+        dob = st.date_input("Date of Birth", value=date(1985, 1, 1), min_value=date(1920, 1, 1), max_value=date(2006, 12, 31)) # -- users can only pick realistic birth dates for adults (18+ years old). 
         phone_number = st.text_input("Phone Number")
         email = st.text_input("Email")
         business_name = st.text_input("Business Name")
