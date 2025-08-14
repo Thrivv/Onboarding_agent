@@ -11,6 +11,34 @@ from datetime import datetime
 import os
 import time
 
+def check_documents_in_ocr(ocr_results: dict) -> dict:
+    """
+    Checks OCR results for presence of commercial and eid documents.
+    ocr_results: dict with format {'filename': {'type': 'commercial'/'eid'/'unknown', 'text': 'extracted_text'}}
+    Returns a dict: {'commercial': bool, 'eid': bool, 'missing': list}
+    """
+    has_commercial = False
+    has_eid = False
+    
+    for filename, data in ocr_results.items():
+        doc_type = data.get('type', 'unknown')
+        if doc_type == 'commercial':
+            has_commercial = True
+        elif doc_type == 'eid':
+            has_eid = True
+    
+    missing = []
+    if not has_commercial:
+        missing.append("Commercial Registration Document")
+    if not has_eid:
+        missing.append("Resident Identity Card (EID)")
+    
+    return {
+        "commercial": has_commercial, 
+        "eid": has_eid,
+        "missing": missing
+    }
+
 def process_user_reply(from_email: str, body: str, attachments: list = None):
     # ✅ Step 1: Get the user
     user_response = supabase.table("users").select("*").eq("email", from_email).execute()
@@ -25,48 +53,64 @@ def process_user_reply(from_email: str, body: str, attachments: list = None):
         print(f"[DEBUG] Attachments received: {[a['filename'] for a in attachments]}")
         save_dir = os.path.join("backend", "documents", "id", from_email)
         os.makedirs(save_dir, exist_ok=True)
+        
+        # Filter and save only image files
+        image_files_saved = []
         for a in attachments:
             filename = a["filename"]
             filedata = a["data"]
-            filepath = os.path.join(save_dir, filename)
-            print(f"[DEBUG] Saving attachment: {filepath} (size: {len(filedata)} bytes)")
-            with open(filepath, "wb") as f:
-                f.write(filedata)
-
-        # ✅ Wait for 1.5 minutes before running OCR
+            
+            # Check if file is an image
+            if filename.lower().endswith((".png", ".jpg", ".jpeg", ".webp")):
+                filepath = os.path.join(save_dir, filename)
+                print(f"[DEBUG] Saving image attachment: {filepath} (size: {len(filedata)} bytes)")
+                with open(filepath, "wb") as f:
+                    f.write(filedata)
+                image_files_saved.append(filename)
+            else:
+                print(f"[WARN] Skipping non-image file: {filename}")
+        
+        if not image_files_saved:
+            subject = "No Valid Documents Received"
+            body = "Please attach image files (PNG, JPG, JPEG, WEBP) containing your Commercial Registration Document and Resident Identity Card (EID)."
+            send_email(to_email=from_email, subject=subject, body=body)
+            print(f"[WARN] No image files found in attachments for: {from_email}")
+            return
+        
+        supabase.table("users").update({"onboarding_step": "document_verification"}).eq("email", from_email).execute()
         print("[INFO] Waiting 1.5 minutes before running OCR...")
         time.sleep(90)
 
         try:
-            ocr_output = extract_text_from_user_documents(from_email)
-            print(f"[INFO] OCR completed. Output saved to: {ocr_output}")
+            # Get OCR results as structured data
+            ocr_results = extract_text_from_user_documents(from_email)
+            print(f"[INFO] OCR completed for {len(ocr_results)} documents")
 
-            # ✅ Set onboarding_step to verification_complete
-            supabase.table("users").update({"onboarding_step": "verification_complete"}).eq("email", from_email).execute()
-            print(f"[INFO] Onboarding step set to verification_complete for {from_email}")
-        except Exception as e:
-            print(f"[ERROR] OCR or onboarding_step update failed for {from_email}: {e}")
+            # Check OCR results for required documents
+            doc_status = check_documents_in_ocr(ocr_results)
+            
+            if not doc_status["missing"]:
+                subject = "Documents Received and Verified"
+                body = "Great! Both your Commercial Registration Document and Resident Identity Card (EID) have been successfully received and verified. Your onboarding will proceed to the next step."
+            else:
+                subject = "Missing Required Document(s)"
+                body = f"We have processed your submitted documents, but we still need the following:\n\n"
+                for missing_doc in doc_status["missing"]:
+                    body += f"• {missing_doc}\n"
+                body += f"\nPlease reply to this email with the missing document(s) attached as image files."
 
-    # Check for required attachments
-    required_files = {"commercial.png", "commercial.jpg", "eid.png", "eid.jpg"}
-    attached_files = set(a["filename"].lower() for a in attachments) if attachments else set()
-    has_commercial = any(f in attached_files for f in ["commercial.png", "commercial.jpg"])
-    has_eid = any(f in attached_files for f in ["eid.png", "eid.jpg"])
-
-    if attachments:
-        if has_commercial and has_eid:
-            # Update onboarding_step
-            supabase.table("users").update({"onboarding_step": "document_verification"}).eq("email", from_email).execute()
-        elif not has_commercial or not has_eid:
-            missing = []
-            if not has_commercial:
-                missing.append("commercial.png or commercial.jpg")
-            if not has_eid:
-                missing.append("eid.png or eid.jpg")
-            subject = "Missing Document(s) for Onboarding"
-            body = f"Please attach the following missing document(s): {', '.join(missing)}"
             send_email(to_email=from_email, subject=subject, body=body)
-            print(f"[INFO] Requested missing docs from: {from_email}")
+            print(f"[INFO] Document verification result sent to: {from_email}")
+
+            # If missing documents, don't proceed further
+            if doc_status["missing"]:
+                return
+
+        except Exception as e:
+            print(f"[ERROR] OCR failed for {from_email}: {e}")
+            subject = "Error Processing Your Documents"
+            body = f"We encountered an error while processing your documents. Please ensure your images are clear and readable, then try submitting them again.\n\nError details: {str(e)}"
+            send_email(to_email=from_email, subject=subject, body=body)
             return
 
     # ✅ Step 2: Log user message in conversation
@@ -108,4 +152,3 @@ def process_user_reply(from_email: str, body: str, attachments: list = None):
     }).execute()
 
     print(f"[INFO] Replied to: {from_email}")
-
