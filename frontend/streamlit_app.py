@@ -218,13 +218,31 @@ def get_customer_status():
 
 # --- CHATBOT FUNCTIONS ---
 def chatbot_query(query):
-    """Send query to chatbot API"""
-    success, data = make_api_call("/chatbot/query", method="POST", data={"query": query})
-    if success:
-        return data.get("response", "I apologize, but I'm experiencing technical difficulties.")
-    else:
-        logger.error(f"Chatbot query failed: {data}")
+    """Send query to chatbot API with enhanced timeout handling"""
+    try:
+        # Increased timeout to match backend
+        response = requests.post(
+            f"{FASTAPI_BASE_URL}/chatbot/query",
+            json={"query": query},
+            headers={"Content-Type": "application/json"},
+            timeout=150  # 150 seconds to allow for backend processing
+        )
+        
+        if response.status_code == 200:
+            data = response.json()
+            return data.get("response", "I apologize, but I'm experiencing technical difficulties.")
+        else:
+            logger.error(f"Chatbot API error: {response.status_code} - {response.text}")
+            return "I apologize, but I'm experiencing technical difficulties. Please try again later."
+            
+    except requests.exceptions.Timeout:
+        logger.error("Frontend chatbot request timeout")
+        return "⏰ The request is taking longer than expected. Please try asking a shorter question or try again later."
+    except Exception as e:
+        logger.error(f"Chatbot query failed: {e}")
         return "I apologize, but I'm experiencing technical difficulties. Please try again later."
+
+
 
 # --- EMAIL FUNCTIONS ---
 def get_unread_emails():
