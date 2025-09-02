@@ -21,14 +21,39 @@ def register_user(user: UserRegisterRequest):
         user_dict = user.dict()
         inserted_user = insert_user(user_dict)
 
-        # 1️⃣ Send Welcome Email
-        send_welcome_email(user.email, user.name)
+        # 1️⃣ Build welcome email with registration details
+        details = f"""
+        Welcome to Thrivv, {user.name}!
+
+        Here are your registration details:
+        - Name: {user.name}
+        - Date of Birth: {user.dob}
+        - Phone Number: {user.phone_number}
+        - Email: {user.email}
+        - Business Name: {user.business_name}
+        - Account Type: {user.account_type}
+        - Ownership Type: {user.ownership_type}
+        - Partnership Details: {user.partnership_details}
+        - Expected Annual Turnover: {user.annual_turnover}
+        - Above 18: {"Yes" if user.is_above_18 else "No"}
+
+        """
+
+        # Ask for documents based on account type
+        if user.account_type == "Savings":
+            details += "\nPlease submit your Emirates ID and Commercial License to continue onboarding."
+        elif user.account_type == "Corporate":
+            details += "\nPlease submit your Emirates ID, Commercial License, and Trade License to continue onboarding."
+        else:
+            details += "\nPlease submit your documents to continue onboarding."
+
+        send_welcome_email(user.email, details)
 
         # 2️⃣ Log Welcome Message to conversations table
         convo = ConversationLog(
             user_email=user.email,
             role="agent",
-            message="Welcome to Thrivv! Please reply with 'Continue' or 'Exit'.",
+            message=details,
             timestamp=datetime.utcnow()
         )
         insert_conversation_log(convo.dict())
@@ -81,8 +106,8 @@ def users_registered_this_week():
         users_this_week = get_users_registered_this_week()
         return {"users_registered_this_week": users_this_week}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e)) 
-    
+        raise HTTPException(status_code=500, detail=str(e))
+
 
 
 
