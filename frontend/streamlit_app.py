@@ -1,15 +1,15 @@
 import streamlit as st
 import requests
 import pandas as pd
-from datetime import datetime, date 
+from datetime import datetime
 from supabase import create_client
 import plotly.express as px
 
 # --- CONFIG ---
-FASTAPI_URL = "http://localhost:8000/register"  # Update if deployed
+FASTAPI_URL = "http://localhost:8000/register" 
 FASTAPI_URLS = "http://localhost:8000"
-SUPABASE_URL = "https://lerdhpeicsxnxlkzkfmq.supabase.co"
-SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxlcmRocGVpY3N4bnhsa3prZm1xIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTM5Nzc0OTQsImV4cCI6MjA2OTU1MzQ5NH0.KX11c-T-Q-o5QO754yet8dlGLEKXv3BlVvaIpb-Q1ig"
+SUPABASE_URL="https://cjqhmjzxcglhvnjjbxcv.supabase.co"
+SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNqcWhtanp4Y2dsaHZuampieGN2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY3OTgwMDEsImV4cCI6MjA3MjM3NDAwMX0.m2eMshGo8_mrKpssVmmot0Q_SskDjQcLRKYHHZUqtY0"
 
 
 supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
@@ -50,16 +50,43 @@ with tabs[0]:
     st.header("📬 Register a New User")
     with st.form("register_form"):
         name = st.text_input("Full Name")
-        #dob = st.date_input("Date of Birth") - Missing value issue 
-        dob = st.date_input("Date of Birth", value=date(1985, 1, 1), min_value=date(1920, 1, 1), max_value=date(2006, 12, 31)) # -- users can only pick realistic birth dates for adults (18+ years old). 
+        dob = st.date_input("Date of Birth")
         phone_number = st.text_input("Phone Number")
         email = st.text_input("Email")
         business_name = st.text_input("Business Name")
+
+        # Q1: Account type
+        account_type = st.radio(
+            "What kind of account do you want to open?",
+            ["Savings", "Corporate"]
+        )
+
+        # Q2: Ownership type
+        ownership_type = st.radio(
+            "Do you want to open a single owner or partnership account?",
+            ["Single Owner", "Partnership"]
+        )
+
+        # Q3: Partnership details (always visible)
+        partnership_details = st.radio(
+            "Are all shareholders in your business individual persons or not?",
+            [
+                "All shareholders are individual persons",
+                "One or more shareholders are companies or other legal entities"
+            ]
+        )
+
+        # Q4: Expected annual turnover
+        annual_turnover = st.text_input("What is your expected annual turnover?")
+
+        # Q5: Age confirmation
+        is_above_18 = st.checkbox("Do you confirm you are above 18 years of age?")
+
         submitted = st.form_submit_button("Register")
 
         if submitted:
-            if not all([name, phone_number, email, business_name]):
-                st.warning("⚠️ Please fill all required fields.")
+            if not all([name, phone_number, email, business_name, account_type, ownership_type, annual_turnover]) or (ownership_type == "Partnership" and not partnership_details) or not is_above_18:
+                st.warning("⚠️ Please fill all required fields and confirm age.")
             else:
                 data = {
                     "name": name,
@@ -67,6 +94,11 @@ with tabs[0]:
                     "phone_number": phone_number,
                     "email": email,
                     "business_name": business_name,
+                    "account_type": account_type,
+                    "ownership_type": ownership_type,
+                    "partnership_details": partnership_details if ownership_type == "Partnership" else None,
+                    "annual_turnover": annual_turnover,
+                    "is_above_18": is_above_18,
                 }
                 try:
                     response = requests.post(FASTAPI_URL, json=data)
@@ -154,3 +186,4 @@ with tabs[2]:
                 st.dataframe(df, use_container_width=True)
         except Exception as e:
             st.error(f"❌ Error fetching conversations: {e}")
+
