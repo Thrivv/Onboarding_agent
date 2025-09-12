@@ -9,3 +9,8 @@ class UserRegisterRequest(BaseModel):
     phone_number: str
     email: EmailStr
     business_name: str
+    account_type: str | None = None
+    ownership_type: str | None = None
+    partnership_details: str | None = None
+    annual_turnover: str | None = None
+    is_above_18: bool | None = None

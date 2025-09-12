@@ -5,7 +5,7 @@ from chromadb import PersistentClient
 from sentence_transformers import SentenceTransformer
 
 # Path to your local FAQ file
-FAQ_FILE_PATH = "/Users/satvik/Desktop/Onboarding 12 August/onboarding-agent-101/backend/faq.txt"
+FAQ_FILE_PATH = "/Users/satvik/Desktop/Onboarding 12 August/onboarding-agent-101/backend/new_faq.txt"
 
 # ChromaDB setup
 CHROMA_DIR = "chroma_store"
