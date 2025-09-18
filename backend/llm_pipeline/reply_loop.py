@@ -7,7 +7,7 @@ from email_res.email_listener import get_unread_emails
 from llm_pipeline.handle_reply import process_user_reply
 
 
-def run_reply_loop(poll_interval=30):
+def run_reply_loop(poll_interval=10):
     print("[INFO] Starting reply loop...")
     while True:
         try:
