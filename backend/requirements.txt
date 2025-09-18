@@ -9,3 +9,7 @@ chromadb
 sentence_transformers
 openai
 plotly
+PyMuPDF 
+python-docx 
+docx2txt 
+Pillow
