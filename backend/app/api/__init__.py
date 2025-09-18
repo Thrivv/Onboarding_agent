@@ -1,14 +1,8 @@
 # app/api/__init__.py
 
 from fastapi import APIRouter
-from app.api.routes import register, dashboard, chatbot, email_system, settings, users
+from app.api.routes import register
 
 api_router = APIRouter()
+api_router.include_router(register.router, prefix="", tags=["Registration"])
 
-# Include all route modules WITHOUT additional prefixes since they're already defined in the route files
-api_router.include_router(register.router, tags=["Registration"])
-api_router.include_router(dashboard.router, tags=["Dashboard"])
-api_router.include_router(chatbot.router, tags=["Chatbot"])
-api_router.include_router(email_system.router, tags=["Email System"])
-api_router.include_router(settings.router, tags=["Settings"])
-api_router.include_router(users.router, tags=["Users"])
