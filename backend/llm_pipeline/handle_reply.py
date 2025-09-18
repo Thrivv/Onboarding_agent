@@ -523,9 +523,9 @@ def process_user_reply(from_email: str, body: str, attachments: list = None):
                     subject = "Documents Received but Missing Fields"
                     body = (
                         "All three required documents have been received and identified correctly:\n"
-                        "✅ Commercial Registration Document\n"
-                        "✅ Resident Identity Card (EID)\n" 
-                        "✅ Tenancy Contract (Ejari)\n\n"
+                        " Commercial Registration Document\n"
+                        " Resident Identity Card (EID)\n" 
+                        " Tenancy Contract (Ejari)\n\n"
                         "However, some required fields are missing:\n"
                         + "\n".join(missing_fields_msgs)
                         + "\n\nPlease resend the documents ensuring all required fields are visible and readable."
@@ -542,9 +542,9 @@ def process_user_reply(from_email: str, body: str, attachments: list = None):
                         "<p>Dear User,</p>"
                         "<p>All three required documents have been successfully received and verified:</p>"
                         "<ul>"
-                        "<li>✅ Commercial Registration Document</li>"
-                        "<li>✅ Resident Identity Card (EID)</li>"
-                        "<li>✅ Tenancy Contract (Ejari)</li>"
+                        "<li> Commercial Registration Document</li>"
+                        "<li> Resident Identity Card (EID)</li>"
+                        "<li> Tenancy Contract (Ejari)</li>"
                         "</ul>"
                         "<p>Your onboarding will proceed to the next step.</p>"
                         "<p style='margin-top:32px;'>Best regards,<br><strong>Thrivv Onboarding Team</strong></p>"
@@ -664,5 +664,6 @@ def process_user_reply(from_email: str, body: str, attachments: list = None):
         "message": llm_response,
         "timestamp": datetime.utcnow().isoformat()
     }).execute()
+
 
     print(f"[INFO] Replied to: {from_email}")
