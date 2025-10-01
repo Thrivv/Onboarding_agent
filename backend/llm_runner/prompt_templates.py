@@ -29,15 +29,21 @@ def build_onboarding_prompt(
     account_type = registration_data.get('account_type') if registration_data else None
     if onboarding_step == "welcome":
         if account_type == "Savings":
-            instructions = "Please submit your Emirates ID and Commercial License as image files."
+            instructions = "Please submit your Emirates ID and Ejari as image files."
         elif account_type == "Corporate":
-            instructions = "Please submit your Emirates ID, Commercial License, and Trade License as image files."
+            instructions = "Please submit your Commercial License as image files."
         else:
             instructions = "Please submit your documents as image files to continue onboarding."
     elif onboarding_step == "document_verification":
         instructions = (
             "Inform the user that all relevant documents have been received and are being verified. Ask if they have any other queries."
         )
+        
+    elif onboarding_step == "verification_in_progress":
+        instructions = (
+            "Inform the user that some documents have been received and are verified. Ask then to submit the remaining documents."
+        )
+        
     elif onboarding_step == "verification_complete":
         instructions = (
             "Congratulate the user for being onboarded and inform them that account details will be shared within 3-4 business days."
@@ -63,4 +69,3 @@ Relevant background information:
 Please respond in a helpful, conversational tone.
 """
     return prompt.strip()
-
