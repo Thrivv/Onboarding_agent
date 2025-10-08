@@ -1,0 +1,11 @@
+fastapi
+uvicorn
+pydantic
+python-dotenv
+supabase
+pydantic[email]
+streamlit
+chromadb
+sentence_transformers
+openai
+plotly

@@ -1,0 +1,12 @@
+streamlit
+requests
+pandas
+plotly
+supabase
+Pillow
+python-dotenv
+supabase
+requests
+PyMuPDF
+python-docx
+docx2txt
