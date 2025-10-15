@@ -1,0 +1,162 @@
+# # services:
+#   # Frontend Service
+#   frontend:
+#     build: ./frontend
+#     ports:
+#       - "8501:8501"
+#     environment:
+#       - BACKEND_URL=http://backend:8000
+#     depends_on:
+#       - backend
+#     networks:
+#       - onboarding-network
+
+#   # Backend Service
+#   backend:
+#     build: ./backend
+#     ports:
+#       - "8000:8000"
+#     env_file:
+#       - .env
+#     volumes:
+#       - ./backend/documents:/app/documents
+#     networks:
+#       - onboarding-network
+
+#   # Email Reply Loop Service
+#   reply-loop:
+#     build: ./backend
+#     env_file:
+#       - .env
+#     environment:
+#       - PYTHONUNBUFFERED=1
+#     command: ["python", "-u", "llm_pipeline/reply_loop.py"]
+#     volumes:
+#       - ./backend/documents:/app/documents
+#     depends_on:
+#       - backend
+#     networks:
+#       - onboarding-network
+#     restart: unless-stopped
+
+# networks:
+#   onboarding-network:
+#     driver: bridge
+
+
+# services:
+#   # Frontend Service
+#   frontend:
+#     build: ./frontend
+#     ports:
+#       - "3000:3000"  # Changed from 8501:8501
+#     environment:
+#       - BACKEND_URL=http://backend:8000
+#     depends_on:
+#       - backend
+#     networks:
+#       - onboarding-network
+
+#   # Backend Service
+#   backend:
+#     build: ./backend
+#     ports:
+#       - "8000:8000"
+#     env_file:
+#       - .env
+#     volumes:
+#       - ./backend/documents:/app/documents
+#     networks:
+#       - onboarding-network
+
+#   # Email Reply Loop Service
+#   reply-loop:
+#     build: ./backend
+#     env_file:
+#       - .env
+#     environment:
+#       - PYTHONUNBUFFERED=1
+#     command: ["python", "-u", "llm_pipeline/reply_loop.py"]
+#     volumes:
+#       - ./backend/documents:/app/documents
+#     depends_on:
+#       - backend
+#     networks:
+#       - onboarding-network
+#     restart: unless-stopped
+
+# networks:
+#   onboarding-network:
+#     driver: bridge
+
+version: '3.8'
+
+services:
+  # Frontend Service
+  frontend:
+    build: ./frontend
+    ports:
+      - "3000:3000"  # Changed from 3000:3000 to avoid conflict
+    environment:
+      - BACKEND_URL=http://backend:8000
+    depends_on:
+      - backend
+      - database
+    networks:
+      - onboarding-network
+
+  # Backend Service
+  backend:
+    build: ./backend
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    volumes:
+      - ./backend/documents:/app/backend/documents
+    depends_on:
+      - database
+    networks:
+      - onboarding-network
+
+  # Email Reply Loop Service
+  reply-loop:
+    build: ./backend
+    env_file:
+      - .env
+    environment:
+      - PYTHONUNBUFFERED=1
+      - VECTOR_DB_PATH=/app/backend/documents
+    command: ["python", "-u", "llm_pipeline/reply_loop.py"]
+    volumes:
+      - ./backend/documents:/app/backend/documents
+    depends_on:
+      - backend
+      - database
+    networks:
+      - onboarding-network
+    restart: unless-stopped
+
+  # Database Service
+  database:
+    build: ./database
+    ports:
+      - "8002:8002"
+      - "8003:8003"
+    volumes:
+      - ./data/chroma:/data/chroma
+      - ./data/documents:/data/documents
+      - ./data/backups:/data/backups
+    networks:
+      - onboarding-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "health_check.py"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+networks:
+  onboarding-network:
+    driver: bridge
