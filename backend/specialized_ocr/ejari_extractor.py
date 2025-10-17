@@ -205,7 +205,7 @@ Document Text (first 25000 chars):
 Example with DISTINCT building and area (MANDATORY):
 {{
   "english": {{
-    "contract_number": "0120241230004974",
+    "Contract Number": "0120241230004974",
     "registration_date": "30-12-2024",
     "owner_name": "AHMED MOHAMMED ALI",
     "owner_number": "784123456789",

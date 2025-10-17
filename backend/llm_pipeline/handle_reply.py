@@ -701,68 +701,38 @@ def generate_user_summary_pdf(user: dict, user_docs_dir: str, output_path: str):
     pdf.cell(0, 10, " Submitted Documents", ln=True, fill=True)
     pdf.ln(3)
 
-    # Scan user's document directory
-    print(f"[DEBUG-PDF] Scanning directory: {user_docs_dir}")
-    print(f"[DEBUG-PDF] Directory exists: {os.path.exists(user_docs_dir)}")
-    
     if not os.path.exists(user_docs_dir):
         pdf.set_font("Arial", "I", 11)
         pdf.set_text_color(200, 0, 0)
         pdf.cell(0, 8, f"No documents found at: {user_docs_dir}", ln=True)
-        print(f"[ERROR-PDF] Directory does not exist: {user_docs_dir}")
     else:
-        # List all items in directory
         all_items = os.listdir(user_docs_dir)
-        print(f"[DEBUG-PDF] Found {len(all_items)} items: {all_items}")
-        
         doc_count = 0
         
         for item in all_items:
             item_path = os.path.join(user_docs_dir, item)
-            
-            print(f"[DEBUG-PDF] Checking item: {item}")
-            print(f"[DEBUG-PDF]   Is directory: {os.path.isdir(item_path)}")
-            
-            # Skip files (only process directories)
             if not os.path.isdir(item_path):
-                print(f"[DEBUG-PDF]   Skipping (not a directory)")
                 continue
             
-            # Skip special directories
-            if item in ["member_progress.json"]:
-                print(f"[DEBUG-PDF]   Skipping (special directory)")
-                continue
-            
-            # Check for output.json FIRST before skipping
             output_path_json = os.path.join(item_path, "output.json")
-            print(f"[DEBUG-PDF]   Checking for: {output_path_json}")
-            print(f"[DEBUG-PDF]   File exists: {os.path.exists(output_path_json)}")
-            
             if not os.path.exists(output_path_json):
-                # Only skip if no output.json (likely a member directory)
-                print(f"[DEBUG-PDF]   Skipping (no output.json - likely member directory)")
                 continue
             
             try:
-                print(f"[DEBUG-PDF]   Reading output.json...")
                 with open(output_path_json, "r", encoding="utf-8") as f:
                     analysis = json.load(f)
                 
                 doc_count += 1
                 filename = analysis.get("filename", item)
-                doc_type = analysis.get("document_type", "unknown").upper()
+                doc_type = analysis.get("document_type", "unknown").lower()
                 is_valid = analysis.get("is_valid", False)
                 extracted = analysis.get("extracted_fields", {})
-                
-                print(f"[DEBUG-PDF]   Document #{doc_count}: {filename}")
-                print(f"[DEBUG-PDF]   Type: {doc_type}, Valid: {is_valid}")
-                print(f"[DEBUG-PDF]   Extracted fields: {list(extracted.keys()) if isinstance(extracted, dict) else 'Not a dict'}")
                 
                 # Document Header
                 pdf.set_font("Arial", "B", 13)
                 pdf.set_text_color(40, 70, 150)
                 status_icon = "Right" if is_valid else "Wrong"
-                pdf.cell(0, 8, f"{doc_count}. {filename} ({doc_type}) {status_icon}", ln=True)
+                pdf.cell(0, 8, f"{doc_count}. {filename} ({doc_type.upper()}) {status_icon}", ln=True)
                 
                 pdf.set_font("Arial", "", 10)
                 pdf.set_text_color(0, 0, 0)
@@ -774,46 +744,48 @@ def generate_user_summary_pdf(user: dict, user_docs_dir: str, output_path: str):
                     pdf.set_font("Arial", "", 10)
                     
                     for key, value in extracted.items():
-                        # Handle nested dictionaries (like managers, partners)
-                        if isinstance(value, dict):
-                            pdf.set_font("Arial", "B", 10)
-                            pdf.cell(0, 5, f"  {key}:", ln=True)
-                            pdf.set_font("Arial", "", 9)
-                            for sub_key, sub_value in value.items():
-                                # Ensure text fits and handle encoding
-                                text = f"    • {sub_key}: {str(sub_value)[:100]}"
-                                pdf.multi_cell(0, 5, text.encode('latin-1', 'replace').decode('latin-1'))
+                        # Skip fields with 'arabic' in the key
+                        if "arabic" in key.lower():
+                            continue
                         
-                        # Handle lists (like multiple managers)
+                        # Make keys bold
+                        pdf.set_font("Arial", "B", 10)
+                        pdf.cell(50, 6, f"{key}:", 0)
+                        pdf.set_font("Arial", "", 10)
+                        
+                        # Handle nested dictionaries
+                        if isinstance(value, dict):
+                            for sub_key, sub_value in value.items():
+                                # Skip subfields with Arabic values for commercial or trade documents
+                                if doc_type in ["commercial", "trade"] and isinstance(sub_value, str) and any("\u0600" <= char <= "\u06FF" for char in sub_value):
+                                    continue
+                                pdf.cell(0, 6, f"{sub_key}: {str(sub_value)}", ln=True)
+                        
+                        # Handle lists
                         elif isinstance(value, list):
-                            pdf.set_font("Arial", "B", 10)
-                            pdf.cell(0, 5, f"  {key}:", ln=True)
-                            pdf.set_font("Arial", "", 9)
                             for idx, list_item in enumerate(value, 1):
                                 if isinstance(list_item, dict):
-                                    pdf.cell(0, 5, f"    {idx}.", ln=True)
                                     for sub_key, sub_value in list_item.items():
-                                        text = f"      • {sub_key}: {str(sub_value)[:100]}"
-                                        pdf.multi_cell(0, 5, text.encode('latin-1', 'replace').decode('latin-1'))
+                                        # Skip subfields with Arabic values for commercial or trade documents
+                                        if doc_type in ["commercial", "trade"] and isinstance(sub_value, str) and any("\u0600" <= char <= "\u06FF" for char in sub_value):
+                                            continue
+                                        pdf.cell(0, 6, f"{sub_key}: {str(sub_value)}", ln=True)
                                 else:
-                                    text = f"    • {str(list_item)[:100]}"
-                                    pdf.cell(0, 5, text.encode('latin-1', 'replace').decode('latin-1'), ln=True)
+                                    pdf.cell(0, 6, f"{str(list_item)}", ln=True)
                         
                         # Handle simple values
                         else:
-                            text = f"  • {key}: {str(value)[:100]}"
-                            pdf.multi_cell(0, 5, text.encode('latin-1', 'replace').decode('latin-1'))
+                            # Skip values in Arabic for commercial or trade documents
+                            if doc_type in ["commercial", "trade"] and isinstance(value, str) and any("\u0600" <= char <= "\u06FF" for char in value):
+                                continue
+                            pdf.cell(0, 6, str(value), ln=True)
                 else:
                     pdf.set_font("Arial", "I", 10)
                     pdf.cell(0, 6, "  No extracted data available", ln=True)
                 
                 pdf.ln(5)
                 
-            except json.JSONDecodeError as e:
-                print(f"[ERROR-PDF] Failed to parse JSON in {output_path_json}: {e}")
-                continue
             except Exception as e:
-                print(f"[ERROR-PDF] Failed to process {output_path_json}: {e}")
                 continue
         
         if doc_count == 0:
@@ -829,9 +801,6 @@ def generate_user_summary_pdf(user: dict, user_docs_dir: str, output_path: str):
 
     # Save PDF
     pdf.output(output_path)
-    print(f"[SUCCESS] PDF generated: {output_path}")
-
-
 # ===========================
 # UPDATED send_completion_email FUNCTION
 # ===========================
@@ -1534,3 +1503,4 @@ def process_user_reply(from_email: str, body: str, attachments: list = None):
     }).execute()
     
     print(f"[INFO] Chat response sent to: {from_email}")
+
