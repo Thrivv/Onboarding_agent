@@ -4,7 +4,7 @@
 An AI-powered banking onboarding solution that streamlines document processing and customer verification using the Email interface. 
 ## How the flow works
 
-Simple user flow - 
+Simple user flow - https://app.eraser.io/workspace/FQmvDxD5qShw6AKDi75e?origin=share
 
 
 ## Key Features 🌟
