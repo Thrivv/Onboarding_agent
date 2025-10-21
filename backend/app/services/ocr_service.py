@@ -437,11 +437,13 @@ def process_document(user_email: str, document_id: str, file_path: str, model_na
                     continue
                 
                 schema_prompt = (
-                    f"You are an information extraction system. Extract the following fields from the Emirates ID document:\n"
-                    f"{json.dumps(list(REQUIRED_FIELDS_EID.keys()), indent=2)}\n"
-                    "Return ONLY a valid JSON object with keys as field names and values as extracted values. Do not include any explanation or extra text.\n"
-                    f"Document text:\n{raw_text}"
-                )
+                "You are an information extraction system. Extract the following fields from the Emirates ID document "
+                "and return them in valid JSON format with double-quoted keys:\n"
+                f"{json.dumps(list(REQUIRED_FIELDS_EID.keys()), indent=2)}\n"
+                "IMPORTANT: Return ONLY a valid JSON object with double-quoted keys and proper JSON formatting.\n"
+                "Example format: {\"Document Type\": \"value\", \"ID Number\": \"value\"}\n"
+                f"Document text:\n{raw_text}"
+            )
                 
                 llm_extracted = {}
                 try:
@@ -449,11 +451,14 @@ def process_document(user_email: str, document_id: str, file_path: str, model_na
                     json_start = llm_response.find('{')
                     json_end = llm_response.rfind('}') + 1
                     llm_json_str = llm_response[json_start:json_end]
+                    # Clean up JSON string
+                    llm_json_str = llm_json_str.replace("'", '"')  # Replace single quotes with double quotes
+                    llm_json_str = re.sub(r'(\w+):', r'"\1":', llm_json_str)  # Quote unquoted keys
                     llm_extracted = json.loads(llm_json_str)
                 except Exception as e:
                     print(f"[ERROR] LLM extraction failed: {e}")
                     llm_extracted = extract_eid_fields(raw_text)
-                
+                                
                 validation = validate_eid_fields(llm_extracted)
                 
                 analysis = {
