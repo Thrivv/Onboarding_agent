@@ -3,7 +3,7 @@ from llm_runner.prompt_templates import build_onboarding_prompt
 from llm_runner.run_model import call_local_llm
 from app.services.supabase_client import supabase
 from app.services.email_sender import send_email
-from app.services.ocr_service import process_document, format_document_name
+from app.services.ocr_service import process_document, format_document_name, run_ocr
 
 from datetime import datetime
 import os
@@ -11,15 +11,15 @@ import time
 import json
 from fpdf import FPDF
 import json
-
+import re
 
 
 LLAMA_MODEL_NAME = "meta-llama/llama-3.2-11b-vision-instruct"
 QWEN_MODEL_NAME = "qwen/qwen-2.5-vl-7b-instruct"
 
-# ===========================
-# DOCUMENT REQUIREMENTS LOGIC
-# ===========================
+    # ===========================
+    # DOCUMENT REQUIREMENTS LOGIC
+    # ===========================
 
 def get_required_documents(account_type: str, ownership_type: str = None) -> dict:
     """
@@ -319,6 +319,50 @@ def save_member_progress(user_email: str, members: list, current_index: int):
 # DOCUMENT PROCESSING
 # ===========================
 
+def generate_reasoning_for_wrong_document(raw_text: str, doc_type: str) -> str:
+    """
+    Generate reasoning for why the document is wrong using call_local_llm.
+    """
+    try:
+        prompt = f"""
+        You are an AI assistant. The following raw text was extracted from a document of type '{doc_type}'.
+        The document was marked as invalid. Please summarize the extracted text and provide a detailed reason
+        why the document is invalid. Ensure the response is clear and user-friendly.
+
+        Raw Text:
+        {raw_text}
+        """
+        reasoning = call_local_llm(prompt)
+        return reasoning
+    except Exception as e:
+        print(f"[ERROR] Failed to generate reasoning for wrong document: {e}")
+        return "Unable to generate reasoning due to an error."
+
+
+def send_reasoning_email(to_email: str, filename: str, doc_type: str, reasoning: str):
+    """
+    Send an email with the reasoning for why the document is invalid.
+    """
+    subject = f"Reasoning for Invalid Document: {filename}"
+    body_html = f"""
+    <html><body style='font-family:Arial,sans-serif;color:#333;'>
+        <div style='max-width:600px;margin:auto;padding:24px;background:#fff;border-radius:10px;box-shadow:0 2px 8px #eee;'>
+            <h2 style='color:#f44336;'>❌ Document Invalid: {filename}</h2>
+            <p>Dear User,</p>
+            <p>We analyzed your submitted document of type <strong>{doc_type.upper()}</strong> and found it to be invalid. Below is the reasoning:</p>
+            <div style='background:#f8f9fa;padding:15px;border-radius:5px;margin:15px 0;'>
+                <p style='margin:0;'><strong>Reasoning:</strong></p>
+                <p>{reasoning}</p>
+            </div>
+            <p>Please review the reasoning and submit the correct document.</p>
+            <p style='margin-top:32px;'>Best regards,<br><strong>Thrivv Onboarding Team</strong></p>
+        </div>
+    </body></html>
+    """
+    send_email(to_email=to_email, subject=subject, body=body_html, html=True)
+    print(f"[INFO] Sent reasoning email for invalid document: {filename} to {to_email}")
+
+
 def process_user_documents(from_email: str, attachments: list, is_member: bool = False, member_name: str = None):
     """Process user/member documents with specialized extractors"""
     
@@ -344,12 +388,6 @@ def process_user_documents(from_email: str, attachments: list, is_member: bool =
         "invalid": [],
         "wrong_type": []
     }
-
-    # --- Fetch user info for name validation (EID only) ---
-    user_response = supabase.table("users").select("name", "dob").eq("email", from_email).execute()
-    user_info = user_response.data[0] if user_response.data else {}
-    user_name = user_info.get("name", "").strip().lower()
-    user_dob = user_info.get("dob", "").strip()
 
     for attachment in attachments:
         filename = attachment["filename"]
@@ -378,6 +416,81 @@ def process_user_documents(from_email: str, attachments: list, is_member: bool =
 
             doc_type = result.get("document_type", "unknown")
             is_valid = result.get("is_valid", False)
+            raw_text = result.get("raw_text", "")
+
+            if doc_type == "unknown":
+                print("[WARN] Unknown document type - extracting text for reasoning")
+                
+                # EXTRACT TEXT FIRST before marking as unknown
+                try:
+                    if ext == '.pdf':
+                        import fitz
+                        doc = fitz.open(filepath)
+                        raw_text = ""
+                        for i in range(min(5, doc.page_count)):
+                            page = doc.load_page(i)
+                            raw_text += page.get_text()
+                        doc.close()
+                        print(f"[INFO] Extracted {len(raw_text)} characters from PDF")
+                    elif ext in ['.png', '.jpg', '.jpeg', '.webp']:
+                        # Use OCR for images
+                        raw_text = run_ocr(filepath, model)
+                        print(f"[INFO] OCR extracted {len(raw_text)} characters from image")
+                    elif ext in ['.docx', '.doc']:
+                        with open(filepath, 'rb') as f:
+                            doc_bytes = f.read()
+                        extractor = EjariExtractor()
+                        raw_text = extractor.extract_text_from_docx(doc_bytes)
+                        print(f"[INFO] Extracted {len(raw_text)} characters from DOCX")
+                    else:
+                        raw_text = "[UNSUPPORTED FILE FORMAT]"
+                        print(f"[WARN] Unsupported file format: {ext}")
+                        
+                except Exception as e:
+                    print(f"[ERROR] Failed to extract text from unknown document: {e}")
+                    raw_text = "[TEXT EXTRACTION FAILED]"
+
+                # Generate reasoning for the invalid document
+                reasoning = generate_reasoning_for_wrong_document(raw_text, doc_type)
+
+                # Send reasoning email
+                send_reasoning_email(
+                    to_email=from_email,
+                    filename=filename,
+                    doc_type=doc_type,
+                    reasoning=reasoning
+                )
+
+                # Add to invalid results with extracted text
+                processed_results["invalid"].append({
+                    "filename": filename,
+                    "type": "unknown",
+                    "issues": ["Unknown document type"],
+                    "raw_text": raw_text,
+                    "reasoning": reasoning
+                })
+                continue
+
+            if not is_valid:
+                # Generate reasoning for the invalid document
+                reasoning = generate_reasoning_for_wrong_document(raw_text, doc_type)
+
+                # Send reasoning email
+                send_reasoning_email(
+                    to_email=from_email,
+                    filename=filename,
+                    doc_type=doc_type,
+                    reasoning=reasoning
+                )
+
+                # Add to invalid results
+                processed_results["invalid"].append({
+                    "filename": filename,
+                    "type": doc_type,
+                    "issues": result.get("validation", {}).get("missing_fields", []),
+                    "reasoning": reasoning
+                })
+                continue
 
             # --- Name validation ONLY for EID ---
             extracted = result.get("extracted_fields", {})
@@ -495,74 +608,117 @@ def process_user_documents(from_email: str, attachments: list, is_member: bool =
 # ===========================
 
 def send_document_status_email(to_email: str, results: dict, is_member: bool = False, member_name: str = None):
-    """Send email about document processing results with a single confirm link and per-document resubmit links"""
+    """
+    Send email about document processing results with a single confirm link and per-document resubmit links.
+    COMBINES NEWLY PROCESSED DOCUMENTS + ALL EXISTING VALIDATED DOCUMENTS FROM DISK.
+    """
     try:
         from urllib.parse import quote
         API_BASE = os.getenv("API_BASE_URL", "http://localhost:8000")
 
-        files_html = ""
-        entries = []
+        # ========================================
+        # STEP 1: COLLECT NEWLY PROCESSED DOCUMENTS FROM results PARAMETER
+        # ========================================
+        newly_processed = []
         if isinstance(results, dict):
-            for key in ("success", "failed", "invalid", "wrong_type"):
-                entries.extend(results.get(key, []))
-        elif isinstance(results, list):
-            entries = results
+            # Only take SUCCESSFUL documents from current submission
+            for item in results.get("success", []):
+                filename = item.get("filename", "Unknown")
+                doc_type = item.get("type", "unknown")
+                result_data = item.get("result", {})
+                extracted = result_data.get("extracted_fields", {})
 
-        for item in entries:
-            filename = item.get("filename") or item.get("name") or "Unknown"
+                newly_processed.append({
+                    "filename": filename,
+                    "document_type": doc_type,
+                    "type": doc_type,
+                    "result": result_data,
+                    "extracted_fields": extracted
+                })
+
+                print(f"[DEBUG] Added newly processed: {filename} ({doc_type})")
+
+        print(f"[DEBUG] Total newly processed documents: {len(newly_processed)}")
+
+        # ========================================
+        # STEP 2: READ ALL EXISTING VALIDATED DOCUMENTS FROM DISK
+        # ========================================
+        if is_member and member_name:
+            user_docs_dir = os.path.join("backend", "documents", "id", to_email, member_name)
+        else:
+            user_docs_dir = os.path.join("backend", "documents", "id", to_email)
+
+        existing_validated_docs = []
+        newly_processed_filenames = {doc["filename"] for doc in newly_processed}
+
+        if os.path.exists(user_docs_dir):
+            print(f"[DEBUG] Reading existing documents from: {user_docs_dir}")
+
+            for item in os.listdir(user_docs_dir):
+                item_path = os.path.join(user_docs_dir, item)
+
+                # Skip files and member_progress.json
+                if not os.path.isdir(item_path) or item == "member_progress.json":
+                    continue
+
+                output_path = os.path.join(item_path, "output.json")
+
+                if os.path.exists(output_path):
+                    try:
+                        with open(output_path, "r", encoding="utf-8") as f:
+                            analysis = json.load(f)
+
+                        doc_type = analysis.get("document_type", "unknown")
+                        is_valid = analysis.get("is_valid", False)
+                        filename = analysis.get("filename", item)
+
+                        # Include only VALID documents that are not in the newly processed list
+                        if is_valid and filename not in newly_processed_filenames:
+                            existing_validated_docs.append({
+                                "filename": filename,
+                                "document_type": doc_type,
+                                "type": doc_type,
+                                "result": analysis,
+                                "extracted_fields": analysis.get("extracted_fields", {})
+                            })
+                            print(f"[DEBUG] Added existing validated: {filename} ({doc_type})")
+
+                    except Exception as e:
+                        print(f"[ERROR] Failed to read {output_path}: {e}")
+
+        print(f"[INFO] Existing validated documents (excluding newly processed): {len(existing_validated_docs)}")
+
+        # ========================================
+        # STEP 3: COMBINE BOTH LISTS
+        # ========================================
+        all_validated_docs = newly_processed + existing_validated_docs
+
+        print(f"[INFO] Total documents to show in email: {len(all_validated_docs)}")
+        for doc in all_validated_docs:
+            print(f"  - {doc['filename']} ({doc['document_type']})")
+
+        if not all_validated_docs:
+            print(f"[ERROR] No documents to display in email!")
+            return
+
+        # ========================================
+        # STEP 4: BUILD EMAIL HTML FROM ALL VALIDATED DOCS
+        # ========================================
+        files_html = ""
+
+        for item in all_validated_docs:
+            filename = item.get("filename", "Unknown")
             doc_type = item.get("document_type", item.get("type", "unknown")).upper()
-            extracted = {}
-            if "result" in item and isinstance(item["result"], dict):
-                extracted = item["result"].get("extracted_fields", {})
-            else:
-                extracted = item.get("extracted_fields", {})
+            extracted = item.get("extracted_fields", {})
 
             # Format extracted fields in a user-friendly way
             extracted_html = ""
-            if isinstance(extracted, dict):
-                if "english" in extracted:
-                    # For Commercial License and Ejari
-                    eng_data = extracted["english"]
-                    if doc_type == "COMMERCIAL":
-                        fields_to_show = [
-                            ("Company Name", eng_data.get("company_name_english")),
-                            ("License Number", eng_data.get("license_number")),
-                            ("Issue Date", eng_data.get("issue_date")),
-                            ("Expiry Date", eng_data.get("expiry_date")),
-                            ("Legal Type", eng_data.get("legal_type")),
-                            ("Activities", "<br>".join(filter(None, [
-                                eng_data.get("activity_1"),
-                                eng_data.get("activity_2"),
-                                eng_data.get("activity_3"),
-                                eng_data.get("activity_4")
-                            ])))
-                        ]
-                        # Add owner info if present
-                        owner = extracted.get("owner", {})
-                        if owner:
-                            fields_to_show.extend([
-                                ("Owner Name", owner.get("name_english")),
-                                ("Nationality", owner.get("nationality_english")),
-                                ("Share Percentage", owner.get("share_percentage"))
-                            ])
-                    elif doc_type == "EJARI":
-                        fields_to_show = [
-                            ("Contract Number", eng_data.get("contract_number")),
-                            ("Registration Date", eng_data.get("registration_date")),
-                            ("Owner Name", eng_data.get("owner_name")),
-                            ("Owner Number", eng_data.get("owner_number")),
-                            ("Tenant Company",eng_data.get("tenant_company")),
-                            ("Start Date", eng_data.get("start_date")),
-                            ("End Date", eng_data.get("end_date")),
-                            ("Plot Number", eng_data.get("plot_number"))
-                        ]
-                else:
-                    # For EID
-                    fields_to_show = [
-                        (k.replace("_", " ").title(), v) 
-                        for k, v in extracted.items()
-                        if v and k not in ["document_type", "raw_text"]
-                    ]
+            if isinstance(extracted, dict) and extracted:
+                fields_to_show = [
+                    (k.replace("_", " ").title(), v)
+                    for k, v in extracted.items()
+                    if v and k not in ["document_type", "raw_text"]
+                ]
 
                 extracted_html = "".join([
                     f"""<div style='margin-bottom:8px;'>
@@ -582,7 +738,7 @@ def send_document_status_email(to_email: str, results: dict, is_member: bool = F
                         <span style='font-size:13px;color:#666;margin-left:8px;'>({doc_type})</span>
                     </h3>
                     <div style='background:#f5f5f5;padding:12px;border-radius:6px;margin-bottom:12px;'>
-                        {extracted_html}
+                        {extracted_html if extracted_html else '<p style="color:#999;">No extracted data available</p>'}
                     </div>
                     <a href="{resubmit_link}" style='display:inline-block;padding:8px 16px;background:#f44336;color:#fff;border-radius:4px;text-decoration:none;font-size:14px;'>
                         Request Resubmission
@@ -611,11 +767,12 @@ def send_document_status_email(to_email: str, results: dict, is_member: bool = F
         """
 
         send_email(to_email=to_email, subject=subject, body=body_html, html=True)
-        print(f"[INFO] Sent document status email with single confirmation link to {to_email}")
+        print(f"[INFO] Sent document status email with {len(all_validated_docs)} validated documents to {to_email}")
 
     except Exception as e:
         print(f"[ERROR] Failed to send document status email: {e}")
-
+        import traceback
+        traceback.print_exc()
 
 def send_missing_documents_email(to_email: str, missing_docs: list, context: str, invalid_reasons: dict = None):
     """Send email requesting missing documents, with reasons if available"""

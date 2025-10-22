@@ -518,7 +518,7 @@ def get_document_status(email: str):
                             
                             if is_valid:
                                 status = "valid"
-                                summary = f"✅ {doc_type.title()} document verified successfully"
+                                summary = f"{doc_type.title()} document verified successfully"
                             elif doc_type == "unknown":
                                 status = "invalid"
                                 summary = "❌ Document type not recognized"

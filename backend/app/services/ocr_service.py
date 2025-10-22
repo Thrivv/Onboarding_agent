@@ -239,6 +239,7 @@ def process_document(user_email: str, document_id: str, file_path: str, model_na
     Enhanced pipeline with retry loop until validation succeeds
     - Retries extraction up to 3 times if validation fails
     - Uses different models for retries
+    - FIXED: Now extracts text from unknown documents for reasoning
     """
     print(f"[INFO] Processing {file_path} for {user_email} with model {model_name}")
     print(f"[INFO] Is member document: {is_member}")
@@ -296,7 +297,7 @@ def process_document(user_email: str, document_id: str, file_path: str, model_na
                     print(f"[ERROR] PDF extraction failed: {raw_text}")
                     continue
                 
-                # CRITICAL FIX: Handle different return types based on ownership
+                # Handle different return types based on ownership
                 result = extractor.extract_with_ai(raw_text)
                 
                 # Check if it's Single Owner (3 values) or Multiple Owners (4 values)
@@ -314,7 +315,7 @@ def process_document(user_email: str, document_id: str, file_path: str, model_na
                         "extracted_fields": {
                             "english": english_data,
                             "arabic": arabic_data,
-                            "owner": owner  # Single owner information
+                            "owner": owner
                         },
                         "validation": validation_result,
                         "status_message": "✅ VALID: Single Owner Commercial License extracted" if validation_result["is_valid"] else f"❌ INCOMPLETE: {', '.join(validation_result.get('issues', []))}",
@@ -344,7 +345,6 @@ def process_document(user_email: str, document_id: str, file_path: str, model_na
                     }
                 
                 else:
-                    # Unexpected return format
                     print(f"[ERROR] Unexpected return format from extractor: {len(result)} values")
                     continue
 
@@ -472,13 +472,46 @@ def process_document(user_email: str, document_id: str, file_path: str, model_na
                 }
             
             # ====================
-            # UNKNOWN
+            # UNKNOWN - NOW EXTRACTS TEXT FOR REASONING
             # ====================
             else:
+                print("[WARN] Unknown document type - extracting text for reasoning")
+                
+                # EXTRACT TEXT FIRST before marking as unknown
+                try:
+                    ext = os.path.splitext(file_path)[1].lower()
+                    
+                    if ext == '.pdf':
+                        import fitz
+                        doc = fitz.open(file_path)
+                        raw_text = ""
+                        for i in range(min(5, doc.page_count)):
+                            page = doc.load_page(i)
+                            raw_text += page.get_text()
+                        doc.close()
+                        print(f"[INFO] Extracted {len(raw_text)} characters from PDF")
+                    elif ext in ['.png', '.jpg', '.jpeg', '.webp']:
+                        # Use OCR for images
+                        raw_text = run_ocr(file_path, current_model)
+                        print(f"[INFO] OCR extracted {len(raw_text)} characters from image")
+                    elif ext in ['.docx', '.doc']:
+                        with open(file_path, 'rb') as f:
+                            doc_bytes = f.read()
+                        extractor = EjariExtractor()
+                        raw_text = extractor.extract_text_from_docx(doc_bytes)
+                        print(f"[INFO] Extracted {len(raw_text)} characters from DOCX")
+                    else:
+                        raw_text = "[UNSUPPORTED FILE FORMAT]"
+                        print(f"[WARN] Unsupported file format: {ext}")
+                        
+                except Exception as e:
+                    print(f"[ERROR] Failed to extract text from unknown document: {e}")
+                    raw_text = "[TEXT EXTRACTION FAILED]"
+                
                 analysis = {
                     "filename": os.path.basename(file_path),
                     "document_type": "unknown",
-                    "raw_text": "",
+                    "raw_text": raw_text,  # NOW HAS TEXT
                     "extracted_fields": {},
                     "validation": {"is_valid": False, "required_fields": [], "present_fields": [], "missing_fields": []},
                     "status_message": f"❌ WRONG DOCUMENT: {os.path.basename(file_path)} is not a recognized document type",
