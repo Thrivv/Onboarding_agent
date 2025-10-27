@@ -14,10 +14,12 @@ COLLECTION_NAME = "faq"
 client = PersistentClient(path=CHROMA_DIR)
 embedding_model = SentenceTransformer("all-MiniLM-L6-v2")
 
+
 def load_faq_chunks(file_path: str, chunk_size=500) -> list[str]:
     with open(file_path, "r", encoding="utf-8") as f:
         content = f.read()
-    return [content[i:i+chunk_size] for i in range(0, len(content), chunk_size)]
+    return [content[i : i + chunk_size] for i in range(0, len(content), chunk_size)]
+
 
 def embed_and_store_faq():
     chunks = load_faq_chunks(FAQ_FILE_PATH)
@@ -28,14 +30,11 @@ def embed_and_store_faq():
 
     for i, chunk in enumerate(chunks):
         embedding = embedding_model.encode(chunk).tolist()
-        collection.add(
-            documents=[chunk],
-            embeddings=[embedding],
-            ids=[f"chunk_{i}"]
-        )
+        collection.add(documents=[chunk], embeddings=[embedding], ids=[f"chunk_{i}"])
 
     # Removed: client.persist()
     print("[INFO] FAQ embedding complete and saved.")
+
 
 if __name__ == "__main__":
     embed_and_store_faq()

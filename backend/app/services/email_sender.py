@@ -9,6 +9,7 @@ from app.config import SMTP_SERVER, SMTP_PORT, SMTP_USERNAME, SMTP_PASSWORD, FRO
 from email.header import Header
 from email.utils import formataddr
 
+
 def send_welcome_email(to_email: str, details: str):
     subject = "Welcome to Thrivv "
     body = f"""
@@ -31,10 +32,12 @@ def send_welcome_email(to_email: str, details: str):
     send_email(to_email, subject, body, html=True)
 
 
-def send_email(to_email: str, subject: str, body: str, html: bool = False, attachments: list = None):
+def send_email(
+    to_email: str, subject: str, body: str, html: bool = False, attachments: list = None
+):
     """
     Send email with optional attachments
-    
+
     Args:
         to_email: Recipient email address
         subject: Email subject
@@ -50,10 +53,10 @@ def send_email(to_email: str, subject: str, body: str, html: bool = False, attac
         msg.attach(MIMEText(body, "html" if html else "plain", "utf-8"))
     else:
         msg = MIMEText(body, "html" if html else "plain", "utf-8")
-    
+
     # Set headers
     msg["Subject"] = Header(subject, "utf-8")
-    
+
     if "<" in FROM_EMAIL and ">" in FROM_EMAIL:
         name, addr = FROM_EMAIL.split("<")
         name = name.strip()
@@ -61,24 +64,23 @@ def send_email(to_email: str, subject: str, body: str, html: bool = False, attac
         msg["From"] = formataddr((str(Header(name, "utf-8")), addr))
     else:
         msg["From"] = FROM_EMAIL
-    
+
     msg["To"] = to_email
 
     # Add attachments if provided
     if attachments:
         for attachment in attachments:
-            filename = attachment.get('filename', 'attachment')
-            data = attachment.get('data')
-            mime_type = attachment.get('mime_type', 'application/octet-stream')
-            
+            filename = attachment.get("filename", "attachment")
+            data = attachment.get("data")
+            mime_type = attachment.get("mime_type", "application/octet-stream")
+
             if data:
                 # Create attachment part
-                part = MIMEBase(*mime_type.split('/'))
+                part = MIMEBase(*mime_type.split("/"))
                 part.set_payload(data)
                 encoders.encode_base64(part)
                 part.add_header(
-                    'Content-Disposition',
-                    f'attachment; filename="{filename}"'
+                    "Content-Disposition", f'attachment; filename="{filename}"'
                 )
                 msg.attach(part)
                 print(f"[INFO] Attached file: {filename} ({mime_type})")
@@ -89,13 +91,18 @@ def send_email(to_email: str, subject: str, body: str, html: bool = False, attac
             server.starttls()
             server.login(SMTP_USERNAME, SMTP_PASSWORD)
             server.sendmail(msg["From"], [to_email], msg.as_string())
-        print(f"[SUCCESS] Email sent to {to_email}" + (f" with {len(attachments)} attachment(s)" if attachments else ""))
+        print(
+            f"[SUCCESS] Email sent to {to_email}"
+            + (f" with {len(attachments)} attachment(s)" if attachments else "")
+        )
     except Exception as e:
         print(f"[ERROR] Failed to send email to {to_email}: {e}")
         raise
 
 
-def send_wrong_document_email(to_email: str, filename: str, summary: str, required_docs: list):
+def send_wrong_document_email(
+    to_email: str, filename: str, summary: str, required_docs: list
+):
     subject = "Incorrect Document Submitted"
     required_docs_html = "".join([f"<li>{doc}</li>" for doc in required_docs])
     body = f"""
