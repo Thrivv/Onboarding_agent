@@ -1,8 +1,4 @@
-"""
-MOA Extractor - UAE Memorandum of Association Document Processing
-Extracts 34 bilingual fields (English + Arabic) from MOA documents
-With retry logic and enhanced prompts from standalone version
-"""
+# specialized_ocr/moa_extractor.py
 
 import os
 import json
