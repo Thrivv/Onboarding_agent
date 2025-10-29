@@ -5,11 +5,11 @@ from app.models.user import UserRegisterRequest
 from app.services.supabase_client import insert_user, get_user_by_email
 from app.services.email_sender import send_welcome_email
 from app.services.supabase_client import (
-    insert_conversation_log, 
-    get_total_users, 
-    get_verified_users_count, 
-    get_users_registered_today, 
-    get_users_registered_this_week
+    insert_conversation_log,
+    get_total_users,
+    get_verified_users_count,
+    get_users_registered_today,
+    get_users_registered_this_week,
 )
 from app.models.conversation import ConversationLog
 from datetime import datetime
@@ -17,7 +17,9 @@ from datetime import datetime
 router = APIRouter()
 
 
-def get_document_requirements_message(account_type: str, ownership_type: str = None) -> str:
+def get_document_requirements_message(
+    account_type: str, ownership_type: str = None
+) -> str:
     """
     Get document requirements message based on account flow
     """
@@ -30,7 +32,7 @@ def get_document_requirements_message(account_type: str, ownership_type: str = N
 </ul>
 <p>Please reply to this email with both documents attached to continue your onboarding.</p>
 """
-    
+
     elif account_type == "Corporate":
         if ownership_type == "Single Owner":
             return """
@@ -42,7 +44,7 @@ def get_document_requirements_message(account_type: str, ownership_type: str = N
 </ul>
 <p>Please reply to this email with all three documents attached to continue your onboarding.</p>
 """
-        
+
         elif ownership_type in ["Partnership", "@Multiple Owners"]:
             return """
 <strong>📋 Initial Documents Required:</strong>
@@ -56,7 +58,7 @@ def get_document_requirements_message(account_type: str, ownership_type: str = N
     <strong>Note:</strong> The number of EIDs required will depend on the number of owners listed in your Commercial License.
 </p>
 """
-    
+
     return "<p>Please submit the required documents to continue your onboarding.</p>"
 
 
@@ -68,16 +70,21 @@ def register_user(user: UserRegisterRequest):
             raise HTTPException(status_code=409, detail="Email already registered")
 
         user_dict = user.dict()
-        
+
         # Add initial document stage for multiple owners
-        if user.account_type == "Corporate" and user.ownership_type in ["Partnership", "@Multiple Owners"]:
+        if user.account_type == "Corporate" and user.ownership_type in [
+            "Partnership",
+            "@Multiple Owners",
+        ]:
             user_dict["document_stage"] = "identification"
-        
+
         inserted_user = insert_user(user_dict)
 
         # Build welcome email with registration details
-        doc_requirements = get_document_requirements_message(user.account_type, user.ownership_type)
-        
+        doc_requirements = get_document_requirements_message(
+            user.account_type, user.ownership_type
+        )
+
         details = f"""
 <p>Welcome to Thrivv, <strong>{user.name}</strong>!</p>
 
@@ -108,7 +115,7 @@ def register_user(user: UserRegisterRequest):
             user_email=user.email,
             role="agent",
             message=f"Registration completed. Account Type: {user.account_type}. {doc_requirements}",
-            timestamp=datetime.utcnow()
+            timestamp=datetime.utcnow(),
         )
         insert_conversation_log(convo.dict())
 
@@ -127,7 +134,7 @@ def total_users():
         return {"total_users": total_users}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-    
+
 
 @router.get("/get-verified-users-count")
 def verfied_user_count():
@@ -136,7 +143,7 @@ def verfied_user_count():
         return {"verified_users_count": verfied_user_count}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-    
+
 
 @router.get("/get-pending-verification-count")
 def pending_verification_count():

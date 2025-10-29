@@ -14,12 +14,13 @@ IMAP_PORT = int(os.getenv("IMAP_PORT", 993))
 IMAP_USER = os.getenv("IMAP_USER")
 IMAP_PASSWORD = os.getenv("IMAP_PASSWORD")
 
+
 def get_unread_emails() -> List[Dict]:
     mail = imaplib.IMAP4_SSL(IMAP_HOST, IMAP_PORT)
     mail.login(IMAP_USER, IMAP_PASSWORD)
     mail.select("inbox")
 
-    status, messages = mail.search(None, 'UNSEEN')
+    status, messages = mail.search(None, "UNSEEN")
     email_ids = messages[0].split()
 
     emails = []
@@ -40,29 +41,33 @@ def get_unread_emails() -> List[Dict]:
                     for part in msg.walk():
                         content_type = part.get_content_type()
                         content_disposition = str(part.get("Content-Disposition"))
-                        if content_type == "text/plain" and "attachment" not in content_disposition:
+                        if (
+                            content_type == "text/plain"
+                            and "attachment" not in content_disposition
+                        ):
                             body = part.get_payload(decode=True).decode()
                         elif "attachment" in content_disposition:
                             filename = part.get_filename()
                             if filename:
                                 filedata = part.get_payload(decode=True)
-                                attachments.append({
-                                    "filename": filename,
-                                    "data": filedata
-                                })
+                                attachments.append(
+                                    {"filename": filename, "data": filedata}
+                                )
                 else:
                     body = msg.get_payload(decode=True).decode()
 
-                emails.append({
-                    "from": from_email,
-                    "subject": subject,
-                    "body": body.strip(),
-                    "attachments": attachments,
-                    "email_id": eid  # Store email ID for marking as read
-                })
-        
+                emails.append(
+                    {
+                        "from": from_email,
+                        "subject": subject,
+                        "body": body.strip(),
+                        "attachments": attachments,
+                        "email_id": eid,  # Store email ID for marking as read
+                    }
+                )
+
         # Mark email as read after processing
-        mail.store(eid, '+FLAGS', '\\Seen')
+        mail.store(eid, "+FLAGS", "\\Seen")
         print(f"[INFO] Marked email {eid} as read")
 
     mail.logout()

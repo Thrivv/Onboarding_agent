@@ -1,8 +1,4 @@
-"""
-MOA Extractor - UAE Memorandum of Association Document Processing
-Extracts 34 bilingual fields (English + Arabic) from MOA documents
-With retry logic and enhanced prompts from standalone version
-"""
+# specialized_ocr/moa_extractor.py
 
 import os
 import json
@@ -25,27 +21,77 @@ QWEN_MODEL_NAME = "qwen/qwen-2.5-vl-32b-instruct"
 
 # Fields expected for MOA extraction (34 fields)
 ENGLISH_FIELDS = [
-    "document_type", "company_name", "company_type", "date_of_execution",
-    "owner_name", "owner_nationality", "passport_number", "date_of_birth", "owner_residence",
-    "activity_1_data_services", "activity_2_computer_systems", "activity_3_web_design", "activity_4_internet_content",
-    "company_address", "head_office_location", "company_duration", "duration_start_date",
-    "number_of_shares", "value_per_share", "share_type", "payment_status",
-    "manager_name", "manager_nationality", "manager_residence", "manager_address",
-    "appointment_start", "appointment_renewal",
-    "financial_year_start", "financial_year_end", "first_financial_year",
-    "maximum_duration", "balance_sheet_submission", "legal_reserve_percentage", "profit_loss_distribution"
+    "document_type",
+    "company_name",
+    "company_type",
+    "date_of_execution",
+    "owner_name",
+    "owner_nationality",
+    "passport_number",
+    "date_of_birth",
+    "owner_residence",
+    "activity_1_data_services",
+    "activity_2_computer_systems",
+    "activity_3_web_design",
+    "activity_4_internet_content",
+    "company_address",
+    "head_office_location",
+    "company_duration",
+    "duration_start_date",
+    "number_of_shares",
+    "value_per_share",
+    "share_type",
+    "payment_status",
+    "manager_name",
+    "manager_nationality",
+    "manager_residence",
+    "manager_address",
+    "appointment_start",
+    "appointment_renewal",
+    "financial_year_start",
+    "financial_year_end",
+    "first_financial_year",
+    "maximum_duration",
+    "balance_sheet_submission",
+    "legal_reserve_percentage",
+    "profit_loss_distribution",
 ]
 
 ARABIC_FIELDS = [
-    "نوع_الوثيقة", "اسم_الشركة", "نوع_الشركة", "تاريخ_التنفيذ",
-    "اسم_المالك", "جنسية_المالك", "رقم_الجواز", "تاريخ_الميلاد", "إقامة_المالك",
-    "النشاط_1_خدمات_البيانات", "النشاط_2_أنظمة_الحاسب", "النشاط_3_تصميم_المواقع", "النشاط_4_محتوى_الإنترنت",
-    "عنوان_الشركة", "موقع_المركز_الرئيسي", "مدة_الشركة", "تاريخ_بدء_المدة",
-    "عدد_الحصص", "قيمة_كل_حصة", "نوع_الحصص", "حالة_الدفع",
-    "اسم_المدير", "جنسية_المدير", "إقامة_المدير", "عنوان_المدير",
-    "بداية_التعيين", "تجديد_التعيين",
-    "بداية_السنة_المالية", "نهاية_السنة_المالية", "السنة_المالية_الأولى",
-    "المدة_القصوى", "تقديم_الميزانية", "نسبة_الاحتياطي_القانوني", "توزيع_الأرباح_والخسائر"
+    "نوع_الوثيقة",
+    "اسم_الشركة",
+    "نوع_الشركة",
+    "تاريخ_التنفيذ",
+    "اسم_المالك",
+    "جنسية_المالك",
+    "رقم_الجواز",
+    "تاريخ_الميلاد",
+    "إقامة_المالك",
+    "النشاط_1_خدمات_البيانات",
+    "النشاط_2_أنظمة_الحاسب",
+    "النشاط_3_تصميم_المواقع",
+    "النشاط_4_محتوى_الإنترنت",
+    "عنوان_الشركة",
+    "موقع_المركز_الرئيسي",
+    "مدة_الشركة",
+    "تاريخ_بدء_المدة",
+    "عدد_الحصص",
+    "قيمة_كل_حصة",
+    "نوع_الحصص",
+    "حالة_الدفع",
+    "اسم_المدير",
+    "جنسية_المدير",
+    "إقامة_المدير",
+    "عنوان_المدير",
+    "بداية_التعيين",
+    "تجديد_التعيين",
+    "بداية_السنة_المالية",
+    "نهاية_السنة_المالية",
+    "السنة_المالية_الأولى",
+    "المدة_القصوى",
+    "تقديم_الميزانية",
+    "نسبة_الاحتياطي_القانوني",
+    "توزيع_الأرباح_والخسائر",
 ]
 
 EXPECTED_FIELD_COUNT = 34
@@ -53,6 +99,7 @@ EXPECTED_FIELD_COUNT = 34
 
 def retry_with_backoff(max_retries=3, base_delay=10):
     """Retry decorator with exponential backoff for API failures"""
+
     def decorator(func):
         @wraps(func)
         def wrapper(*args, **kwargs):
@@ -61,21 +108,28 @@ def retry_with_backoff(max_retries=3, base_delay=10):
                     return func(*args, **kwargs)
                 except RuntimeError as e:
                     error_msg = str(e)
-                    if any(code in error_msg for code in ['503', '429', '502', '504']) and attempt < max_retries - 1:
-                        delay = base_delay * (2 ** attempt)
-                        print(f"[WARN] MOA API error (attempt {attempt + 1}/{max_retries}): {error_msg}")
+                    if (
+                        any(code in error_msg for code in ["503", "429", "502", "504"])
+                        and attempt < max_retries - 1
+                    ):
+                        delay = base_delay * (2**attempt)
+                        print(
+                            f"[WARN] MOA API error (attempt {attempt + 1}/{max_retries}): {error_msg}"
+                        )
                         print(f"[INFO] Retrying in {delay} seconds...")
                         time.sleep(delay)
                     else:
                         raise
             return None
+
         return wrapper
+
     return decorator
 
 
 class MOAExtractor:
     """MOA extractor with bilingual support and retry logic"""
-    
+
     def __init__(self, api_key: str = None):
         self.api_key = api_key or API_KEY
         self.api_url = API_URL
@@ -84,121 +138,137 @@ class MOAExtractor:
         """Extract text from PDF using PyMuPDF"""
         try:
             doc = fitz.open(stream=pdf_bytes, filetype="pdf")
-            
+
             all_text = ""
             for page_num in range(doc.page_count):
                 page = doc.load_page(page_num)
                 page_text = page.get_text()
                 all_text += f"\n--- Page {page_num + 1} ---\n{page_text}\n"
-            
+
             doc.close()
             return all_text
-            
+
         except Exception as e:
             return f"[PDF EXTRACTION ERROR] {str(e)}"
-    
+
     def extract_text_from_docx(self, docx_bytes: bytes) -> str:
         """Extract text from DOCX by parsing OXML structure"""
         temp_dir = None
         try:
             temp_dir = tempfile.mkdtemp()
             docx_path = os.path.join(temp_dir, "temp_document.docx")
-            
-            with open(docx_path, 'wb') as f:
+
+            with open(docx_path, "wb") as f:
                 f.write(docx_bytes)
-            
-            with zipfile.ZipFile(docx_path, 'r') as zip_ref:
+
+            with zipfile.ZipFile(docx_path, "r") as zip_ref:
                 zip_ref.extractall(temp_dir)
-            
-            document_xml_path = os.path.join(temp_dir, 'word', 'document.xml')
-            
+
+            document_xml_path = os.path.join(temp_dir, "word", "document.xml")
+
             if not os.path.exists(document_xml_path):
-                return "[DOCX EXTRACTION ERROR] document.xml not found in DOCX structure"
-            
+                return (
+                    "[DOCX EXTRACTION ERROR] document.xml not found in DOCX structure"
+                )
+
             tree = ET.parse(document_xml_path)
             root = tree.getroot()
-            
-            ns = {'w': 'http://schemas.openxmlformats.org/wordprocessingml/2006/main'}
-            
+
+            ns = {"w": "http://schemas.openxmlformats.org/wordprocessingml/2006/main"}
+
             text_content = []
-            
-            for text_elem in root.findall('.//w:t', ns):
+
+            for text_elem in root.findall(".//w:t", ns):
                 if text_elem.text:
                     text_content.append(text_elem.text)
-            
+
             # Extract table content
-            for table in root.findall('.//w:tbl', ns):
-                for row in table.findall('.//w:tr', ns):
+            for table in root.findall(".//w:tbl", ns):
+                for row in table.findall(".//w:tr", ns):
                     row_text = []
-                    for cell in row.findall('.//w:tc', ns):
+                    for cell in row.findall(".//w:tc", ns):
                         cell_text = []
-                        for text_elem in cell.findall('.//w:t', ns):
+                        for text_elem in cell.findall(".//w:t", ns):
                             if text_elem.text:
                                 cell_text.append(text_elem.text)
                         if cell_text:
-                            row_text.append(' '.join(cell_text))
+                            row_text.append(" ".join(cell_text))
                     if row_text:
-                        text_content.append(' | '.join(row_text))
-            
-            extracted_text = '\n'.join(text_content)
-            extracted_text = re.sub(r'\s+', ' ', extracted_text)
+                        text_content.append(" | ".join(row_text))
+
+            extracted_text = "\n".join(text_content)
+            extracted_text = re.sub(r"\s+", " ", extracted_text)
             extracted_text = extracted_text.strip()
-            
-            return extracted_text if extracted_text else "[DOCX EXTRACTION ERROR] No text content found"
-            
+
+            return (
+                extracted_text
+                if extracted_text
+                else "[DOCX EXTRACTION ERROR] No text content found"
+            )
+
         except Exception as e:
             return f"[DOCX EXTRACTION ERROR] {str(e)}"
-        
+
         finally:
             if temp_dir and os.path.exists(temp_dir):
                 try:
                     shutil.rmtree(temp_dir)
                 except Exception:
                     pass
-    
+
     @retry_with_backoff(max_retries=3, base_delay=10)
     def call_ai_api(self, prompt: str, model_name: str = None) -> str:
         """Call OpenRouter API with retry logic"""
         if not self.api_key:
             return "API key not configured"
-        
+
         model = model_name or LLAMA_MODEL_NAME
-        
+
         headers = {
             "Authorization": f"Bearer {self.api_key}",
             "Content-Type": "application/json",
         }
-        
+
         data = {
             "model": model,
             "messages": [{"role": "user", "content": prompt}],
             "temperature": 0.1,
             "max_tokens": 4500,
         }
-        
+
         try:
-            response = requests.post(self.api_url, headers=headers, json=data, timeout=120)
-            
+            response = requests.post(
+                self.api_url, headers=headers, json=data, timeout=120
+            )
+
             if response.status_code in [502, 503, 504]:
-                raise RuntimeError(f"MOA API failed: {response.status_code} Server temporarily unavailable")
-            
+                raise RuntimeError(
+                    f"MOA API failed: {response.status_code} Server temporarily unavailable"
+                )
+
             if response.status_code == 429:
-                raise RuntimeError(f"MOA API failed: {response.status_code} Rate limit exceeded")
-            
+                raise RuntimeError(
+                    f"MOA API failed: {response.status_code} Rate limit exceeded"
+                )
+
             response.raise_for_status()
             result = response.json()
             return result["choices"][0]["message"]["content"]
-            
+
         except requests.exceptions.Timeout:
             raise RuntimeError("MOA API failed: Request timeout after 120 seconds")
         except requests.exceptions.RequestException as e:
-            raise RuntimeError(f"MOA API failed: {response.status_code if 'response' in locals() else 'Network error'} {str(e)}")
-        
+            raise RuntimeError(
+                f"MOA API failed: {response.status_code if 'response' in locals() else 'Network error'} {str(e)}"
+            )
+
     @retry_with_backoff(max_retries=3, base_delay=10)
-    def extract_with_ai(self, raw_text: str, model_choice: str = "llama") -> Tuple[Dict, Dict]:
+    def extract_with_ai(
+        self, raw_text: str, model_choice: str = "llama"
+    ) -> Tuple[Dict, Dict]:
         """Extract bilingual MOA fields using AI - ENHANCED PROMPT FROM STANDALONE"""
         model_name = QWEN_MODEL_NAME if model_choice == "qwen" else LLAMA_MODEL_NAME
-        
+
         prompt = f"""You are an expert at extracting information from UAE Memorandum of Association (MOA) documents.
 
 Extract ALL {EXPECTED_FIELD_COUNT} fields in BOTH English and Arabic from this bilingual MOA document.
@@ -337,48 +407,49 @@ Extract only information explicitly present in the text.
 
         if response and not response.startswith("API Error"):
             try:
-                json_match = re.search(r'\{.*\}', response, re.DOTALL)
+                json_match = re.search(r"\{.*\}", response, re.DOTALL)
                 if json_match:
                     json_str = json_match.group()
-                    
+
                     # Clean up JSON
-                    json_str = re.sub(r',\s*}', '}', json_str)
-                    json_str = re.sub(r',\s*]', ']', json_str)
-                    json_str = json_str.replace('\n', ' ')
-                    json_str = re.sub(r'\s+', ' ', json_str)
-                    
+                    json_str = re.sub(r",\s*}", "}", json_str)
+                    json_str = re.sub(r",\s*]", "]", json_str)
+                    json_str = json_str.replace("\n", " ")
+                    json_str = re.sub(r"\s+", " ", json_str)
+
                     try:
                         data = json.loads(json_str)
                     except json.JSONDecodeError as e:
                         print(f"[ERROR] MOA JSON decode error: {e}")
-                        
+
                         # Try fixing common issues
-                        json_str = re.sub(r'//.*?\n', '', json_str)
-                        json_str = re.sub(r'/\*.*?\*/', '', json_str, flags=re.DOTALL)
-                        json_str = re.sub(r'(\w+):', r'"\1":', json_str)
-                        
+                        json_str = re.sub(r"//.*?\n", "", json_str)
+                        json_str = re.sub(r"/\*.*?\*/", "", json_str, flags=re.DOTALL)
+                        json_str = re.sub(r"(\w+):", r'"\1":', json_str)
+
                         try:
                             data = json.loads(json_str)
                         except json.JSONDecodeError as e2:
                             print(f"[ERROR] MOA JSON still invalid: {e2}")
                             return self.get_empty_fields()
-                    
+
                     english_data = data.get("english", {})
                     arabic_data = data.get("arabic", {})
-                    
+
                     # Ensure all fields exist
                     english_data = self.ensure_all_fields(english_data, ENGLISH_FIELDS)
                     arabic_data = self.ensure_all_fields(arabic_data, ARABIC_FIELDS)
-                    
+
                     # Post-process with enhanced logic
                     english_data = self.post_process_data(english_data, raw_text)
                     arabic_data = self.post_process_data(arabic_data, raw_text)
-                    
+
                     return english_data, arabic_data
-                    
+
             except Exception as e:
                 print(f"[ERROR] MOA extraction failed: {e}")
                 import traceback
+
                 traceback.print_exc()
 
         return self.get_empty_fields()
@@ -387,7 +458,7 @@ Extract only information explicitly present in the text.
         """Return empty dictionaries with all fields"""
         return (
             {field: "" for field in ENGLISH_FIELDS},
-            {field: "" for field in ARABIC_FIELDS}
+            {field: "" for field in ARABIC_FIELDS},
         )
 
     def ensure_all_fields(self, data: Dict, required_fields: list) -> Dict:
@@ -399,62 +470,72 @@ Extract only information explicitly present in the text.
 
     def post_process_data(self, data: Dict, raw_text: str) -> Dict:
         """Fix incomplete or missing values using ENHANCED regex fallback"""
-        
+
         # Enhanced patterns with multiple alternatives
         incomplete_patterns = {
             "date_of_execution": [
-                r'entered into on.*?(\d{2}/\d{2}/\d{4})',
-                r'day of\s+(\d{2}/\d{2}/\d{4})',
-                r'executed on\s+(\d{2}/\d{2}/\d{4})',
-                r'(\d{2}/\d{2}/\d{4})'
+                r"entered into on.*?(\d{2}/\d{2}/\d{4})",
+                r"day of\s+(\d{2}/\d{2}/\d{4})",
+                r"executed on\s+(\d{2}/\d{2}/\d{4})",
+                r"(\d{2}/\d{2}/\d{4})",
             ],
             "date_of_birth": [
-                r'born on[:\s]+(\d{2}/\d{2}/\d{4})',
-                r'Date of Birth[:\s]+(\d{2}/\d{2}/\d{4})',
-                r'DOB[:\s]+(\d{2}/\d{2}/\d{4})',
+                r"born on[:\s]+(\d{2}/\d{2}/\d{4})",
+                r"Date of Birth[:\s]+(\d{2}/\d{2}/\d{4})",
+                r"DOB[:\s]+(\d{2}/\d{2}/\d{4})",
             ],
             "passport_number": [
-                r'passport\s+No\.?\s*([A-Z]\d{6,})',
-                r'holder of passport.*?([A-Z]\d{6,})',
-                r'Passport[:\s]+([A-Z]\d{6,})',
+                r"passport\s+No\.?\s*([A-Z]\d{6,})",
+                r"holder of passport.*?([A-Z]\d{6,})",
+                r"Passport[:\s]+([A-Z]\d{6,})",
             ],
             "company_duration": [
-                r'duration.*?(\d+)\s*(?:years?|سنة|سنوات)',
-                r'مدة.*?(\d+)\s*(?:years?|سنة|سنوات)',
-                r'period of\s+(\d+)\s+years',
+                r"duration.*?(\d+)\s*(?:years?|سنة|سنوات)",
+                r"مدة.*?(\d+)\s*(?:years?|سنة|سنوات)",
+                r"period of\s+(\d+)\s+years",
             ],
             "number_of_shares": [
-                r'divided into\s*\(?(\d+)\)?\s*shares',
-                r'(\d+)\s*shares',
-                r'موزعة.*?(\d+).*?حصص',
-                r'Article 7.*?(\d+)\s*shares',
+                r"divided into\s*\(?(\d+)\)?\s*shares",
+                r"(\d+)\s*shares",
+                r"موزعة.*?(\d+).*?حصص",
+                r"Article 7.*?(\d+)\s*shares",
             ],
             "value_per_share": [
-                r'value\s+of\s+each\s+share.*?(?:DHS|درهم)\s*(\d+)',
-                r'(?:DHS|درهم)\s*(\d{3,})',
-                r'قيمة.*?حصة.*?(\d{3,})',
-                r'per share.*?(\d{3,})',
+                r"value\s+of\s+each\s+share.*?(?:DHS|درهم)\s*(\d+)",
+                r"(?:DHS|درهم)\s*(\d{3,})",
+                r"قيمة.*?حصة.*?(\d{3,})",
+                r"per share.*?(\d{3,})",
             ],
             "appointment_start": [
-                r'(\d+)\s*years?\s+from\s+the\s+date',
-                r'period of\s+(\d+)\s+years',
-                r'مدة.*?(\d+)\s*(?:سنة|سنوات)',
+                r"(\d+)\s*years?\s+from\s+the\s+date",
+                r"period of\s+(\d+)\s+years",
+                r"مدة.*?(\d+)\s*(?:سنة|سنوات)",
             ],
             "maximum_duration": [
-                r'not\s+exceed\s*(\d+)\s*months',
-                r'(\d+)\s*months',
-                r'لا تتجاوز.*?(\d+).*?شهر',
+                r"not\s+exceed\s*(\d+)\s*months",
+                r"(\d+)\s*months",
+                r"لا تتجاوز.*?(\d+).*?شهر",
             ],
             "legal_reserve_percentage": [
-                r'(\d+)\s*%.*?(?:reserve|احتياطي)',
-                r'reserve.*?(\d+)\s*%',
-                r'احتياطي.*?(\d+)\s*%',
+                r"(\d+)\s*%.*?(?:reserve|احتياطي)",
+                r"reserve.*?(\d+)\s*%",
+                r"احتياطي.*?(\d+)\s*%",
             ],
         }
-        
+
         # Check and fix incomplete values
-        incomplete_indicators = ['', '//', 'Z', ' years', ' months', 'DHS ', '% ', 'st January', 'st December']
-        
+        incomplete_indicators = [
+            "",
+            "//",
+            "Z",
+            " years",
+            " months",
+            "DHS ",
+            "% ",
+            "st January",
+            "st December",
+        ]
+
         for field, patterns in incomplete_patterns.items():
             if field in data:
                 value = str(data[field]).strip()
@@ -485,7 +566,9 @@ Extract only information explicitly present in the text.
             if val in ["st January", " January", "January", "1 January"]:
                 data["financial_year_start"] = "1st January"
             elif not val or len(val) < 5:
-                match = re.search(r'commence\s+on\s+(1st\s+January)', raw_text, re.IGNORECASE)
+                match = re.search(
+                    r"commence\s+on\s+(1st\s+January)", raw_text, re.IGNORECASE
+                )
                 if match:
                     data["financial_year_start"] = match.group(1)
 
@@ -494,7 +577,9 @@ Extract only information explicitly present in the text.
             if val in ["st December", " December", "December", "31 December"]:
                 data["financial_year_end"] = "31st December"
             elif not val or len(val) < 5:
-                match = re.search(r'end\s+on\s+(31st\s+December)', raw_text, re.IGNORECASE)
+                match = re.search(
+                    r"end\s+on\s+(31st\s+December)", raw_text, re.IGNORECASE
+                )
                 if match:
                     data["financial_year_end"] = match.group(1)
 
@@ -502,12 +587,20 @@ Extract only information explicitly present in the text.
         for addr_field in ["company_address", "manager_address"]:
             if addr_field in data:
                 value = str(data[addr_field])
-                if "P.O. Box No. ," in value or "P.O. Box No.  ," in value or not re.search(r'\d', value):
+                if (
+                    "P.O. Box No. ," in value
+                    or "P.O. Box No.  ," in value
+                    or not re.search(r"\d", value)
+                ):
                     # Try to find P.O. Box number
-                    po_match = re.search(r'P\.O\.\s*Box\s*No\.\s*(\d+)', raw_text, re.IGNORECASE)
+                    po_match = re.search(
+                        r"P\.O\.\s*Box\s*No\.\s*(\d+)", raw_text, re.IGNORECASE
+                    )
                     if po_match:
                         po_box = po_match.group(1)
-                        data[addr_field] = f"P.O. Box No. {po_box}, Dubai, United Arab Emirates"
+                        data[addr_field] = (
+                            f"P.O. Box No. {po_box}, Dubai, United Arab Emirates"
+                        )
 
         # Fix activity field names (if AI used wrong names)
         fields_to_rename = {}
@@ -524,7 +617,7 @@ Extract only information explicitly present in the text.
                         fields_to_rename[key] = "activity_3_web_design"
                     elif "internet" in activity_type or "إنترنت" in activity_type:
                         fields_to_rename[key] = "activity_4_internet_content"
-        
+
         # Perform renaming
         for old_key, new_key in fields_to_rename.items():
             data[new_key] = data.pop(old_key)
@@ -534,29 +627,53 @@ Extract only information explicitly present in the text.
     def validate_extraction(self, english_data: Dict, arabic_data: Dict) -> Dict:
         """Validate extracted fields - RELAXED THRESHOLD"""
         validation = {
-            "english_field_count": len([v for v in english_data.values() if v and str(v).strip()]),
-            "arabic_field_count": len([v for v in arabic_data.values() if v and str(v).strip()]),
-            "english_missing": [f for f in ENGLISH_FIELDS if f not in english_data or not english_data[f]],
-            "arabic_missing": [f for f in ARABIC_FIELDS if f not in arabic_data or not arabic_data[f]],
+            "english_field_count": len(
+                [v for v in english_data.values() if v and str(v).strip()]
+            ),
+            "arabic_field_count": len(
+                [v for v in arabic_data.values() if v and str(v).strip()]
+            ),
+            "english_missing": [
+                f
+                for f in ENGLISH_FIELDS
+                if f not in english_data or not english_data[f]
+            ],
+            "arabic_missing": [
+                f for f in ARABIC_FIELDS if f not in arabic_data or not arabic_data[f]
+            ],
             "is_valid": False,
             "issues": [],
             "required_fields": ENGLISH_FIELDS,
             "present_fields": [k for k, v in english_data.items() if v],
-            "missing_fields": []
+            "missing_fields": [],
         }
 
         # Count non-empty fields (excluding obvious incomplete values)
-        non_empty_count = len([v for v in english_data.values() 
-                               if v and str(v).strip() and str(v).strip() not in ["--", "Z", "", "//"]])
-        
+        non_empty_count = len(
+            [
+                v
+                for v in english_data.values()
+                if v and str(v).strip() and str(v).strip() not in ["--", "Z", "", "//"]
+            ]
+        )
+
         print(f"[VALIDATION] MOA: {non_empty_count}/34 fields populated")
 
         # Check critical fields
-        critical_fields = ["company_name", "owner_name", "manager_name", "date_of_execution"]
+        critical_fields = [
+            "company_name",
+            "owner_name",
+            "manager_name",
+            "date_of_execution",
+        ]
         missing_critical = []
-        
+
         for f in critical_fields:
-            if f not in english_data or not english_data[f] or str(english_data[f]).strip() in ["", "--", "Z"]:
+            if (
+                f not in english_data
+                or not english_data[f]
+                or str(english_data[f]).strip() in ["", "--", "Z"]
+            ):
                 missing_critical.append(f)
                 validation["missing_fields"].append(f)
 
@@ -565,12 +682,18 @@ Extract only information explicitly present in the text.
         # 2. At least 22 out of 34 fields must have values
         if missing_critical:
             validation["is_valid"] = False
-            validation["issues"].append(f"Missing critical fields: {', '.join(missing_critical)}")
+            validation["issues"].append(
+                f"Missing critical fields: {', '.join(missing_critical)}"
+            )
             print(f"[VALIDATION] MOA INVALID: Missing critical: {missing_critical}")
         elif non_empty_count < 22:  # CHANGED from 25
             validation["is_valid"] = False
-            validation["issues"].append(f"Insufficient fields: {non_empty_count}/34 (need 22+)")
-            print(f"[VALIDATION] MOA INVALID: Only {non_empty_count}/34 fields (need 22+)")
+            validation["issues"].append(
+                f"Insufficient fields: {non_empty_count}/34 (need 22+)"
+            )
+            print(
+                f"[VALIDATION] MOA INVALID: Only {non_empty_count}/34 fields (need 22+)"
+            )
         else:
             validation["is_valid"] = True
             validation["issues"] = []

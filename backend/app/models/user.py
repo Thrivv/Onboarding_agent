@@ -3,6 +3,7 @@
 from pydantic import BaseModel, EmailStr
 from datetime import date
 
+
 class UserRegisterRequest(BaseModel):
     name: str
     dob: date

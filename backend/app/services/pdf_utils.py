@@ -1,6 +1,7 @@
 import fitz  # PyMuPDF
 import os
 
+
 def pdf_to_images_pymupdf(pdf_path, output_folder="output_images", dpi=200, fmt="png"):
     if not os.path.exists(output_folder):
         os.makedirs(output_folder)
