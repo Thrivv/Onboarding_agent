@@ -1,5 +1,4 @@
-## ------------Pages Method--------------##
-import os
+# Frontend/Streamlit_app.py
 import streamlit as st
 import requests
 import pandas as pd
@@ -15,16 +14,24 @@ from io import BytesIO
 from PIL import Image
 import PyPDF2
 import docx
+import os
 
 # Load environment variables
 load_dotenv()
 
 # --- CONFIG ---
-BACKEND_URL = os.getenv("BACKEND_URL", "http://localhost:8000")
+try:
+    BACKEND_URL = st.secrets.get("BACKEND_URL", os.getenv("BACKEND_URL", "http://localhost:8000"))
+    SUPABASE_URL = st.secrets.get("SUPABASE_URL", os.getenv("SUPABASE_URL"))
+    SUPABASE_KEY = st.secrets.get("SUPABASE_API_KEY", os.getenv("SUPABASE_API_KEY"))
+except:
+    BACKEND_URL = os.getenv("BACKEND_URL", "http://localhost:8000")
+    SUPABASE_URL = os.getenv("SUPABASE_URL")
+    SUPABASE_KEY = os.getenv("SUPABASE_API_KEY")
+    
 FASTAPI_URL = f"{BACKEND_URL}/register"
 FASTAPI_URLS = BACKEND_URL
-SUPABASE_URL = os.getenv("SUPABASE_URL")
-SUPABASE_KEY = os.getenv("SUPABASE_API_KEY")
+
 
 # Add error checking
 if not SUPABASE_URL or not SUPABASE_KEY:
@@ -184,15 +191,92 @@ st.markdown(
     }
     
     .document-preview img {
-    max-width: 300px;  /* Adjust this value */
+    max-width: 300px;
     height: auto;
     border-radius: 8px;
     }
 
-    /* Or for all images in chat */
     [data-testid="stChatMessageContent"] img {
         max-width: 400px;
         height: auto;
+    }
+    
+    /* Document Upload Page Styles */
+    .doc-card {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 20px;
+        border-radius: 12px;
+        margin: 10px 0;
+        box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+    }
+    
+    .status-badge {
+        display: inline-block;
+        padding: 6px 12px;
+        border-radius: 20px;
+        font-size: 12px;
+        font-weight: 600;
+        margin: 5px 5px 5px 0;
+    }
+    
+    .status-submitted {
+        background: #d4edda;
+        color: #155724;
+        border: 1px solid #c3e6cb;
+    }
+    
+    .status-required {
+        background: #fff3cd;
+        color: #856404;
+        border: 1px solid #ffeaa7;
+    }
+    
+    .status-optional {
+        background: #e2e3e5;
+        color: #383d41;
+        border: 1px solid #d6d8db;
+    }
+    
+    .extracted-info {
+        background: #e7f3ff;
+        border-left: 4px solid #2196F3;
+        padding: 15px;
+        border-radius: 5px;
+        margin: 15px 0;
+    }
+    
+    .progress-bar-container {
+        background: #e9ecef;
+        border-radius: 10px;
+        overflow: hidden;
+        margin: 15px 0;
+        height: 25px;
+    }
+    
+    .progress-bar-fill {
+        height: 100%;
+        background: linear-gradient(90deg, #28a745 0%, #20c997 100%);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: white;
+        font-weight: 600;
+        font-size: 12px;
+    }
+    
+    .member-card {
+        background: white;
+        border: 1px solid #dee2e6;
+        border-radius: 10px;
+        padding: 15px;
+        margin: 10px 0;
+        transition: all 0.3s ease;
+    }
+    
+    .member-card:hover {
+        box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        border-color: #667eea;
     }
         </style>
     """,
@@ -252,7 +336,18 @@ def init_session_state():
         'cu_conversation_started': False,
         'cu_member_name_input': "",
         'cu_completion_email_sent': False,
-        'cu_document_context': ""  # NEW: Store document context for chat
+        'cu_document_context': "",
+        # Document Upload Page States
+        'doc_auth': False,
+        'doc_email': None,
+        'doc_user': {},
+        'doc_uploading': False,
+        'doc_uploaded': False,
+        'doc_upload_result': None,
+        'doc_requirements': None,
+        'doc_status': None,
+        'doc_member_name': "",
+        'doc_selected_member': None,
     }
     
     for key, value in defaults.items():
@@ -266,26 +361,26 @@ init_session_state()
 st.sidebar.title("🧾 Onboarding Agent")
 st.sidebar.markdown("---")
 
-# Navigation
+# Navigation - ADDED DOCUMENT UPLOAD
 page = st.sidebar.radio(
     "Navigate to:",
-    ["📬 Register User", "📊 Admin Dashboard", "💬 AI Assistant"],
+    ["📋 Register User", "📊 Admin Dashboard", "💬 AI Assistant", "📄 Document Upload"],
     label_visibility="collapsed"
 )
 
 st.sidebar.markdown("---")
 
-# --- REGISTER USER PAGE ---
-# --- REGISTER USER PAGE ---
-if page == "📬 Register User":
-    st.title("📬 Register a New User")
+# ============================================================================
+# REGISTER USER PAGE - UNCHANGED
+# ============================================================================
+if page == "📋 Register User":
+    st.title("📋 Register a New User")
     
     # STEP 1: BASIC INFORMATION
     if st.session_state.registration_step == 'basic_info':
         with st.form("basic_info_form"):
             st.subheader("Basic Information")
             
-            # Get existing values from session state
             name_value = st.session_state.user_data.get('name', '')
             
             if st.session_state.user_data.get('dob'):
@@ -302,7 +397,6 @@ if page == "📬 Register User":
             email_value = st.session_state.user_data.get('email', '')
             business_value = st.session_state.user_data.get('business_name', '')
             
-            # Form inputs
             name = st.text_input("Full Name", value=name_value)
             dob = st.date_input(
                 "Date of Birth", 
@@ -321,7 +415,6 @@ if page == "📬 Register User":
                     st.warning("⚙️ Please fill all required fields.")
                     st.stop()
                 
-                # Save to session state
                 st.session_state.user_data.update({
                     'name': name,
                     'dob': dob.isoformat(),
@@ -336,7 +429,6 @@ if page == "📬 Register User":
     elif st.session_state.registration_step == 'account_type':
         st.subheader("Account Information")
         
-        # Previously answered questions
         with st.expander("📋 Previously Answered Questions", expanded=True):
             st.write("**1. Full Name:** " + st.session_state.user_data.get('name', ''))
             
@@ -353,30 +445,25 @@ if page == "📬 Register User":
             st.write("**4. Email:** " + st.session_state.user_data.get('email', ''))
             st.write("**5. Business Name:** " + st.session_state.user_data.get('business_name', ''))
         
-        # Back button (outside form)
         col1, col2 = st.columns([1, 4])
         with col1:
             if st.button("⬅️ Back", key="account_type_back_btn"):
                 st.session_state.registration_step = 'basic_info'
                 st.rerun()
         
-        st.write("")  # Add spacing
+        st.write("")
         
-        # Form for account type
         with st.form("account_type_form"):
             st.markdown("### What kind of account do you want to open?")
             
-            # Get current selection
             current_account_type = st.session_state.user_data.get('account_type', 'Savings')
             account_type_options = ["Savings", "Corporate"]
             
-            # Find default index
             try:
                 default_index = account_type_options.index(current_account_type)
             except ValueError:
                 default_index = 0
             
-            # Radio buttons
             account_type = st.radio(
                 "Select your account type:",
                 account_type_options,
@@ -384,7 +471,6 @@ if page == "📬 Register User":
                 key="account_type_selection"
             )
               
-            # Submit button
             col1, col2, col3 = st.columns([1, 1, 1])
             with col2:
                 submitted = st.form_submit_button(
@@ -393,32 +479,23 @@ if page == "📬 Register User":
                     use_container_width=True
                 )
             
-            # Handle submission
             if submitted:
-                # Save to session state
                 st.session_state.user_data['account_type'] = account_type
                 
-                # Determine next step
                 if account_type == "Savings":
-                    # Savings goes directly to terms & conditions
                     st.session_state.registration_step = 'final_confirmation'
                     st.success("✅ Account type saved! Moving to Terms & Conditions...")
                 elif account_type == "Corporate":
-                    # Corporate needs ownership type
                     st.session_state.registration_step = 'ownership_type'
                     st.success("✅ Account type saved! Moving to Ownership Type...")
                 
-                # Wait a moment for user to see the success message
                 time.sleep(0.5)
-                
-                # Refresh page to show next step
                 st.rerun()
     
-    # STEP 3: OWNERSHIP TYPE (ONLY FOR CORPORATE)
+    # STEP 3: OWNERSHIP TYPE
     elif st.session_state.registration_step == 'ownership_type':
         st.subheader("Ownership Details")
         
-        # Previously answered questions
         with st.expander("📋 Previously Answered Questions", expanded=True):
             st.write("**1. Full Name:** " + st.session_state.user_data.get('name', ''))
             
@@ -436,23 +513,16 @@ if page == "📬 Register User":
             st.write("**5. Business Name:** " + st.session_state.user_data.get('business_name', ''))
             st.write("**6. Account Type:** " + st.session_state.user_data.get('account_type', ''))
         
-        # Back button
         col1, col2 = st.columns([1, 4])
         with col1:
             if st.button("⬅️ Back"):
                 st.session_state.registration_step = 'account_type'
                 st.rerun()
         
-        # Form for ownership type
         with st.form("ownership_type_form"):
-            current_ownership_type = st.session_state.user_data.get(
-                'ownership_type', 
-                'Single Owner'
-            )
+            current_ownership_type = st.session_state.user_data.get('ownership_type', 'Single Owner')
             ownership_options = ["Single Owner", "Partnership"]
-            default_index = ownership_options.index(
-                current_ownership_type
-            ) if current_ownership_type in ownership_options else 0
+            default_index = ownership_options.index(current_ownership_type) if current_ownership_type in ownership_options else 0
             
             ownership_type = st.radio(
                 "Do you want to open a single owner or partnership account?", 
@@ -473,7 +543,6 @@ if page == "📬 Register User":
     elif st.session_state.registration_step == 'partnership_details':
         st.subheader("Partnership Information")
         
-        # Previously answered questions
         with st.expander("📋 Previously Answered Questions", expanded=True):
             st.write("**1. Full Name:** " + st.session_state.user_data.get('name', ''))
             
@@ -492,26 +561,19 @@ if page == "📬 Register User":
             st.write("**6. Account Type:** " + st.session_state.user_data.get('account_type', ''))
             st.write("**7. Ownership Type:** " + st.session_state.user_data.get('ownership_type', ''))
         
-        # Back button
         col1, col2 = st.columns([1, 4])
         with col1:
             if st.button("⬅️ Back"):
                 st.session_state.registration_step = 'ownership_type'
                 st.rerun()
         
-        # Form for partnership details
         with st.form("partnership_details_form"):
-            current_partnership = st.session_state.user_data.get(
-                'partnership_details', 
-                'All shareholders are individual persons'
-            )
+            current_partnership = st.session_state.user_data.get('partnership_details', 'All shareholders are individual persons')
             partnership_options = [
                 "All shareholders are individual persons",
                 "One or more shareholders are companies or other legal entities"
             ]
-            default_index = partnership_options.index(
-                current_partnership
-            ) if current_partnership in partnership_options else 0
+            default_index = partnership_options.index(current_partnership) if current_partnership in partnership_options else 0
             
             partnership_details = st.radio(
                 "Are all shareholders in your business individual persons or not?", 
@@ -529,7 +591,6 @@ if page == "📬 Register User":
     elif st.session_state.registration_step == 'annual_turnover':
         st.subheader("Financial Information")
         
-        # Previously answered questions
         with st.expander("📋 Previously Answered Questions", expanded=True):
             st.write("**1. Full Name:** " + st.session_state.user_data.get('name', ''))
             
@@ -552,7 +613,6 @@ if page == "📬 Register User":
             if st.session_state.user_data.get('partnership_details'):
                 st.write("**8. Partnership Details:** " + st.session_state.user_data.get('partnership_details', ''))
         
-        # Back button
         col1, col2 = st.columns([1, 4])
         with col1:
             if st.button("⬅️ Back"):
@@ -562,7 +622,6 @@ if page == "📬 Register User":
                     st.session_state.registration_step = 'ownership_type'
                 st.rerun()
         
-        # Form for annual turnover
         with st.form("annual_turnover_form"):
             annual_turnover = st.text_input(
                 "What is your expected annual turnover?", 
@@ -582,7 +641,6 @@ if page == "📬 Register User":
     elif st.session_state.registration_step == 'final_confirmation':
         st.subheader("Final Confirmation")
         
-        # Previously answered questions
         with st.expander("📋 Previously Answered Questions", expanded=True):
             st.write("**1. Full Name:** " + st.session_state.user_data.get('name', ''))
             
@@ -607,7 +665,6 @@ if page == "📬 Register User":
             if st.session_state.user_data.get('annual_turnover'):
                 st.write("**9. Expected Annual Turnover:** " + st.session_state.user_data.get('annual_turnover', ''))
         
-        # Back button
         col1, col2 = st.columns([1, 4])
         with col1:
             if st.button("⬅️ Back"):
@@ -619,18 +676,13 @@ if page == "📬 Register User":
         
         st.info("Please review your information before completing registration.")
         
-        # Load terms and conditions
         try:
-            terms_file_path = os.path.join(
-                os.path.dirname(__file__), 
-                "Terms&Conditions.txt"
-            )
+            terms_file_path = os.path.join(os.path.dirname(__file__), "Terms&Conditions.txt")
             with open(terms_file_path, "r", encoding="utf-8") as f:
                 terms_content = f.read()
         except:
             terms_content = "Terms and Conditions file not found. Please contact support."
 
-        # Terms and conditions expander
         with st.expander("📋 Terms and Conditions For Data Sharing and Privacy", expanded=False):
             st.markdown(terms_content)
             st.markdown("---")
@@ -639,17 +691,11 @@ if page == "📬 Register User":
                 value=st.session_state.terms_accepted
             )
         
-        # Complete registration button
-        if st.button(
-            "Complete Registration", 
-            type="primary", 
-            disabled=not st.session_state.terms_accepted
-        ):
+        if st.button("Complete Registration", type="primary", disabled=not st.session_state.terms_accepted):
             if not st.session_state.terms_accepted:
                 st.error("⚙️ You must accept the Terms and Conditions.")
                 st.stop()
             
-            # Prepare final data
             final_data = {
                 "name": st.session_state.user_data['name'],
                 "dob": st.session_state.user_data['dob'],
@@ -663,7 +709,6 @@ if page == "📬 Register User":
                 "terms_accepted": st.session_state.terms_accepted,
             }
             
-            # Submit to backend
             try:
                 response = requests.post(FASTAPI_URL, json=final_data)
                 
@@ -671,7 +716,6 @@ if page == "📬 Register User":
                     st.success("✅ User registered and onboarding started!")
                     st.json(response.json())
                     
-                    # Reset form
                     st.session_state.registration_step = 'basic_info'
                     st.session_state.user_data = {}
                     st.session_state.terms_accepted = False
@@ -682,7 +726,7 @@ if page == "📬 Register User":
                     st.error(f"❌ Error: {response.json().get('detail')}")
                     
             except Exception as e:
-                st.error(f"❌ Connection error: {e}")               
+                st.error(f"❌ Connection error: {e}")
 
 # --- ADMIN DASHBOARD PAGE ---
 elif page == "📊 Admin Dashboard":
@@ -697,7 +741,7 @@ elif page == "📊 Admin Dashboard":
         col2.markdown(f"<div class='kpi-card' style='background-color:#28a745;'>✅ Verified<div class='kpi-number'>{metrics['verified_users']}</div></div>", unsafe_allow_html=True)
         col3.markdown(f"<div class='kpi-card' style='background-color:#ffc107;'>⏳ Pending<div class='kpi-number'>{metrics['pending_verification']}</div></div>", unsafe_allow_html=True)
         col4.markdown(f"<div class='kpi-card' style='background-color:#17a2b8;'>📅 Today<div class='kpi-number'>{metrics['registered_today']}</div></div>", unsafe_allow_html=True)
-        col5.markdown(f"<div class='kpi-card' style='background-color:#6f42c1;'>🗓️ This Week<div class='kpi-number'>{metrics['registered_this_week']}</div></div>", unsafe_allow_html=True)
+        col5.markdown(f"<div class='kpi-card' style='background-color:#6f42c1;'>📋️ This Week<div class='kpi-number'>{metrics['registered_this_week']}</div></div>", unsafe_allow_html=True)
 
         st.markdown("---")
         
@@ -749,15 +793,12 @@ elif page == "📊 Admin Dashboard":
         st.rerun()
 
 # --- AI ASSISTANT PAGE (WITH DOCUMENT PREVIEW) ---
-
 elif page == "💬 AI Assistant":
     st.title("💬 AI Onboarding Assistant")
     
-    # Add chat message styling only (remove container CSS since we'll use st.container)
     st.markdown(
         """
         <style>
-        /* User message styling */
         .user-message {
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             color: white;
@@ -773,7 +814,6 @@ elif page == "💬 AI Assistant":
             animation: slideInRight 0.3s ease-out;
         }
         
-        /* Assistant message styling */
         .assistant-message {
             background: #f8f9fa;
             color: #2c3e50;
@@ -788,7 +828,6 @@ elif page == "💬 AI Assistant":
             animation: slideInLeft 0.3s ease-out;
         }
         
-        /* System message styling */
         .system-message {
             background: linear-gradient(135deg, #d4edda 0%, #c3e6cb 100%);
             color: #155724;
@@ -803,7 +842,6 @@ elif page == "💬 AI Assistant":
             animation: fadeIn 0.4s ease-out;
         }
         
-        /* File upload message styling */
         .file-upload-message {
             background: linear-gradient(135deg, #fff3cd 0%, #ffeaa7 100%);
             color: #856404;
@@ -819,7 +857,6 @@ elif page == "💬 AI Assistant":
             animation: slideInRight 0.3s ease-out;
         }
         
-        /* Document preview container */
         .document-preview {
             margin: 15px 0 15px auto;
             max-width: 70%;
@@ -841,39 +878,21 @@ elif page == "💬 AI Assistant":
             box-shadow: 0 6px 16px rgba(0,0,0,0.2);
         }
         
-        /* Animations */
         @keyframes slideInRight {
-            from {
-                opacity: 0;
-                transform: translateX(30px);
-            }
-            to {
-                opacity: 1;
-                transform: translateX(0);
-            }
+            from { opacity: 0; transform: translateX(30px); }
+            to { opacity: 1; transform: translateX(0); }
         }
         
         @keyframes slideInLeft {
-            from {
-                opacity: 0;
-                transform: translateX(-30px);
-            }
-            to {
-                opacity: 1;
-                transform: translateX(0);
-            }
+            from { opacity: 0; transform: translateX(-30px); }
+            to { opacity: 1; transform: translateX(0); }
         }
         
         @keyframes fadeIn {
-            from {
-                opacity: 0;
-            }
-            to {
-                opacity: 1;
-            }
+            from { opacity: 0; }
+            to { opacity: 1; }
         }
         
-        /* Clear floats */
         .clearfix {
             clear: both;
             height: 10px;
@@ -885,7 +904,7 @@ elif page == "💬 AI Assistant":
     
     # USER AUTHENTICATION
     if not st.session_state.cu_auth:
-        st.subheader("🔐 User Authentication")
+        st.subheader("🔓 User Authentication")
         st.info("✉️ Enter your registered email to continue")
         
         col1, col2 = st.columns([3, 1])
@@ -918,8 +937,6 @@ elif page == "💬 AI Assistant":
         st.stop()
     
     # AUTHENTICATED USER INTERFACE
-    
-    # Header
     colh1, colh2 = st.columns([3, 1])
     with colh1:
         st.subheader(f"👤 {st.session_state.cu_user.get('name','User')} - AI Onboarding")
@@ -930,7 +947,6 @@ elif page == "💬 AI Assistant":
                     del st.session_state[key]
             st.rerun()
 
-    # User info cards
     c1, c2, c3 = st.columns(3)
     c1.info(f"💼 Account: {st.session_state.cu_user.get('account_type','N/A')}")
     c2.info(f"👥 Ownership: {st.session_state.cu_user.get('ownership_type','N/A')}")
@@ -938,7 +954,7 @@ elif page == "💬 AI Assistant":
 
     st.markdown("---")
     
-    # INITIALIZE CONVERSATION (ONCE) - WITH HISTORY LOADING
+    # INITIALIZE CONVERSATION (ONCE)
     if not st.session_state.cu_conversation_started:
         try:
             history_resp = requests.get(
@@ -989,16 +1005,11 @@ elif page == "💬 AI Assistant":
             st.error(f"❌ Connection error: {e}")
             st.stop()
     
-    # ============================================================================
-    # CHAT DISPLAY - USING STREAMLIT'S NATIVE CONTAINER (RESIZABLE)
-    # ============================================================================
+    # CHAT DISPLAY
     st.markdown("### 💬 Conversation")
-    
-    # ✅ USE STREAMLIT'S NATIVE CONTAINER WITH HEIGHT
     chat_container = st.container(height=600, border=True)
     
     with chat_container:
-        # Render all messages
         for msg in st.session_state.cu_msgs:
             role = msg.get("role")
             content = msg.get("content", "")
@@ -1009,14 +1020,12 @@ elif page == "💬 AI Assistant":
                     unsafe_allow_html=True
                 )
             
-            # Handle document preview
             elif role == "document":
                 filename = msg.get("filename", "Document")
                 file_data = msg.get("file_data", {})
                 file_type = file_data.get("type", "")
                 file_bytes = file_data.get("bytes")
                 
-                # Document header
                 st.markdown(
                     f"""
                     <div class='document-preview'>
@@ -1036,10 +1045,8 @@ elif page == "💬 AI Assistant":
                     unsafe_allow_html=True
                 )
                 
-                # Display based on file type
                 if file_bytes:
                     if file_type == "application/pdf":
-                        # PDF Preview
                         base64_pdf = base64.b64encode(file_bytes).decode('utf-8')
                         pdf_display = f'''
                         <div class='document-preview'>
@@ -1055,16 +1062,11 @@ elif page == "💬 AI Assistant":
                         st.markdown(pdf_display, unsafe_allow_html=True)
                         
                     elif file_type in ["image/jpeg", "image/jpg", "image/png", "image/gif", "image/bmp", "image/webp"]:
-                        # Image Preview - RIGHT ALIGNED
                         st.markdown("<div class='document-preview'>", unsafe_allow_html=True)
-                        
-                        # Create columns for right alignment
                         col1, col2 = st.columns([2, 1])
                         
                         with col2:
                             image = Image.open(BytesIO(file_bytes))
-                            
-                            # Resize image
                             max_width = 350
                             if image.width > max_width:
                                 ratio = max_width / image.width
@@ -1073,34 +1075,6 @@ elif page == "💬 AI Assistant":
                             
                             st.image(image, caption=None)
                         
-                        st.markdown("</div>", unsafe_allow_html=True)    
-                        
-                    elif file_type == "application/vnd.openxmlformats-officedocument.wordprocessingml.document":
-                        # DOCX Preview
-                        st.markdown("<div class='document-preview'>", unsafe_allow_html=True)
-                        with st.expander("📖 View Document Content", expanded=True):
-                            doc_text = msg.get("content", "")
-                            st.text_area(
-                                "Document",
-                                doc_text,
-                                height=400,
-                                disabled=True,
-                                label_visibility="collapsed"
-                            )
-                        st.markdown("</div>", unsafe_allow_html=True)
-                        
-                    elif file_type == "text/plain":
-                        # TXT Preview
-                        st.markdown("<div class='document-preview'>", unsafe_allow_html=True)
-                        with st.expander("📖 View Document Content", expanded=True):
-                            doc_text = msg.get("content", "")
-                            st.text_area(
-                                "Document",
-                                doc_text,
-                                height=400,
-                                disabled=True,
-                                label_visibility="collapsed"
-                            )
                         st.markdown("</div>", unsafe_allow_html=True)
             
             elif role == "assistant":
@@ -1119,15 +1093,13 @@ elif page == "💬 AI Assistant":
             
             elif role == "file_upload":
                 st.markdown(
-                    f"<div class='file-upload-message'>📎 {content}</div>", 
+                    f"<div class='file-upload-message'>📋 {content}</div>", 
                     unsafe_allow_html=True
                 )
         
-        # Add clearfix
         st.markdown("<div class='clearfix'></div>", unsafe_allow_html=True)
 
     st.markdown("---")
-    # COMBINED UPLOAD AND SEND MESSAGE SECTION
     st.markdown("### 📤 Upload & Send")
 
     ownership_type = st.session_state.cu_user.get("ownership_type")
@@ -1179,7 +1151,6 @@ elif page == "💬 AI Assistant":
         else:
             st.warning("⚠️ Please enter the member's name before uploading")
 
-    # SIMPLIFIED UPLOAD AND SEND SECTION
     st.markdown("""
         <style>
         [data-testid="stFileUploader"] { width: 100%; }
@@ -1236,7 +1207,6 @@ elif page == "💬 AI Assistant":
 
     # HANDLE COMBINED BUTTON ACTION
     if action_btn:
-        # Handle document upload with preview
         if button_action in ["upload", "both"] and uploaded_file:
             st.session_state.cu_processing = True
             
@@ -1248,14 +1218,11 @@ elif page == "💬 AI Assistant":
                     st.session_state.cu_processing = False
                     st.stop()
             
-            # Extract text from document for context
             file_bytes = uploaded_file.getvalue()
             document_text = extract_document_text(file_bytes, uploaded_file.name)
             
-            # Store document context for use in chat
             st.session_state.cu_document_context = document_text
             
-            # Add document message with preview data
             st.session_state.cu_msgs.append({
                 "role": "document",
                 "content": document_text,
@@ -1291,7 +1258,6 @@ elif page == "💬 AI Assistant":
                     
                     if upload_resp.status_code == 200:
                         result = upload_resp.json()
-                        
                         wrong_doc_type = result.get("wrong_document_type", False)
                         
                         if wrong_doc_type:
@@ -1312,8 +1278,6 @@ elif page == "💬 AI Assistant":
                             if remaining_docs:
                                 remaining_text = "\n• ".join(remaining_docs)
                                 st.warning(f"⚠️ **Remaining Documents to Upload:**\n• {remaining_text}")
-                            else:
-                                st.warning("⚠️ The uploaded document has been removed. Please upload the correct document type.")
                             
                             if show_member_input:
                                 st.session_state.cu_member_name_input = ""
@@ -1386,7 +1350,6 @@ elif page == "💬 AI Assistant":
             time.sleep(0.5)
             st.rerun()
         
-        # Handle chat message
         if button_action in ["send", "both"] and user_input.strip():
             if not st.session_state.cu_processing:
                 st.session_state.cu_processing = True
@@ -1450,20 +1413,16 @@ elif page == "💬 AI Assistant":
                         
             except requests.exceptions.Timeout:
                 st.session_state.cu_processing = False
-                st.error("⏰ Request timed out. Please try again.")
+                st.error("⏱ Request timed out. Please try again.")
             except Exception as e:
                 st.session_state.cu_processing = False
                 st.error(f"❌ Error: {e}")
-                import traceback
-                print(traceback.format_exc())
             
             st.session_state.cu_chat_key += 1
             time.sleep(0.5)
             st.rerun()
 
-    # ACTION BUTTONS
     st.markdown("---")
-
     col1, col2 = st.columns([1, 1])
 
     with col1:
@@ -1493,3 +1452,832 @@ elif page == "💬 AI Assistant":
         ):
             st.cache_data.clear()
             st.rerun()
+
+# ============================================================================
+# DOCUMENT UPLOAD PAGE - NEW
+# ============================================================================
+
+# ============================================================================
+# DOCUMENT UPLOAD PAGE - COMPLETE AND CORRECTED
+# ============================================================================
+
+elif page == "📄 Document Upload":
+    st.title("📄 Document Upload Center")
+    
+    # Enhanced CSS with all styling
+    st.markdown("""
+    <style>
+    /* Info Cards */
+    .info-card {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        padding: 20px;
+        border-radius: 12px;
+        color: white;
+        text-align: center;
+        box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+        margin: 10px 0;
+    }
+    .info-card-label {
+        font-size: 14px;
+        opacity: 0.9;
+        margin-bottom: 8px;
+        font-weight: 600;
+    }
+    .info-card-value {
+        font-size: 20px;
+        font-weight: 700;
+    }
+    
+    /* Status Cards */
+    .stat-card {
+        background: white;
+        border: 2px solid #e0e0e0;
+        border-radius: 12px;
+        padding: 24px;
+        text-align: center;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+        transition: all 0.3s ease;
+    }
+    .stat-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(0,0,0,0.12);
+    }
+    .stat-icon {
+        font-size: 32px;
+        margin-bottom: 12px;
+    }
+    .stat-value {
+        font-size: 36px;
+        font-weight: 700;
+        color: #2c3e50;
+        margin: 8px 0;
+    }
+    .stat-label {
+        font-size: 14px;
+        color: #7f8c8d;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+    }
+    .stat-card.complete {
+        border-color: #28a745;
+        background: linear-gradient(135deg, #d4edda 0%, #c3e6cb 100%);
+    }
+    .stat-card.complete .stat-value {
+        color: #155724;
+    }
+    .stat-card.complete .stat-label {
+        color: #155724;
+    }
+    .stat-card.pending {
+        border-color: #ffc107;
+        background: linear-gradient(135deg, #fff3cd 0%, #ffeaa7 100%);
+    }
+    .stat-card.pending .stat-value {
+        color: #856404;
+    }
+    .stat-card.pending .stat-label {
+        color: #856404;
+    }
+    .stat-card.submitted {
+        border-color: #007bff;
+        background: linear-gradient(135deg, #cfe2ff 0%, #b6d4fe 100%);
+    }
+    .stat-card.submitted .stat-value {
+        color: #004085;
+    }
+    .stat-card.submitted .stat-label {
+        color: #004085;
+    }
+    
+    /* Progress Bar */
+    .progress-bar-container {
+        background: #e9ecef;
+        border-radius: 10px;
+        height: 30px;
+        margin: 20px 0;
+        overflow: hidden;
+        box-shadow: inset 0 2px 4px rgba(0,0,0,0.1);
+    }
+    .progress-bar-fill {
+        background: linear-gradient(90deg, #28a745 0%, #20c997 100%);
+        height: 100%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: white;
+        font-weight: 600;
+        font-size: 13px;
+        transition: width 0.3s ease;
+    }
+    
+    /* Success Card */
+    .success-card {
+        background: linear-gradient(135deg, #d4edda 0%, #c3e6cb 100%);
+        border: 3px solid #28a745;
+        border-radius: 16px;
+        padding: 30px;
+        margin: 20px 0;
+        text-align: center;
+        box-shadow: 0 4px 12px rgba(40, 167, 69, 0.2);
+    }
+    .success-icon {
+        font-size: 72px;
+        margin-bottom: 20px;
+    }
+    .success-title {
+        font-size: 28px;
+        font-weight: 700;
+        color: #155724;
+        margin-bottom: 15px;
+    }
+    .success-message {
+        font-size: 16px;
+        color: #155724;
+        margin-bottom: 20px;
+        line-height: 1.8;
+    }
+    
+    /* Member Card */
+    .member-item {
+        background: white;
+        border: 1px solid #e0e0e0;
+        border-radius: 10px;
+        padding: 15px;
+        margin: 10px 0;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        transition: all 0.3s ease;
+    }
+    .member-item:hover {
+        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        border-color: #667eea;
+    }
+    .member-name {
+        font-weight: 600;
+        color: #2c3e50;
+    }
+    
+    /* Document Header */
+    .doc-header {
+        background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+        border-left: 4px solid #667eea;
+        border-radius: 8px;
+        padding: 15px;
+        margin: 15px 0;
+    }
+    .doc-type {
+        font-size: 18px;
+        font-weight: 700;
+        color: #2c3e50;
+    }
+    .doc-meta {
+        font-size: 12px;
+        color: #6c757d;
+        margin-top: 8px;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+    
+    # ============================================================================
+    # AUTHENTICATION
+    # ============================================================================
+    if not st.session_state.doc_auth:
+        st.subheader("🔐 User Authentication")
+        st.info("✉️ Enter your registered email to access the document upload portal")
+        
+        col1, col2 = st.columns([3, 1])
+        with col1:
+            email_input = st.text_input(
+                "Email",
+                placeholder="your.email@example.com",
+                label_visibility="collapsed"
+            )
+        with col2:
+            st.markdown("<br>", unsafe_allow_html=True)
+            verify_btn = st.button("✅ Verify", use_container_width=True, type="primary")
+        
+        if verify_btn and email_input:
+            try:
+                req_url = f"{BACKEND_URL}/documentupload/get-document-requirements"
+                response = requests.post(req_url, json={"email": email_input}, timeout=10)
+                
+                if response.status_code == 200:
+                    st.session_state.doc_auth = True
+                    st.session_state.doc_email = email_input
+                    st.session_state.doc_requirements = response.json()
+                    st.success(f"✅ Welcome back!")
+                    time.sleep(0.5)
+                    st.rerun()
+                else:
+                    st.error("❌ Email not found. Please register first.")
+            except Exception as e:
+                st.error(f"❌ Connection error: {e}")
+        elif verify_btn:
+            st.warning("⚠️ Please enter your email address")
+        
+        st.stop()
+
+    # ============================================================================
+    # AUTHENTICATED USER INTERFACE
+    # ============================================================================
+    
+    col1, col2 = st.columns([4, 1])
+    with col1:
+        account_info = st.session_state.doc_requirements.get("account_type", "User")
+        st.subheader(f"👤 {account_info} Account")
+        st.caption(f"📧 {st.session_state.doc_email}")
+    with col2:
+        if st.button("🔄 Switch User", use_container_width=True):
+            for key in list(st.session_state.keys()):
+                if key.startswith('doc_'):
+                    del st.session_state[key]
+            st.rerun()
+
+    st.markdown("---")
+
+    # Load current status
+    try:
+        status_response = requests.get(
+            f"{BACKEND_URL}/documentupload/document-status/{st.session_state.doc_email}",
+            timeout=10
+        )
+        
+        if status_response.status_code == 200:
+            st.session_state.doc_status = status_response.json()
+    except Exception as e:
+        st.error(f"⚠️ Error loading status: {e}")
+
+    # Get user requirements
+    ownership_type = st.session_state.doc_requirements.get("ownership_type", "")
+    account_type = st.session_state.doc_requirements.get("account_type", "")
+    
+    # ✅ CRITICAL FIX: Get stage from LATEST status, not old requirements
+    if st.session_state.doc_status:
+        stage = st.session_state.doc_status.get("stage", "identification")
+        
+        # Map internal stage to user-friendly description
+        if stage == "member_eids":
+            stage_desc = "Partnership Member EID Collection"
+        elif stage == "identification":
+            stage_desc = "Partnership Identification Stage"
+        elif stage == "complete":
+            stage_desc = "Verification Complete"
+        else:
+            stage_desc = st.session_state.doc_requirements.get("stage_description", "General Account")
+    else:
+        stage = st.session_state.doc_requirements.get("stage", "identification")
+        stage_desc = st.session_state.doc_requirements.get("stage_description", "")
+    
+    # Debug logging
+    print(f"[DEBUG] 🎯 Current stage: {stage}")
+    print(f"[DEBUG] 📊 Account: {account_type} | Ownership: {ownership_type}")
+    print(f"[DEBUG] 📋 Stage description: {stage_desc}")
+    
+    # ============================================================================
+    # ACCOUNT INFO CARDS
+    # ============================================================================
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.markdown(f"""
+        <div class="info-card">
+            <div class="info-card-label">📊 Account Type</div>
+            <div class="info-card-value">{account_type}</div>
+        </div>
+        """, unsafe_allow_html=True)
+    with col2:
+        st.markdown(f"""
+        <div class="info-card">
+            <div class="info-card-label">👥 Ownership</div>
+            <div class="info-card-value">{ownership_type or 'N/A'}</div>
+        </div>
+        """, unsafe_allow_html=True)
+    with col3:
+        st.markdown(f"""
+        <div class="info-card">
+            <div class="info-card-label">📋 Current Stage</div>
+            <div class="info-card-value">{stage_desc}</div>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    st.markdown("---")
+    
+    # ============================================================================
+    # STATUS METRICS
+    # ============================================================================
+    if st.session_state.doc_status:
+        submitted_docs = st.session_state.doc_status.get("documents", [])
+        remaining_docs = st.session_state.doc_status.get("remaining_documents", [])
+        is_complete = st.session_state.doc_status.get("is_complete", False)
+        members_info = st.session_state.doc_status.get("members_info")
+        
+        col1, col2, col3 = st.columns(3)
+        
+        with col1:
+            st.markdown(f"""
+            <div class="stat-card submitted">
+                <div class="stat-icon">📄</div>
+                <div class="stat-value">{len(submitted_docs)}</div>
+                <div class="stat-label">Submitted</div>
+            </div>
+            """, unsafe_allow_html=True)
+        
+        with col2:
+            st.markdown(f"""
+            <div class="stat-card pending">
+                <div class="stat-icon">📋</div>
+                <div class="stat-value">{len(remaining_docs)}</div>
+                <div class="stat-label">Remaining</div>
+            </div>
+            """, unsafe_allow_html=True)
+        
+        with col3:
+            status_class = "complete" if is_complete else "pending"
+            status_icon = "✅" if is_complete else "⏳"
+            status_text = "Complete" if is_complete else "In Progress"
+            
+            st.markdown(f"""
+            <div class="stat-card {status_class}">
+                <div class="stat-icon">{status_icon}</div>
+                <div class="stat-value" style="font-size: 24px;">{status_text}</div>
+                <div class="stat-label">Status</div>
+            </div>
+            """, unsafe_allow_html=True)
+        
+        st.markdown("---")
+        
+        # ============================================================================
+        # SUBMITTED DOCUMENTS WITH PDF PREVIEW
+        # ============================================================================
+        if submitted_docs:
+            st.markdown("### 📊 Submitted Documents")
+            
+            for idx, doc in enumerate(submitted_docs):
+                doc_type = doc.get("document_type", "unknown").upper()
+                filename = doc.get("filename", "Unknown")
+                is_valid = doc.get("is_valid", False)
+                member_name = doc.get("member_name")
+                
+                col_header, col_status = st.columns([3, 1])
+                
+                with col_header:
+                    st.markdown(f"""
+                    <div class="doc-header">
+                        <div class="doc-type">📄 {doc_type}</div>
+                        <div class="doc-meta">📁 {filename}</div>
+                        {f'<div class="doc-meta">👤 Member: {member_name}</div>' if member_name else ''}
+                    </div>
+                    """, unsafe_allow_html=True)
+                
+                with col_status:
+                    if is_valid:
+                        st.success("✅ Valid")
+                    else:
+                        st.warning("⚠️ Invalid")
+                
+                # Display preview in expander
+
+                with st.expander(f"👁️ View Details - {doc_type}", expanded=False):
+                    try:
+                        # ✅ Call separate preview endpoint
+                        preview_response = requests.get(
+                            f"{BACKEND_URL}/documentupload/get-document-preview/{st.session_state.doc_email}/{doc_type.lower()}",
+                            params={"member_name": member_name} if member_name else {},
+                            timeout=10
+                        )
+                        
+                        if preview_response.status_code == 200:
+                            preview_info = preview_response.json()
+                            
+                            col_left, col_right = st.columns([1, 1])
+                            
+                            # LEFT: Document Preview Display
+                            with col_left:
+                                st.markdown("**🖼️ Document Preview**")
+                                
+                                if preview_info.get("preview_html"):
+                                    st.markdown(preview_info.get("preview_html"), unsafe_allow_html=True)
+                                
+                                # PDF Download Button
+                                if preview_info.get("mime_type") == "application/pdf":
+                                    if st.button(
+                                        "📥 Download PDF",
+                                        key=f"pdf_download_{idx}",
+                                        use_container_width=True
+                                    ):
+                                        try:
+                                            # ✅ Call separate download endpoint
+                                            download_response = requests.get(
+                                                f"{BACKEND_URL}/documentupload/download-document/{st.session_state.doc_email}/{doc_type.lower()}",
+                                                params={"member_name": member_name} if member_name else {},
+                                                timeout=30
+                                            )
+                                            
+                                            if download_response.status_code == 200:
+                                                st.download_button(
+                                                    label="📥 Download",
+                                                    data=download_response.content,
+                                                    file_name=preview_info.get("filename", f"{doc_type}.pdf"),
+                                                    mime="application/pdf",
+                                                    use_container_width=True,
+                                                    key=f"dl_pdf_{idx}"
+                                                )
+                                        except Exception as e:
+                                            st.error(f"Error downloading: {e}")
+                            
+                            # RIGHT: Extracted Information
+                            with col_right:
+                                st.markdown("**📋 Extracted Information**")
+                                extracted_data = preview_info.get("extracted_data", {})
+                                
+                                if extracted_data:
+                                    if doc_type == "EID":
+                                        st.write("**👤 Personal Information:**")
+                                        st.write(f"• **Name:** {extracted_data.get('Name') or extracted_data.get('name', 'N/A')}")
+                                        st.write(f"• **ID Number:** {extracted_data.get('ID Number') or extracted_data.get('id_number', 'N/A')}")
+                                        st.write(f"• **Nationality:** {extracted_data.get('Nationality') or extracted_data.get('nationality', 'N/A')}")
+                                        st.write(f"• **Expiry:** {extracted_data.get('Expiry Date') or extracted_data.get('expiry_date', 'N/A')}")
+                                    
+                                    elif doc_type == "COMMERCIAL":
+                                        eng = extracted_data.get("english", {})
+                                        st.write("**🏢 Company Information:**")
+                                        st.write(f"• **Company:** {eng.get('company_name_english', 'N/A')}")
+                                        st.write(f"• **License:** {eng.get('license_number', 'N/A')}")
+                                        st.write(f"• **Status:** {eng.get('status', 'N/A')}")
+                                        
+                                    elif doc_type in ["EJARI", "TENANCY"]:
+                                        eng = extracted_data.get("english", {})
+                                        st.write("**🏠 Tenancy Information:**")
+                                        st.write(f"• **Contract:** {eng.get('contract_number', 'N/A')}")
+                                        st.write(f"• **Property:** {eng.get('property_type', 'N/A')}")
+                                        st.write(f"• **Start:** {eng.get('start_date', 'N/A')}")
+                                        st.write(f"• **End:** {eng.get('end_date', 'N/A')}")
+                                    
+                                    elif doc_type in ["MOA", "MEMORANDUM"]:
+                                        eng = extracted_data.get("english", {})
+                                        st.write("**📜 MOA Information:**")
+                                        st.write(f"• **Company:** {eng.get('company_name', 'N/A')}")
+                                        st.write(f"• **Shares:** {eng.get('number_of_shares', 'N/A')}")
+                                        st.write(f"• **Capital:** {eng.get('capital', 'N/A')}")
+                                else:
+                                    st.info("ℹ️ No extracted data available")
+                        
+                        else:
+                            st.warning("⚠️ Preview not available")
+                    
+                    except Exception as e:
+                        st.error(f"Error loading preview: {e}")
+                        
+                st.markdown("<br>", unsafe_allow_html=True)
+            
+            st.markdown("---")
+        
+        # ============================================================================
+        # MEMBER PROGRESS FOR PARTNERSHIPS
+        # ============================================================================
+        if members_info:
+            st.markdown("### 👥 Member Progress")
+            
+            total = members_info.get("total", 0)
+            verified = members_info.get("verified", 0)
+            all_members = members_info.get("all_members", [])
+            verified_members = members_info.get("verified_members", [])
+            
+            progress_pct = (verified / total * 100) if total > 0 else 0
+            st.markdown(f"""
+                <div class="progress-bar-container">
+                    <div class="progress-bar-fill" style="width: {progress_pct}%;">
+                        {verified}/{total} EIDs Verified
+                    </div>
+                </div>
+            """, unsafe_allow_html=True)
+            
+            for member_name in all_members:
+                is_verified = member_name in verified_members
+                status_icon = "✅" if is_verified else "⏳"
+                status_text = "Verified" if is_verified else "Pending"
+                status_color = "#28a745" if is_verified else "#ffc107"
+                
+                st.markdown(f"""
+                <div class="member-item">
+                    <span class="member-name">👤 {member_name}</span>
+                    <span style="color: {status_color}; font-weight: 600;">{status_icon} {status_text}</span>
+                </div>
+                """, unsafe_allow_html=True)
+            
+            st.markdown("---")
+    
+    # ============================================================================
+    # FINAL CONFIRMATION
+    # ============================================================================
+    if is_complete:
+        st.markdown("---")
+        st.markdown("### ✅ Final Confirmation")
+        st.write("Please confirm that all document information is correct:")
+        
+        try:
+            confirmation_response = requests.get(
+                f"{BACKEND_URL}/documentupload/check-confirmation-status/{st.session_state.doc_email}",
+                timeout=10
+            )
+            
+            if confirmation_response.status_code == 200:
+                confirmation_data = confirmation_response.json()
+                db_confirmation_sent = confirmation_data.get("confirmation_sent", False)
+            else:
+                db_confirmation_sent = False
+        except Exception as e:
+            print(f"[WARN] Could not check confirmation status: {e}")
+            db_confirmation_sent = False
+        
+        if "doc_confirmation_sent" not in st.session_state:
+            st.session_state.doc_confirmation_sent = db_confirmation_sent
+        
+        if st.session_state.doc_confirmation_sent or db_confirmation_sent:
+            st.markdown("""
+            <div class="success-card">
+                <div class="success-icon">🎉</div>
+                <div class="success-title">Document Verification Complete!</div>
+                <div class="success-message">
+                    ✅ Confirmation email has been sent<br>
+                    ⏰ Account activation within 3-4 business days<br>
+                    📧 Check your inbox for further updates
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+            
+            st.info("💡 You can now close this page. We'll contact you via email once your account is activated.")
+            st.session_state.doc_confirmation_sent = True
+        else:
+            confirm_checkbox = st.checkbox(
+                "✅ I confirm that all document information is correct and want to proceed with verification",
+                key="final_confirmation"
+            )
+            
+            if confirm_checkbox:
+                try:
+                    with st.spinner("📧 Sending confirmation email..."):
+                        completion_response = requests.post(
+                            f"{BACKEND_URL}/documentupload/send-completion-email",
+                            json={"email": st.session_state.doc_email},
+                            timeout=10
+                        )
+                    
+                    if completion_response.status_code == 200:
+                        st.session_state.doc_confirmation_sent = True
+                        st.balloons()
+                        time.sleep(1)
+                        st.rerun()
+                    else:
+                        st.error("❌ Failed to send confirmation email. Please try again.")
+                        st.session_state.doc_confirmation_sent = False
+                
+                except Exception as e:
+                    st.error(f"❌ Error: {e}")
+                    st.session_state.doc_confirmation_sent = False
+        
+        st.stop()
+    
+    # ============================================================================
+    # CORPORATE MULTIPLE OWNERS - STAGE 1
+    # ============================================================================
+    if (account_type == "Corporate" and 
+        ownership_type in ["Partnership", "Multiple Owners"] and 
+        stage == "identification"):
+        
+        st.markdown("### 📤 Stage 1: Upload Commercial License & MOA")
+        st.info("✅ Upload both documents: Commercial License and MOA")
+        
+        uploaded_files = st.file_uploader(
+            "📎 Upload Commercial License & MOA (2 files)",
+            type=["pdf", "png", "jpg", "jpeg"],
+            accept_multiple_files=True,
+            key="stage1_uploader"
+        )
+        
+        if uploaded_files:
+            if len(uploaded_files) == 2:
+                st.success("✅ 2 files selected!")
+                
+                col1, col2, col3 = st.columns([1, 2, 1])
+                with col2:
+                    if st.button("📤 Upload & Process", type="primary", use_container_width=True):
+                        success_count = 0
+                        
+                        try:
+                            for idx, file in enumerate(uploaded_files):
+                                with st.spinner(f"Processing {file.name}..."):
+                                    upload_response = requests.post(
+                                        f"{BACKEND_URL}/documentupload/upload-document",
+                                        data={"email": st.session_state.doc_email},
+                                        files=[("files", (file.name, file.getvalue(), file.type))],
+                                        timeout=600
+                                    )
+                                
+                                if upload_response.status_code == 200:
+                                    st.success(f"✅ {file.name} uploaded successfully")
+                                    success_count += 1
+                                else:
+                                    st.error(f"❌ Failed to upload {file.name}")
+                            
+                            # ✅ FIX: Check if BOTH documents succeeded
+                            if success_count == 2:
+                                st.success("🎉 Both documents uploaded!")
+                                
+                                # ✅ CRITICAL: Wait for backend to process transition
+                                with st.spinner("🔄 Processing stage transition..."):
+                                    time.sleep(3)  # Give backend time to transition
+                                    
+                                    # ✅ Force refresh status from backend
+                                    try:
+                                        status_check = requests.get(
+                                            f"{BACKEND_URL}/documentupload/document-status/{st.session_state.doc_email}",
+                                            timeout=10
+                                        )
+                                        
+                                        if status_check.status_code == 200:
+                                            new_status = status_check.json()
+                                            new_stage = new_status.get("stage", "")
+                                            
+                                            st.info(f"📋 New stage detected: {new_stage}")
+                                            
+                                            # ✅ Clear cache and reload requirements
+                                            st.cache_data.clear()
+                                            
+                                            req_response = requests.post(
+                                                f"{BACKEND_URL}/documentupload/get-document-requirements",
+                                                json={"email": st.session_state.doc_email},
+                                                timeout=10
+                                            )
+                                            
+                                            if req_response.status_code == 200:
+                                                st.session_state.doc_requirements = req_response.json()
+                                                st.session_state.doc_status = new_status
+                                    
+                                    except Exception as e:
+                                        print(f"[WARN] Status check error: {e}")
+                                
+                                st.success("✅ Ready for Stage 2!")
+                                time.sleep(2)
+                                st.rerun()
+                        
+                        except Exception as e:
+                            st.error(f"❌ Error: {e}")
+            else:
+                st.warning(f"⚠️ Please upload exactly 2 files. You've selected {len(uploaded_files)}.")
+
+    # ============================================================================
+    # CORPORATE MULTIPLE OWNERS - STAGE 2
+    # ============================================================================
+    elif (account_type == "Corporate" and 
+          ownership_type in ["Partnership", "Multiple Owners"] and 
+          stage == "member_eids"):
+        
+        st.markdown("### 👥 Stage 2: Upload Member EIDs")
+        
+        try:
+            members_response = requests.get(
+                f"{BACKEND_URL}/documentupload/member-list/{st.session_state.doc_email}",
+                timeout=10
+            )
+            
+            if members_response.status_code == 200:
+                members_data = members_response.json()
+                members = members_data.get("members", [])
+                total_members = members_data.get("total", 0)
+                verified_members = members_data.get("verified", 0)
+                
+                pending_members = [m for m in members if not m.get("eid_verified")]
+                pending_count = len(pending_members)
+                
+                st.info(f"📊 Progress: {verified_members}/{total_members} members completed")
+                
+                progress_pct = (verified_members / total_members * 100) if total_members > 0 else 0
+                st.progress(progress_pct / 100, text=f"{verified_members}/{total_members} EIDs Verified")
+                
+                if pending_count == 0:
+                    st.success("✅ All member EIDs verified!")
+                    st.stop()
+                
+                current_member = pending_members[0]
+                st.markdown(f"### 👤 Current Member: **{current_member['name']}**")
+                st.markdown(f"📤 Upload Emirates ID for {current_member['name']}")
+                
+                with st.expander("👥 View All Members Status"):
+                    for member in members:
+                        status_icon = "✅" if member.get("eid_verified") else "⏳"
+                        status_text = "Verified" if member.get("eid_verified") else "Pending"
+                        st.write(f"{status_icon} **{member['name']}** - {status_text}")
+                
+                uploaded_eids = st.file_uploader(
+                    f"📎 Upload EID(s) for {pending_count} remaining member(s)",
+                    type=["pdf", "png", "jpg", "jpeg"],
+                    accept_multiple_files=True,
+                    key="stage2_uploader",
+                    help=f"Upload {current_member['name']}'s EID first."
+                )
+                
+                if uploaded_eids and len(uploaded_eids) > 0:
+                    st.info(f"📎 {len(uploaded_eids)} file(s) selected")
+                    
+                    col1, col2, col3 = st.columns([1, 2, 1])
+                    with col2:
+                        if st.button("📤 Upload EID(s)", type="primary", use_container_width=True):
+                            try:
+                                success_count = 0
+                                
+                                for idx, file in enumerate(uploaded_eids):
+                                    if idx < len(pending_members):
+                                        member_name = pending_members[idx]['name']
+                                    else:
+                                        member_name = pending_members[0]['name']
+                                        st.warning(f"⚠️ More files than pending members. Uploading to {member_name}")
+                                    
+                                    st.write(f"📤 Uploading **{file.name}** for {member_name}...")
+                                    
+                                    with st.spinner(f"Processing {file.name}..."):
+                                        upload_response = requests.post(
+                                            f"{BACKEND_URL}/documentupload/upload-document",
+                                            data={
+                                                "email": st.session_state.doc_email,
+                                                "member_name": member_name
+                                            },
+                                            files=[("files", (file.name, file.getvalue(), file.type))],
+                                            timeout=600
+                                        )
+                                    
+                                    if upload_response.status_code == 200:
+                                        response_data = upload_response.json()
+                                        st.success(f"✅ {member_name} - {file.name} uploaded")
+                                        success_count += 1
+                                    else:
+                                        error_msg = upload_response.json().get("detail", "Unknown error")
+                                        st.error(f"❌ Failed to upload {file.name}: {error_msg}")
+                                
+                                if success_count > 0:
+                                    st.success(f"✅ {success_count} file(s) uploaded successfully!")
+                                    st.info("🔄 Refreshing status...")
+                                    time.sleep(2)
+                                    st.rerun()
+                            
+                            except Exception as e:
+                                st.error(f"❌ Error uploading: {str(e)}")
+                else:
+                    st.info(f"👆 Select {current_member['name']}'s Emirates ID to continue")
+            
+            else:
+                st.error("❌ Failed to load member list")
+        
+        except Exception as e:
+            st.error(f"❌ Error loading member information: {str(e)}")
+
+    # ============================================================================
+    # ALL OTHER ACCOUNT TYPES - BULK UPLOAD
+    # ============================================================================
+    else:
+        st.markdown("### 📤 Upload Your Documents")
+        
+        required_docs = st.session_state.doc_requirements.get("required_documents", [])
+        st.info(f"📋 Required: {', '.join(required_docs)}")
+        
+        uploaded_files = st.file_uploader(
+            f"📎 Upload all {len(required_docs)} document(s)",
+            type=["pdf", "png", "jpg", "jpeg"],
+            accept_multiple_files=True,
+            key="bulk_uploader"
+        )
+        
+        if uploaded_files:
+            col1, col2, col3 = st.columns([1, 2, 1])
+            with col2:
+                if st.button("📤 Upload All Documents", type="primary", use_container_width=True):
+                    try:
+                        for idx, file in enumerate(uploaded_files):
+                            with st.spinner(f"Processing {file.name}..."):
+                                upload_response = requests.post(
+                                    f"{BACKEND_URL}/documentupload/upload-document",
+                                    data={"email": st.session_state.doc_email},
+                                    files=[("files", (file.name, file.getvalue(), file.type))],
+                                    timeout=600
+                                )
+                            
+                            if upload_response.status_code == 200:
+                                st.success(f"✅ {file.name} uploaded")
+                            else:
+                                st.error(f"❌ Failed to upload {file.name}")
+                        
+                        st.info("🔄 Refreshing status...")
+                        time.sleep(2)
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"❌ Error: {e}")
+    
+    # ============================================================================
+    # HELP SECTION
+    # ============================================================================
+    st.markdown("---")
+
+    if st.button("🔄 Refresh Status", use_container_width=True):
+        st.cache_data.clear()
+        st.rerun()
