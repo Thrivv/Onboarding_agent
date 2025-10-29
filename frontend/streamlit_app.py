@@ -2026,7 +2026,6 @@ elif page == "📄 Document Upload":
                     
                     if completion_response.status_code == 200:
                         st.session_state.doc_confirmation_sent = True
-                        st.balloons()
                         time.sleep(1)
                         st.rerun()
                     else:
@@ -2280,4 +2279,5 @@ elif page == "📄 Document Upload":
 
     if st.button("🔄 Refresh Status", use_container_width=True):
         st.cache_data.clear()
+
         st.rerun()
