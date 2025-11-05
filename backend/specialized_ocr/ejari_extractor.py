@@ -42,7 +42,7 @@ ARABIC_FIELDS = [
 EXPECTED_FIELD_COUNT = 25
 
 
-def retry_with_backoff(max_retries=3, base_delay=10):
+def retry_with_backoff(max_retries=3, base_delay=5):
     """Retry decorator with exponential backoff for API failures"""
     def decorator(func):
         @wraps(func)
@@ -145,7 +145,7 @@ class EjariExtractor:
         }
 
         try:
-            response = requests.post(self.api_url, headers=headers, json=data, timeout=120)
+            response = requests.post(self.api_url, headers=headers, json=data, timeout=60)
             
             if response.status_code in [502, 503, 504]:
                 raise RuntimeError(f"Ejari API failed: {response.status_code} Server temporarily unavailable")
@@ -158,7 +158,7 @@ class EjariExtractor:
             return result["choices"][0]["message"]["content"]
             
         except requests.exceptions.Timeout:
-            raise RuntimeError("Ejari API failed: Request timeout after 120 seconds")
+            raise RuntimeError("Ejari API failed: Request timeout after 60 seconds")
         except requests.exceptions.RequestException as e:
             raise RuntimeError(f"Ejari API failed: {response.status_code if 'response' in locals() else 'Network error'} {str(e)}")
 

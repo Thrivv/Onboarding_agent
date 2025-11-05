@@ -7,7 +7,7 @@ load_dotenv()  # Load from .env file in project root
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_API_KEY = os.getenv("SUPABASE_API_KEY")
 
-#SMTP settings
+# SMTP settings
 SMTP_SERVER = os.getenv("SMTP_SERVER")
 SMTP_PORT = int(os.getenv("SMTP_PORT", "587"))  # Default 587
 SMTP_USERNAME = os.getenv("SMTP_USERNAME")

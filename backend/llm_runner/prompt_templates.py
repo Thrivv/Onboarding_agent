@@ -1,9 +1,8 @@
 # backend/llm_runner/prompt_templates.py
 
+
 def build_onboarding_prompt(
-    user_message: str,
-    context: str = "",
-    registration_data: dict = None
+    user_message: str, context: str = "", registration_data: dict = None
 ) -> str:
     onboarding_step = "welcome"
     if context.startswith("Onboarding Step:"):
@@ -26,28 +25,24 @@ def build_onboarding_prompt(
         )
 
     # Document instructions based on account type
-    account_type = registration_data.get('account_type') if registration_data else None
+    account_type = registration_data.get("account_type") if registration_data else None
     if onboarding_step == "welcome":
         if account_type == "Savings":
             instructions = "Please submit your Emirates ID and Ejari as image files."
         elif account_type == "Corporate":
             instructions = "Please submit your Commercial License as image files."
         else:
-            instructions = "Please submit your documents as image files to continue onboarding."
+            instructions = (
+                "Please submit your documents as image files to continue onboarding."
+            )
     elif onboarding_step == "document_verification":
-        instructions = (
-            "Inform the user that all relevant documents have been received and are being verified. Ask if they have any other queries."
-        )
-        
+        instructions = "Inform the user that all relevant documents have been received and are being verified. Ask if they have any other queries."
+
     elif onboarding_step == "verification_in_progress":
-        instructions = (
-            "Inform the user that some documents have been received and are verified. Ask then to submit the remaining documents."
-        )
-        
+        instructions = "Inform the user that some documents have been received and are verified. Ask then to submit the remaining documents."
+
     elif onboarding_step == "verification_complete":
-        instructions = (
-            "Congratulate the user for being onboarded and inform them that account details will be shared within 3-4 business days."
-        )
+        instructions = "Congratulate the user for being onboarded and inform them that account details will be shared within 3-4 business days."
     else:
         instructions = "Respond helpfully to the user's query."
 
