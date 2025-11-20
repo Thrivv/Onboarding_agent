@@ -4,6 +4,7 @@ import requests
 import sys
 import time
 
+
 def check_database_health():
     """Check if database service is healthy"""
     try:
@@ -14,18 +15,19 @@ def check_database_health():
             if data.get("status") == "healthy":
                 print("[INFO] Database service is healthy")
                 return True
-        
+
         print(f"[ERROR] Database service unhealthy: {response.status_code}")
         return False
-        
+
     except requests.exceptions.RequestException as e:
         print(f"[ERROR] Database health check failed: {e}")
         return False
 
+
 if __name__ == "__main__":
     # Give service time to start
     time.sleep(2)
-    
+
     if check_database_health():
         sys.exit(0)
     else:

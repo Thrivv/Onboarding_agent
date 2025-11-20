@@ -75,7 +75,7 @@ def build_chat_prompt(user_message: str, context: str = "", registration_data: d
 
     account_type = registration_data.get('account_type') if registration_data else None
     if account_type == "Savings":
-        doc_info = "Required documents: Emirates ID, Commercial Registration, Tenancy Contract (Ejari), Memorandum of Association (MOA)"
+        doc_info = "Required documents: Emirates ID, Tenancy Contract (Ejari)"
     elif account_type == "Corporate":
         doc_info = "Required documents: Emirates ID, Commercial Registration, Tenancy Contract (Ejari), Memorandum of Association (MOA)"
     else:
@@ -553,15 +553,29 @@ def get_document_status(email: str):
 def confirm_document(email: str, filename: str = None):
     """
     User clicked Confirm in email. Mark progress and log confirmation.
+    Handles both single-user and multiple-owner flows.
     """
     try:
         user = get_user_by_email(email)
         if not user:
             return HTMLResponse(content="<h3>User not found.</h3>", status_code=404)
 
-        # Update user onboarding step to verification_in_progress (or a suitable state)
+        account_type = user.get("account_type", "Account")
+        ownership_type = user.get("ownership_type", "")
+        
+        print(f"[INFO] Confirmation received from: {email}")
+        print(f"       Account Type: {account_type}")
+        print(f"       Ownership Type: {ownership_type}")
+
+        # ✅ Update user onboarding step to verification_complete
         try:
-            supabase.table("users").update({"onboarding_step": "verification_complete"}).eq("email", email).execute()
+            supabase.table("users").update({
+                "onboarding_step": "verification_complete",
+                "document_stage": "complete",
+                "document_confirmation_sent": True,  # ✅ ADD THIS
+                "confirmation_timestamp": datetime.utcnow().isoformat()  # ✅ ADD THIS
+            }).eq("email", email).execute()
+            print(f"[INFO] ✅ Updated onboarding_step to verification_complete for {email}")
         except Exception as e:
             print(f"[WARN] Could not update user onboarding step: {e}")
 
@@ -570,28 +584,67 @@ def confirm_document(email: str, filename: str = None):
             supabase.table("conversations").insert({
                 "user_email": email,
                 "role": "user",
-                "message": f"Confirmed extracted data for {filename or 'documents'}",
+                "message": f"Confirmed extracted data for {filename or 'all documents'}",
                 "timestamp": datetime.utcnow().isoformat()
             }).execute()
         except Exception as e:
             print(f"[WARN] Could not insert conversation log: {e}")
 
-        # --- ADD THIS BLOCK ---
-        # Send onboarding complete email after confirmation
+        # Send onboarding complete email with PDF
         try:
             from llm_pipeline.handle_reply import send_completion_email
-            send_completion_email(email, user.get("account_type", "Account"))
+            print(f"[INFO] 📄 Generating PDF and sending completion email...")
+            send_completion_email(email, account_type)
+            print(f"[INFO] ✅ Completion email sent to {email}")
         except Exception as e:
-            print(f"[WARN] Could not send onboarding complete email: {e}")
-        # --- END BLOCK ---
+            print(f"[ERROR] Could not send onboarding complete email: {e}")
+            import traceback
+            traceback.print_exc()
 
-        # Respond with a friendly HTML page
-        return HTMLResponse(content=f"<h3>Thank you — confirmed.</h3><p>We received your confirmation. for <strong>{filename or 'your documents'}</strong>. Thank You for your support.</p>", status_code=200)
+        # Return success HTML page
+        return HTMLResponse(content="""
+            <html>
+                <head>
+                    <meta charset="UTF-8">
+                    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                    <title>Confirmation Received</title>
+                </head>
+                <body style='font-family:Arial,sans-serif;background:#f5f5f5;padding:20px;'>
+                    <div style='max-width:600px;margin:auto;background:#fff;padding:40px;border-radius:10px;box-shadow:0 2px 10px rgba(0,0,0,0.1);text-align:center;'>
+                        <h1 style='color:#4CAF50;margin-bottom:20px;'>✔ Confirmation Received!</h1>
+                        <p style='font-size:16px;color:#333;'>Thank you for confirming your documents.</p>
+                        <p style='font-size:16px;color:#333;'>Your onboarding is now complete.</p>
+                        
+                        <div style='margin-top:30px;padding:20px;background:#e8f5e9;border-radius:5px;'>
+                            <p style='margin:0;color:#2e7d32;font-weight:bold;'>📧 Check your email</p>
+                            <p style='margin:10px 0 0 0;color:#555;'>You will receive a completion email with your onboarding summary PDF shortly.</p>
+                        </div>
+                        
+                        <div style='margin-top:30px;padding:15px;background:#fff3e0;border-radius:5px;'>
+                            <p style='margin:0;color:#f57c00;'><strong>Next Steps:</strong></p>
+                            <p style='margin:10px 0 0 0;color:#666;'>Your account will be activated within <strong>3-4 business days</strong>.</p>
+                        </div>
+                        
+                        <p style='margin-top:30px;font-size:14px;color:#999;'>You can close this window.</p>
+                    </div>
+                </body>
+            </html>
+        """, status_code=200)
 
     except Exception as e:
         print(f"[ERROR] confirm-document error: {e}")
-        return HTMLResponse(content=f"<h3>Error</h3><p>{e}</p>", status_code=500)
-
+        import traceback
+        traceback.print_exc()
+        
+        return HTMLResponse(content=f"""
+            <html>
+                <body style='font-family:Arial;text-align:center;padding:50px;'>
+                    <h1 style='color:#f44336;'>❌ Error</h1>
+                    <p>Failed to process confirmation. Please contact support.</p>
+                    <p style='color:#999;font-size:12px;'>{str(e)}</p>
+                </body>
+            </html>
+        """, status_code=500)
 
 @router.get("/resubmit-document", response_class=HTMLResponse)
 def resubmit_document(email: str, filename: str = None):

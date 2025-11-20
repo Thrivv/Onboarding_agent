@@ -15,12 +15,10 @@ collection = client.get_or_create_collection(name=COLLECTION_NAME)
 # Load embedding model
 embedding_model = SentenceTransformer("all-MiniLM-L6-v2")
 
+
 def retrieve_similar_chunks(query: str, top_k: int = 3) -> list[str]:
     query_embedding = embedding_model.encode(query).tolist()
 
-    results = collection.query(
-        query_embeddings=[query_embedding],
-        n_results=top_k
-    )
+    results = collection.query(query_embeddings=[query_embedding], n_results=top_k)
 
     return results["documents"][0] if results and results.get("documents") else []

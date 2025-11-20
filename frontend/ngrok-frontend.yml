@@ -1,0 +1,11 @@
+version: "2"
+authtoken: ${NGROK_AUTHTOKEN}
+log_level: info
+log_format: json
+log: stdout
+
+tunnels:
+  frontend:
+    proto: http
+    addr: frontend:3030
+    inspect: true
