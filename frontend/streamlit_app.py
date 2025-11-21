@@ -1454,7 +1454,7 @@ elif page == "💬 AI Assistant":
             st.rerun()
 
 # ============================================================================
-# DOCUMENT UPLOAD PAGE - NEW
+# DOCUMENT UPLOAD PAGE
 # ============================================================================
 
 elif page == "📄 Document Upload":
@@ -1594,6 +1594,40 @@ elif page == "📄 Document Upload":
         line-height: 1.8;
     }
     
+    /* Validation Progress Card */
+    .validation-card {
+        background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%);
+        border: 3px solid #2196f3;
+        border-radius: 16px;
+        padding: 40px;
+        margin: 20px 0;
+        text-align: center;
+        box-shadow: 0 4px 12px rgba(33, 150, 243, 0.3);
+    }
+    .validation-icon {
+        font-size: 72px;
+        margin-bottom: 20px;
+        animation: pulse 2s ease-in-out infinite;
+    }
+    .validation-title {
+        font-size: 28px;
+        font-weight: 700;
+        color: #1565c0;
+        margin-bottom: 15px;
+    }
+    .validation-message {
+        font-size: 16px;
+        color: #1976d2;
+        margin-bottom: 20px;
+        line-height: 1.8;
+    }
+    
+    /* Pulse Animation */
+    @keyframes pulse {
+        0%, 100% { opacity: 1; transform: scale(1); }
+        50% { opacity: 0.7; transform: scale(1.05); }
+    }
+    
     /* Member Card */
     .member-item {
         background: white;
@@ -1632,6 +1666,33 @@ elif page == "📄 Document Upload":
         font-size: 12px;
         color: #6c757d;
         margin-top: 8px;
+    }
+    
+    /* Error Card */
+    .error-card {
+        background: linear-gradient(135deg, #f8d7da 0%, #f5c6cb 100%);
+        border: 3px solid #dc3545;
+        border-radius: 16px;
+        padding: 30px;
+        margin: 20px 0;
+        text-align: center;
+        box-shadow: 0 4px 12px rgba(220, 53, 69, 0.2);
+    }
+    .error-icon {
+        font-size: 72px;
+        margin-bottom: 20px;
+    }
+    .error-title {
+        font-size: 28px;
+        font-weight: 700;
+        color: #721c24;
+        margin-bottom: 15px;
+    }
+    .error-message {
+        font-size: 16px;
+        color: #721c24;
+        margin-bottom: 20px;
+        line-height: 1.8;
     }
     </style>
     """, unsafe_allow_html=True)
@@ -1693,21 +1754,7 @@ elif page == "📄 Document Upload":
 
     st.markdown("---")
 
-    # # Load current status
-    # try:
-    #     status_response = requests.get(
-    #         f"{BACKEND_URL}/documentupload/document-status/{st.session_state.doc_email}",
-    #         timeout=10
-    #     )
-        
-    #     if status_response.status_code == 200:
-    #         st.session_state.doc_status = status_response.json()
-    # except Exception as e:
-    #     st.error(f"⚠️ Error loading status: {e}")
-
-    # # Get user requirements
-    # ownership_type = st.session_state.doc_requirements.get("ownership_type", "")
-        # Load current status
+    # Load current status
     try:
         status_response = requests.get(
             f"{BACKEND_URL}/documentupload/document-status/{st.session_state.doc_email}",
@@ -1719,7 +1766,9 @@ elif page == "📄 Document Upload":
     except Exception as e:
         st.error(f"⚠️ Error loading status: {e}")
 
-    # ✅ CHECK IF ALREADY VERIFIED COMPLETE - ADD THIS BLOCK
+    # ============================================================================
+    # CHECK IF ALREADY VERIFIED COMPLETE
+    # ============================================================================
     if st.session_state.doc_status:
         stage = st.session_state.doc_status.get("stage", "")
         is_complete = st.session_state.doc_status.get("is_complete", False)
@@ -1745,9 +1794,9 @@ elif page == "📄 Document Upload":
                         del st.session_state[key]
                 st.rerun()
             
-            st.stop()  # ✅ Stop rendering rest of page
+            st.stop()
 
-    # Get user requirements (existing code continues...)
+    # Get user requirements
     ownership_type = st.session_state.doc_requirements.get("ownership_type", "")
     account_type = st.session_state.doc_requirements.get("account_type", "")
     
@@ -1850,7 +1899,7 @@ elif page == "📄 Document Upload":
                 filename = doc.get("filename", "Unknown")
                 is_valid = doc.get("is_valid", False)
                 member_name = doc.get("member_name")
-                display_name = doc.get("display_name", doc_type.upper())  # ✅ Use display_name
+                display_name = doc.get("display_name", doc_type.upper())
                 
                 col_header, col_status = st.columns([3, 1])
                 
@@ -1870,7 +1919,7 @@ elif page == "📄 Document Upload":
                         st.warning("⚠️ Invalid")
                 
                 # Display preview in expander
-                with st.expander(f"👁️ View Details - {display_name}", expanded=False):  # ✅ Use display_name
+                with st.expander(f"👁️ View Details - {display_name}", expanded=False):
                     try:
                         preview_response = requests.get(
                             f"{BACKEND_URL}/documentupload/get-document-preview/{st.session_state.doc_email}/{doc_type.lower()}",
@@ -1887,11 +1936,7 @@ elif page == "📄 Document Upload":
                             with col_left:
                                 st.markdown("**🖼️ Document Preview**")
                                 
-                                # ============================================================================
-                                # ✅ SHOW PREVIEW CARD
-                                # ============================================================================
                                 if preview_info.get("mime_type") == "application/pdf":
-                                    # PDF Preview Card
                                     pdf_meta = preview_info.get("pdf_metadata", {})
                                     
                                     st.markdown(f"""
@@ -1913,7 +1958,6 @@ elif page == "📄 Document Upload":
                                     </div>
                                     """, unsafe_allow_html=True)
                                     
-                                    # Download Button
                                     if st.button(
                                         "📥 Download PDF",
                                         key=f"pdf_download_{idx}",
@@ -1940,7 +1984,6 @@ elif page == "📄 Document Upload":
                                             st.error(f"❌ Error downloading: {e}")
                                 
                                 elif preview_info.get("mime_type", "").startswith("image/"):
-                                    # Image Preview - Show directly
                                     try:
                                         download_response = requests.get(
                                             f"{BACKEND_URL}/documentupload/download-document/{st.session_state.doc_email}/{doc_type.lower()}",
@@ -1962,21 +2005,17 @@ elif page == "📄 Document Upload":
                                         st.warning("⚠️ Could not display image")
                                 
                                 elif preview_info.get("is_email_upload"):
-                                    # Email Upload - No preview available
                                     st.info("📧 Document uploaded via email - preview not available")
                                 
                                 else:
                                     st.warning("⚠️ Preview not available")
 
-                            # ============================================================================
-                            # ✅ RIGHT COLUMN: Extracted Information (FIXED for Ejari)
-                            # ============================================================================
+                            # RIGHT COLUMN: Extracted Information
                             with col_right:
                                 st.markdown("**📋 Extracted Information**")
                                 extracted_data = preview_info.get("extracted_data", {})
                                 
                                 if extracted_data:
-                                    # ✅ EID - Flat structure
                                     if display_name == "Emirates ID (EID)":
                                         st.write("**👤 Personal Information:**")
                                         st.write(f"• **Name:** {extracted_data.get('Name') or extracted_data.get('name', 'N/A')}")
@@ -1984,7 +2023,6 @@ elif page == "📄 Document Upload":
                                         st.write(f"• **Nationality:** {extracted_data.get('Nationality') or extracted_data.get('nationality', 'N/A')}")
                                         st.write(f"• **Expiry:** {extracted_data.get('Expiry Date') or extracted_data.get('expiry_date', 'N/A')}")
                                     
-                                    # ✅ COMMERCIAL LICENSE - Nested structure
                                     elif display_name == "Commercial License":
                                         eng = extracted_data.get("english", {})
                                         st.write("**🏢 Company Information:**")
@@ -1993,7 +2031,6 @@ elif page == "📄 Document Upload":
                                         st.write(f"• **Status:** {eng.get('status', 'N/A')}")
                                         st.write(f"• **Expiry:** {eng.get('expiry_date', 'N/A')}")
                                     
-                                    # ✅ EJARI - FIXED: Nested structure
                                     elif display_name == "Ejari (Tenancy Contract)":
                                         eng = extracted_data.get("english", {})
                                         st.write("**🏠 Tenancy Information:**")
@@ -2005,7 +2042,6 @@ elif page == "📄 Document Upload":
                                         st.write(f"• **Property:** {eng.get('property_type', 'N/A')}")
                                         st.write(f"• **Area:** {eng.get('area', 'N/A')}")
                                     
-                                    # ✅ MOA - Nested structure
                                     elif display_name == "Memorandum of Association (MOA)":
                                         eng = extracted_data.get("english", {})
                                         st.write("**📜 MOA Information:**")
@@ -2046,7 +2082,6 @@ elif page == "📄 Document Upload":
                 </div>
             """, unsafe_allow_html=True)
             
-            # ✅ FIX: all_members is a list of strings, not dicts
             for member_name in all_members:
                 is_verified = member_name in verified_members
                 status_icon = "✅" if is_verified else "⏳"
@@ -2063,13 +2098,29 @@ elif page == "📄 Document Upload":
             st.markdown("---")
             
     # ============================================================================
-    # FINAL CONFIRMATION
+    # FINAL CONFIRMATION WITH AUTO-START VALIDATION
     # ============================================================================
     if is_complete:
         st.markdown("---")
         st.markdown("### ✅ Final Confirmation")
-        st.write("Please confirm that all document information is correct:")
         
+        # Initialize session states
+        if "doc_confirmation_sent" not in st.session_state:
+            st.session_state.doc_confirmation_sent = False
+        
+        if "validation_in_progress" not in st.session_state:
+            st.session_state.validation_in_progress = False
+        
+        if "validation_failed" not in st.session_state:
+            st.session_state.validation_failed = False
+        
+        if "validation_error_message" not in st.session_state:
+            st.session_state.validation_error_message = ""
+        
+        if "validation_mismatches" not in st.session_state:
+            st.session_state.validation_mismatches = []
+        
+        # Check backend confirmation status
         try:
             confirmation_response = requests.get(
                 f"{BACKEND_URL}/documentupload/check-confirmation-status/{st.session_state.doc_email}",
@@ -2079,14 +2130,18 @@ elif page == "📄 Document Upload":
             if confirmation_response.status_code == 200:
                 confirmation_data = confirmation_response.json()
                 db_confirmation_sent = confirmation_data.get("confirmation_sent", False)
+                
+                if db_confirmation_sent and not st.session_state.doc_confirmation_sent:
+                    st.session_state.doc_confirmation_sent = True
+                    st.session_state.validation_in_progress = False
             else:
                 db_confirmation_sent = False
         except Exception as e:
             db_confirmation_sent = False
         
-        if "doc_confirmation_sent" not in st.session_state:
-            st.session_state.doc_confirmation_sent = db_confirmation_sent
-        
+        # ============================================================================
+        # SHOW SUCCESS CARD IF ALREADY CONFIRMED
+        # ============================================================================
         if st.session_state.doc_confirmation_sent or db_confirmation_sent:
             st.markdown("""
             <div class="success-card">
@@ -2101,33 +2156,153 @@ elif page == "📄 Document Upload":
             """, unsafe_allow_html=True)
             
             st.info("💡 You can now close this page. We'll contact you via email once your account is activated.")
-            st.session_state.doc_confirmation_sent = True
-        else:
-            confirm_checkbox = st.checkbox(
-                "✅ I confirm that all document information is correct and want to proceed with verification",
-                key="final_confirmation"
-            )
             
-            if confirm_checkbox:
-                try:
-                    with st.spinner("📧 Sending confirmation email..."):
-                        completion_response = requests.post(
-                            f"{BACKEND_URL}/documentupload/send-completion-email",
-                            json={"email": st.session_state.doc_email},
-                            timeout=10
-                        )
-                    
-                    if completion_response.status_code == 200:
+            if st.button("🔄 Refresh Page", use_container_width=True):
+                st.rerun()
+            
+            st.stop()
+        
+        # ============================================================================
+        # SHOW VALIDATION IN PROGRESS
+        # ============================================================================
+        if st.session_state.validation_in_progress:
+            st.markdown("""
+            <div class="validation-card">
+                <div class="validation-icon">⏳</div>
+                <div class="validation-title">Validation In Progress</div>
+                <div class="validation-message">
+                    🔍 Running cross-validation checks<br>
+                    🏛️ Verifying documents with government database<br>
+                    ⏱️ This may take 30-60 seconds...<br><br>
+                    <em>Please do not close this page</em>
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+            
+            # Auto-refresh to check status
+            time.sleep(3)
+            
+            try:
+                # Check if validation completed
+                status_check = requests.get(
+                    f"{BACKEND_URL}/documentupload/check-confirmation-status/{st.session_state.doc_email}",
+                    timeout=10
+                )
+                
+                if status_check.status_code == 200:
+                    data = status_check.json()
+                    if data.get("confirmation_sent"):
+                        st.session_state.validation_in_progress = False
                         st.session_state.doc_confirmation_sent = True
-                        time.sleep(1)
+                        st.rerun()
+            except Exception as e:
+                # Keep showing progress on error
+                pass
+            
+            st.rerun()
+        
+        # ============================================================================
+        # SHOW VALIDATION FAILED ERROR
+        # ============================================================================
+        if st.session_state.validation_failed:
+            st.markdown(f"""
+            <div class="error-card">
+                <div class="error-icon">❌</div>
+                <div class="error-title">Validation Failed</div>
+                <div class="error-message">
+                    {st.session_state.validation_error_message}
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+            
+            if st.session_state.validation_mismatches:
+                st.error("**❌ Please fix the following issues:**")
+                for mismatch in st.session_state.validation_mismatches:
+                    st.write(f"• {mismatch}")
+                
+                st.info("💡 Please review your documents and upload corrected versions, then try again.")
+            
+            # Reset button
+            if st.button("🔄 Try Again", use_container_width=True, type="primary"):
+                st.session_state.validation_failed = False
+                st.session_state.validation_error_message = ""
+                st.session_state.validation_mismatches = []
+                st.rerun()
+            
+            st.stop()
+        
+        # ============================================================================
+        # SHOW CONFIRMATION CHECKBOX - AUTO-START ON CHECK
+        # ============================================================================
+        st.write("Please confirm that all document information is correct:")
+        
+        confirm_checkbox = st.checkbox(
+            "✅ I confirm that all document information is correct and want to proceed with verification",
+            key="final_confirmation"
+        )
+        
+        # ✅ AUTO-START VALIDATION WHEN CHECKBOX IS CHECKED
+        if confirm_checkbox:
+            # Immediately set validation in progress
+            st.session_state.validation_in_progress = True
+            st.session_state.validation_failed = False
+            st.session_state.validation_error_message = ""
+            st.session_state.validation_mismatches = []
+            
+            # Trigger backend validation
+            try:
+                completion_response = requests.post(
+                    f"{BACKEND_URL}/documentupload/send-completion-email",
+                    json={"email": st.session_state.doc_email},
+                    timeout=120  # 2 minutes timeout for validation
+                )
+                
+                if completion_response.status_code == 200:
+                    result = completion_response.json()
+                    
+                    if result.get("success"):
+                        # Validation passed
+                        st.session_state.validation_in_progress = False
+                        st.session_state.doc_confirmation_sent = True
                         st.rerun()
                     else:
-                        st.error("❌ Failed to send confirmation email. Please try again.")
-                        st.session_state.doc_confirmation_sent = False
-                
-                except Exception as e:
-                    st.error(f"❌ Error: {e}")
-                    st.session_state.doc_confirmation_sent = False
+                        # Validation failed
+                        st.session_state.validation_in_progress = False
+                        st.session_state.validation_failed = True
+                        st.session_state.validation_error_message = result.get('message', 'Validation failed. Please check your documents.')
+                        st.session_state.validation_mismatches = result.get("mismatches", [])
+                        st.rerun()
+                else:
+                    # HTTP error
+                    st.session_state.validation_in_progress = False
+                    st.session_state.validation_failed = True
+                    
+                    try:
+                        error_data = completion_response.json()
+                        error_detail = error_data.get('detail', 'Validation failed')
+                    except:
+                        error_detail = f"Server error (Status {completion_response.status_code})"
+                    
+                    st.session_state.validation_error_message = error_detail
+                    st.rerun()
+            
+            except requests.exceptions.Timeout:
+                st.session_state.validation_in_progress = False
+                st.session_state.validation_failed = True
+                st.session_state.validation_error_message = "⏱️ Validation timed out. Please try again or contact support if the issue persists."
+                st.rerun()
+            
+            except requests.exceptions.ConnectionError:
+                st.session_state.validation_in_progress = False
+                st.session_state.validation_failed = True
+                st.session_state.validation_error_message = "🔌 Connection error. Please check your internet connection and try again."
+                st.rerun()
+            
+            except Exception as e:
+                st.session_state.validation_in_progress = False
+                st.session_state.validation_failed = True
+                st.session_state.validation_error_message = f"❌ Unexpected error: {str(e)}"
+                st.rerun()
         
         st.stop()
     
@@ -2230,9 +2405,9 @@ elif page == "📄 Document Upload":
             
             if members_response.status_code == 200:
                 members_data = members_response.json()
-                all_members = members_data.get("members", [])  # ✅ This is a list of strings
+                all_members = members_data.get("members", [])
                 
-                # ✅ Get verification status from document_status
+                # Get verification status from document_status
                 if st.session_state.doc_status:
                     submitted_docs = st.session_state.doc_status.get("documents", [])
                     members_info = st.session_state.doc_status.get("members_info", {})
