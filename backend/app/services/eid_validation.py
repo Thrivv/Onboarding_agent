@@ -16,13 +16,43 @@ SUREPASS_JWT_TOKEN = os.getenv("SUREPASS_JWT_TOKEN", "")
 
 from app.services.cross_validator import CrossValidator
 
+# ========================================================================
+# TOGGLE CONFIGURATION FOR SUREPASS EID VALIDATION
+# ========================================================================
+def is_surepass_enabled(account_type: str, ownership_type: str = "") -> bool:
+    """
+    Check if SurePass EID validation is enabled for the given account type
+    
+    Args:
+        account_type: Account type (e.g., 'Savings', 'Corporate')
+        ownership_type: Ownership type (e.g., 'Single Owner', 'Partnership')
+        
+    Returns:
+        bool: True if validation is enabled, False otherwise
+    """
+    # Map account types to environment variable keys
+    if account_type == "Savings":
+        env_key = "EID_VALIDATION_SAVINGS"
+    elif account_type == "Corporate" and ownership_type == "Single Owner":
+        env_key = "EID_VALIDATION_CORPORATE_SINGLE"
+    elif account_type == "Corporate" and ownership_type == "Partnership":
+        env_key = "EID_VALIDATION_CORPORATE_PARTNERSHIP"
+    else:
+        # Unknown account type - default to disabled
+        return False
+    
+    # Read environment variable (default to 'false')
+    value = os.getenv(env_key, 'false').lower()
+    return value in ('true', '1', 'yes')
+
+
 def validate_eid_before_confirmation(email: str) -> Tuple[bool, str]:
     """
     Main validation function with CROSS-VALIDATION FIRST
     
     Flow:
     1. ✅ Cross-validate documents against each other
-    2. ✅ SurePass validate EID against government records
+    2. ✅ SurePass validate EID against government records (if enabled)
     3. ✅ Return result
     """
     print(f"\n{'='*80}")
@@ -74,10 +104,24 @@ def validate_eid_before_confirmation(email: str) -> Tuple[bool, str]:
         print(f"   All document data is consistent and matches\n")
         
         # ========================================================================
-        # STEP 2: SUREPASS EID VALIDATION
+        # STEP 2: SUREPASS EID VALIDATION (WITH TOGGLE)
         # ========================================================================
         print(f"✅ [STEP 2/3] SurePass EID Validation Starting...")
         print(f"{'='*80}\n")
+        
+        # 🔧 CHECK IF SUREPASS IS ENABLED FOR THIS ACCOUNT TYPE
+        if not is_surepass_enabled(account_type, ownership):
+            print(f"ℹ️  [INFO] SurePass validation is DISABLED for {account_type} - {ownership}")
+            print(f"   Skipping SurePass API call...\n")
+            print(f"✅ [STEP 2/3] SurePass EID Validation SKIPPED (Disabled)")
+            print(f"{'='*80}\n")
+            print(f"🎉 [SUCCESS] All required verification checks passed!")
+            print(f"   ✅ Cross-Validation: PASSED")
+            print(f"   ⏭️  SurePass Validation: SKIPPED (Disabled)")
+            print(f"{'='*80}\n")
+            return True, "✅ Validation completed (SurePass disabled)"
+        
+        print(f"✅ [INFO] SurePass validation is ENABLED for {account_type} - {ownership}")
         
         eid_data = _get_eid_data(email)
         if not eid_data:
