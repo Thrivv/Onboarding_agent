@@ -1,0 +1,38 @@
+# Dockerfile.base - Base image with all common dependencies
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    gcc \
+    curl \
+    build-essential \
+    libpq-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install common Python packages used across all services
+RUN pip install --no-cache-dir \
+    fastapi \
+    uvicorn \
+    streamlit \
+    pandas \
+    plotly \
+    requests \
+    python-dotenv \
+    supabase \
+    chromadb \
+    sentence-transformers \
+    qdrant-client \
+    pydantic \
+    python-multipart \
+    pypdf2 \
+    python-docx \
+    pillow \
+    fpdf
+
+# Set Python to use UTF-8 encoding
+ENV PYTHONUNBUFFERED=1
+ENV PYTHONIOENCODING=utf-8
+
+# This base image is ready for all services
