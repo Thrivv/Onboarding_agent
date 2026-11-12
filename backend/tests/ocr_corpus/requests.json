@@ -1,0 +1,77 @@
+{
+  "bvi/synthetic_sample_01.pdf": [
+    {
+      "max_tokens": 3000,
+      "model": null,
+      "prompt_chars": 6015,
+      "prompt_sha1": "bf5b514e14c618c0198297e470f1bd38c2233806",
+      "prompt_tokens_est": 1504,
+      "system_cached": true,
+      "system_chars": 1846,
+      "system_tokens_est": 462,
+      "temperature": 0.0,
+      "timeout": 90,
+      "url": "https://bedrock-runtime.ap-south-1.amazonaws.com/model/global.anthropic.claude-haiku-4-5-20251001-v1:0/invoke"
+    }
+  ],
+  "ejari/synthetic_sample_01.pdf": [
+    {
+      "max_tokens": 3500,
+      "model": null,
+      "prompt_chars": 20015,
+      "prompt_sha1": "c3c2d84aa97b11709faddf9fd22f7d8f09854b72",
+      "prompt_tokens_est": 5004,
+      "system_cached": true,
+      "system_chars": 15309,
+      "system_tokens_est": 3827,
+      "temperature": 0.0,
+      "timeout": 60,
+      "url": "https://bedrock-runtime.ap-south-1.amazonaws.com/model/global.anthropic.claude-haiku-4-5-20251001-v1:0/invoke"
+    }
+  ],
+  "moa/synthetic_sample_01.pdf": [
+    {
+      "max_tokens": 4500,
+      "model": null,
+      "prompt_chars": 20015,
+      "prompt_sha1": "7200485fd5dfaafdf4d180448be28d371c30fa24",
+      "prompt_tokens_est": 5004,
+      "system_cached": true,
+      "system_chars": 22391,
+      "system_tokens_est": 5598,
+      "temperature": 0.0,
+      "timeout": 60,
+      "url": "https://bedrock-runtime.ap-south-1.amazonaws.com/model/global.anthropic.claude-haiku-4-5-20251001-v1:0/invoke"
+    }
+  ],
+  "passport/synthetic_sample_01.jpg": [
+    {
+      "max_tokens": 800,
+      "model": null,
+      "prompt_chars": 0,
+      "prompt_sha1": "da39a3ee5e6b4b0d3255bfef95601890afd80709",
+      "prompt_tokens_est": 0,
+      "system_cached": true,
+      "system_chars": 1106,
+      "system_tokens_est": 276,
+      "temperature": 0.0,
+      "timeout": 60,
+      "url": "https://bedrock-runtime.ap-south-1.amazonaws.com/model/global.anthropic.claude-haiku-4-5-20251001-v1:0/invoke"
+    }
+  ],
+  "trade/synthetic_sample_01.pdf": [
+    {
+      "max_tokens": 4500,
+      "model": null,
+      "prompt_chars": 25015,
+      "prompt_sha1": "816f3cb8fd5e8d93c38a728a149d6ff8fa7dbf4a",
+      "prompt_tokens_est": 6254,
+      "system_cached": true,
+      "system_chars": 16464,
+      "system_tokens_est": 4116,
+      "temperature": 0.0,
+      "timeout": 60,
+      "url": "https://bedrock-runtime.ap-south-1.amazonaws.com/model/global.anthropic.claude-haiku-4-5-20251001-v1:0/invoke"
+    }
+  ]
+}

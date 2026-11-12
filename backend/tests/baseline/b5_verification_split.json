@@ -1,0 +1,52 @@
+{
+  "recorded_at": "2026-07-29",
+  "source": "backend/app/domain/onboarding/verification.py (pre-split snapshot _snapshot_preB5C3C5_20260728_234612)",
+  "source_lines": 2262,
+  "note": "Current expected hashes. --verify compares against these. A mismatch means an edit, not a move.",
+  "history": [
+    {
+      "event": "B5 split",
+      "date": "2026-07-29",
+      "note": "Hashes taken from the original 2,261-line verification.py. These prove the split itself moved every function byte-identical.",
+      "functions": {
+        "process_uploaded_document": {
+          "module": "document_processing.py",
+          "sha1": "71a2cad8065ea7c9c1024ae0ce8c98343df572ae",
+          "lines": 863
+        },
+        "_find_latest_unverified_document": {
+          "module": "latest_document.py",
+          "sha1": "00c2a599118878e0497e84a2bc8ed1fdf1bad8b9",
+          "lines": 118
+        },
+        "handle_verification_response": {
+          "module": "response_handling.py",
+          "sha1": "1d3fd673e087f02b57b21962ab15e4948e919476",
+          "lines": 1182
+        }
+      }
+    },
+    {
+      "event": "stage constants adopted",
+      "date": "2026-07-29",
+      "note": "adopt_stage_constants.py replaced bare stage/ownership literals with the constants stage_table.py exports. Value-identical by construction (each constant IS the literal), verified by folding the names back and comparing ASTs, but it changes the source bytes \u2014 so the verbatim hash moved. Deliberate. Functions touched: process_uploaded_document, _find_latest_unverified_document, handle_verification_response."
+    }
+  ],
+  "functions": {
+    "process_uploaded_document": {
+      "module": "document_processing.py",
+      "sha1": "6ed5a12c3820cae17264f518d9e2f7979a5a6b64",
+      "lines": 863
+    },
+    "_find_latest_unverified_document": {
+      "module": "latest_document.py",
+      "sha1": "549d0cf1aa0c3a9ae383a6ad6a027d00e9b0cc55",
+      "lines": 118
+    },
+    "handle_verification_response": {
+      "module": "response_handling.py",
+      "sha1": "30bc2ccba3d9946633d68afc273c5743199cae68",
+      "lines": 1182
+    }
+  }
+}

@@ -1,0 +1,74 @@
+/* frontend/src/styles/base.css
+ * Tailwind entry point and the brand custom properties.
+ *
+ * index.css was 1,685 lines in one stream; Stage B9 split it into five files
+ * along its OWN section banners, keeping every rule in its original order.
+ *
+ * The custom properties below exist because the two brand colours were
+ * hardcoded as raw hex in ~25 places across this stylesheet. They are declared
+ * here, but the existing hex literals are deliberately left alone: replacing 25
+ * of them is a visual change that wants eyes on the UI, and B9's remit is to
+ * split the file, not restyle the app. New code should use the variables.
+ */
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  /* Brand palette.
+     Note that tailwind.config.js maps `blue-600` to the amber below — every
+     `bg-blue-600` in this codebase renders orange. See docs/naming.md. These
+     are named for what they are rather than for the Tailwind key they hide
+     behind.
+     Declared, not yet applied: the ~25 existing hex literals in the other
+     stylesheets are untouched, because swapping them is a visual change and
+     B9 only splits the file. */
+  --brand-primary: #eea73b;   /* amber — primary actions, highlights */
+  --brand-secondary: #4d669f; /* slate blue — headers, secondary accents */
+}
+
+/* ---------------------------------------------------------------------------
+ * Arabic RTL support (multilingual rollout — docs/multilingual-support-plan.html,
+ * Phase 3). `dir` is set on <html> by context/LanguageContext.jsx whenever the
+ * user picks Arabic; nothing else in the app needs to know the current
+ * language to get the right font. Tailwind's built-in `rtl:`/`ltr:` variants
+ * (v3.3+) key off this same [dir] attribute for layout mirroring.
+ * ------------------------------------------------------------------------ */
+[dir="rtl"] {
+  font-family: 'IBM Plex Sans Arabic', 'Segoe UI', Tahoma, Arial, sans-serif;
+}
+
+/* ---------------------------------------------------------------------------
+ * Moved here from the end of the stylesheet during the B9 split.
+ *
+ * `@layer components` must sit in the same file as the `@tailwind components`
+ * directive — PostCSS resolves layers per file, so leaving this block in
+ * tampering.css broke the production build with:
+ *     "`@layer components` is used but no matching `@tailwind components`
+ *      directive is present"
+ *
+ * Moving it is not a cascade change. Tailwind HOISTS `@layer components`
+ * content into the position of the `@tailwind components` directive, so in the
+ * original single-file index.css this block was already being emitted here at
+ * the top — not at line 1,654 where it was written. Its position in the output
+ * is identical before and after.
+ * ------------------------------------------------------------------------- */
+
+@layer components {
+  .gx-input {
+    @apply w-full bg-gray-50 border border-gray-300 rounded-xl outline-none transition-all placeholder:text-slate-500 focus:bg-white focus:ring-2;
+  }
+
+  .gx-input-icon {
+    @apply pl-10 pr-4 py-2.5;
+  }
+
+  .gx-input-password {
+    @apply pl-10 pr-10 py-2.5;
+  }
+
+  .gx-input-error {
+    @apply border-red-500 bg-red-50;
+  }
+}

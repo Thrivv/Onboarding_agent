@@ -1,0 +1,17 @@
+/* frontend/src/index.css
+ * Entry point only.
+ *
+ * Was 1,685 lines of animations, component styles, utilities and forensics UI
+ * in a single stream. Stage B9 split it into five files along the banners the
+ * file already used.
+ *
+ * THE ORDER BELOW IS LOAD-BEARING. CSS breaks equal-specificity ties on source
+ * order, so these imports reproduce the original file's sequence exactly.
+ * Reordering them changes what renders.
+ */
+
+@import './styles/base.css';
+@import './styles/animations.css';
+@import './styles/components.css';
+@import './styles/utilities.css';
+@import './styles/tampering.css';

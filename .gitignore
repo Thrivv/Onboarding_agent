@@ -1,73 +1,79 @@
-# Environment files
+# ============================================================================
+# Secrets — NEVER commit. Use .env.example as the documented contract.
+# ============================================================================
 .env
 .env.*
-*.env
+!.env.example
+*.bak_*
+ssl/*
+!ssl/.gitkeep
 
+# ============================================================================
+# Customer data / PII — passport & Emirates ID scans, MOA, trade licences,
+# and the extracted-field JSON that accompanies them. Must never enter history.
+# ============================================================================
+backend/documents/
+backend/summary/
+external_documents/
+
+# OCR corpus fixtures are real customer documents — trade licences, tenancy
+# contracts, passports. The recorded corpus (hashes, request shapes) is safe
+# to keep; the source documents are not. See docs/ocr-corpus-runbook.md.
+backend/tests/ocr_fixtures/**
+!backend/tests/ocr_fixtures/**/.gitkeep
+backend/tests/ocr_corpus/cassettes/
+
+# ============================================================================
 # Python
+# ============================================================================
 __pycache__/
 *.py[cod]
 *$py.class
 *.so
 .Python
 venv/
+.venv/
 env/
-.env/
-build/
-develop-eggs/
-dist/
-downloads/
-eggs/
-.eggs/
-lib/
-lib64/
-parts/
-sdist/
-var/
-wheels/
 *.egg-info/
-.installed.cfg
-*.egg
+.pytest_cache/
+.mypy_cache/
+.coverage
+htmlcov/
 
-# IDEs and editors
-.idea/
-.vscode/
-*.swp
-*.swo
-*~
+# ============================================================================
+# Node / React
+# ============================================================================
+node_modules/
+frontend/build/
+frontend/dist/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.eslintcache
 
-# Project specific
-backend/documents/
-backend/summary/
-chroma_store/
-**/output.json
-
-# Logs
-*.log
+# ============================================================================
+# Logs & runtime artifacts
+# ============================================================================
 logs/
-log/
+*.log
+test logs.txt
 
-# Database
-*.sqlite3
-*.db
+# ============================================================================
+# Pre-refactor snapshots — safety copies, not source
+# ============================================================================
+_backup_*/
+_snapshot_*/
 
-# OS specific
+# ============================================================================
+# Editor / OS
+# ============================================================================
+.vscode/
+.idea/
+*.swp
 .DS_Store
 Thumbs.db
+desktop.ini
 
-# PDF files and documents
-*.pdf
-*.doc
-*.docx
-*.txt
-
-# Images
-*.png
-*.jpg
-*.jpeg
-*.gif
-*.ico
-*.webp
-
-# Docker
-.docker/
-docker-compose.override.yml
+# Stage B0 behavioural capture output (temporary, see docs/HANDOFF.md)
+logs/backend/capture/
+backend/tests/golden/

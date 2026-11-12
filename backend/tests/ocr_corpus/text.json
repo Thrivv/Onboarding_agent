@@ -1,0 +1,38 @@
+{
+  "bvi/synthetic_sample_01.pdf": {
+    "chars": 14906,
+    "head": "\n--- Page 1 ---\nSYNTHETIC TEST FIXTURE -- NO REAL PERSON, COMPANY OR DOCUMENT -- GENERATED FOR THE OCR\nCORPUS BASELINE (PHASE 0)\nTERRITORY OF THE BRITISH VIRGIN ISLANDS\nBVI BUSINESS COMPANIES ACT, 200",
+    "is_error": false,
+    "lines": 147,
+    "page_markers": 3,
+    "sha1": "e67a5de8faecf092eca9451baaa9e1b3d319005a",
+    "tail": "rporation with attached registers, so the OCR corpus baseline measures a realistic\nworst-case prompt size rather than a short sample. No party, obligation, or right described in this clause is real.\n\n"
+  },
+  "ejari/synthetic_sample_01.pdf": {
+    "chars": 82824,
+    "head": "SYNTHETIC TEST FIXTURE -- NO REAL PERSON, COMPANY OR DOCUMENT -- GENERATED FOR THE OCR\nCORPUS BASELINE (PHASE 0)\nGOVERNMENT OF DUBAI -- DUBAI LAND DEPARTMENT\nEJARI -- TENANCY CONTRACT REGISTRATION CER",
+    "is_error": false,
+    "lines": 831,
+    "page_markers": 0,
+    "sha1": "c3f47258b91734e44ea0e7c28edd2731487509d3",
+    "tail": "enancy\ncontract with its full schedule of standard terms and conditions, so the OCR corpus baseline measures a realistic\nworst-case prompt size. No party, premises, or obligation named here is real.\n\n"
+  },
+  "moa/synthetic_sample_01.pdf": {
+    "chars": 26735,
+    "head": "\n--- Page 1 ---\nSYNTHETIC TEST FIXTURE -- NO REAL PERSON, COMPANY OR DOCUMENT -- GENERATED FOR THE OCR\nCORPUS BASELINE (PHASE 0)\nMEMORANDUM OF ASSOCIATION\nOF\nSAMPLE TRADING COMPANY L.L.C\nCompany Name:",
+    "is_error": false,
+    "lines": 394,
+    "page_markers": 7,
+    "sha1": "24f91acb9e917957b6fa1857c0303702b9a07620",
+    "tail": " registration. (restated at\nclause 187 for length.)\nARTICLE 4 -- REGISTERED OFFICE: The registered office of the company shall be in Dubai, United Arab Emirates.\n(restated at clause 188 for length.)\n\n"
+  },
+  "trade/synthetic_sample_01.pdf": {
+    "chars": 94941,
+    "head": "SYNTHETIC TEST FIXTURE -- NO REAL PERSON, COMPANY OR DOCUMENT -- GENERATED FOR THE OCR\nCORPUS BASELINE (PHASE 0)\nDEPARTMENT OF ECONOMY AND TOURISM -- DUBAI\nTRADE LICENSE\nLicense No: 1000001\nCompany Na",
+    "is_error": false,
+    "lines": 937,
+    "page_markers": 0,
+    "sha1": "6bda35e94287f396232dba4f2921fb69e7bd0a7d",
+    "tail": "to a real\ntrade license with its full schedule of activities and standard conditions, so the OCR corpus baseline measures a realistic\nworst-case prompt size. No party or activity named here is real.\n\n"
+  }
+}

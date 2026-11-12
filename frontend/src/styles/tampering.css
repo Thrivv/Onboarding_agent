@@ -1,0 +1,574 @@
+/* frontend/src/styles/tampering.css
+ * Document-forensics UI: status banners, icon animations, progress indicator,
+ * verification badge, alert box, score indicator and reference display — plus
+ * the styling for LLM-rendered message HTML that follows it in the cascade.
+ *
+ * Kept as its own file because it is a self-contained subsystem, and because
+ * it is the block most likely to be worked on independently of the rest.
+ */
+
+/* ============================================================================
+   TAMPERING DETECTION STYLES
+   ============================================================================ */
+
+/* Tampering Status Banners */
+.tampering-banner-reject {
+  background: linear-gradient(135deg, #fee2e2 0%, #fecaca 100%);
+  border: 2px solid #ef4444;
+  animation: slideDown 0.5s ease-out;
+}
+
+.tampering-banner-escalate {
+  background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+  border: 2px solid #f59e0b;
+  animation: slideDown 0.5s ease-out;
+}
+
+.tampering-banner-accept {
+  background: linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%);
+  border: 2px solid #10b981;
+  animation: slideDown 0.5s ease-out;
+}
+
+/* Tampering Icon Animations */
+.tampering-icon-reject {
+  background: #ef4444;
+  animation: pulse-error 2s ease-in-out infinite;
+}
+
+.tampering-icon-escalate {
+  background: #f59e0b;
+  animation: pulse-warning 2s ease-in-out infinite;
+}
+
+.tampering-icon-accept {
+  background: #10b981;
+  animation: pulse-success 2s ease-in-out infinite;
+}
+
+@keyframes pulse-error {
+
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7);
+  }
+
+  50% {
+    box-shadow: 0 0 0 10px rgba(239, 68, 68, 0);
+  }
+}
+
+@keyframes pulse-warning {
+
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.7);
+  }
+
+  50% {
+    box-shadow: 0 0 0 10px rgba(245, 158, 11, 0);
+  }
+}
+
+@keyframes pulse-success {
+
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7);
+  }
+
+  50% {
+    box-shadow: 0 0 0 10px rgba(16, 185, 129, 0);
+  }
+}
+
+/* Tampering Progress Indicator */
+.tampering-progress {
+  position: relative;
+  height: 4px;
+  background: #e5e7eb;
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.tampering-progress-bar {
+  height: 100%;
+  background: linear-gradient(90deg, #4d669f 0%, #eea73b 100%);
+  animation: progress-slide 20s linear;
+}
+
+@keyframes progress-slide {
+  0% {
+    width: 0%;
+  }
+
+  100% {
+    width: 100%;
+  }
+}
+
+/* Tampering Verification Badge */
+.tampering-verified-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  background: linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%);
+  border: 2px solid #10b981;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #065f46;
+}
+
+.tampering-rejected-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  background: linear-gradient(135deg, #fee2e2 0%, #fecaca 100%);
+  border: 2px solid #ef4444;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #7f1d1d;
+}
+
+.tampering-review-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+  border: 2px solid #f59e0b;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #78350f;
+}
+
+/* Tampering Modal Overlay */
+.tampering-modal-overlay {
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  background: rgba(27, 82, 174, 0.6);
+  animation: fadeIn 0.3s ease-out;
+}
+
+/* Tampering Alert Box */
+.tampering-alert-box {
+  background: white;
+  border-radius: 12px;
+  padding: 20px;
+  box-shadow: 0 8px 24px rgba(27, 82, 174, 0.15);
+  animation: slideDown 0.4s ease-out;
+}
+
+.tampering-alert-box.error {
+  border-left: 6px solid #ef4444;
+}
+
+.tampering-alert-box.warning {
+  border-left: 6px solid #f59e0b;
+}
+
+.tampering-alert-box.success {
+  border-left: 6px solid #10b981;
+}
+
+/* Tampering Score Indicator */
+.tampering-score-low {
+  color: #10b981;
+  font-weight: bold;
+}
+
+.tampering-score-medium {
+  color: #f59e0b;
+  font-weight: bold;
+}
+
+.tampering-score-high {
+  color: #ef4444;
+  font-weight: bold;
+  animation: pulse-slow 2s ease-in-out infinite;
+}
+
+/* Tampering Loading Spinner */
+.tampering-spinner {
+  border: 4px solid #f3f4f6;
+  border-top: 4px solid #4d669f;
+  border-radius: 50%;
+  width: 40px;
+  height: 40px;
+  animation: spin 1s linear infinite;
+}
+
+/* Tampering Reference ID Display */
+.tampering-reference-id {
+  display: inline-block;
+  padding: 6px 12px;
+  background: rgba(27, 82, 174, 0.05);
+  border-radius: 6px;
+  font-family: "Courier New", monospace;
+  font-size: 12px;
+  color: #4b5563;
+  margin-top: 8px;
+}
+
+/* Responsive Tampering Styles */
+@media (max-width: 768px) {
+
+  .tampering-banner-reject,
+  .tampering-banner-escalate,
+  .tampering-banner-accept {
+    padding: 16px;
+  }
+
+  .tampering-alert-box {
+    padding: 16px;
+  }
+
+  .tampering-reference-id {
+    font-size: 10px;
+    padding: 4px 8px;
+  }
+}
+
+/* ============================================================================
+   MESSAGE HTML CONTENT STYLING
+   ============================================================================ */
+
+.message-html-content table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 10px 0;
+  font-size: 0.875rem;
+}
+
+.message-html-content table th {
+  background-color: #f3f4f6;
+  padding: 8px;
+  text-align: left;
+  font-weight: 600;
+  border: 1px solid #d1d5db;
+}
+
+.message-html-content table td {
+  padding: 8px;
+  border: 1px solid #d1d5db;
+}
+
+.message-html-content table tr:nth-child(even) {
+  background-color: #f9fafb;
+}
+
+.message-html-content h3 {
+  font-size: 1.125rem;
+  font-weight: 600;
+  margin: 12px 0 8px 0;
+}
+
+.message-html-content p {
+  margin: 8px 0;
+  line-height: 1.6;
+}
+
+.message-html-content ul,
+.message-html-content ol {
+  margin: 8px 0;
+  padding-left: 24px;
+}
+
+.message-html-content li {
+  margin: 4px 0;
+}
+
+.message-html-content strong {
+  font-weight: 600;
+}
+
+.message-html-content code {
+  background-color: #f3f4f6;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-family: monospace;
+  font-size: 0.875em;
+}
+
+/* Preserve spacing and line breaks */
+.message-text-content,
+.message-markdown-content {
+  white-space: pre-wrap;
+  word-wrap: break-word;
+}
+
+/* Animation */
+.animate-fadeIn {
+  animation: fadeIn 0.3s ease-in;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.tampering-warning {
+  padding: 16px;
+  border-radius: 8px;
+  margin: 12px 0;
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  border-left: 4px solid transparent;
+  font-family:
+    -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu,
+    Cantarell, sans-serif;
+}
+
+.tampering-warning.rejected {
+  background: #fee2e2;
+  border-left-color: #dc3545;
+  color: #7f1d1d;
+}
+
+.tampering-warning.rejected .warning-icon {
+  color: #dc3545;
+}
+
+.tampering-warning.review {
+  background: #fef3c7;
+  border-left-color: #ffc107;
+  color: #78350f;
+}
+
+.tampering-warning.review .warning-icon {
+  color: #ffc107;
+}
+
+.warning-icon {
+  font-size: 24px;
+  flex-shrink: 0;
+  line-height: 1.5;
+}
+
+.warning-content {
+  flex: 1;
+}
+
+.warning-content h3 {
+  margin: 0 0 8px 0;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.warning-content ul {
+  margin: 8px 0 0 0;
+  padding-left: 20px;
+}
+
+.warning-content li {
+  margin: 4px 0;
+  line-height: 1.5;
+}
+
+.warning-text {
+  color: inherit;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  margin: 0;
+  font-size: 14px;
+}
+
+.warning-text strong {
+  font-weight: 600;
+}
+
+.reference-id {
+  margin-top: 12px;
+  padding: 8px 12px;
+  background: rgba(27, 82, 174, 0.08);
+  border-radius: 4px;
+  font-size: 12px;
+  font-family: "Courier New", monospace;
+  color: #666;
+  word-break: break-all;
+}
+
+.reference-id strong {
+  color: #333;
+}
+
+.next-steps {
+  margin-top: 12px;
+  padding: 8px 12px;
+  background: rgba(27, 82, 174, 0.05);
+  border-radius: 4px;
+  font-size: 13px;
+}
+
+.next-steps strong {
+  display: block;
+  margin-bottom: 6px;
+  font-weight: 600;
+}
+
+.next-steps ul {
+  margin: 0;
+  padding-left: 18px;
+}
+
+.next-steps li {
+  margin: 4px 0;
+  line-height: 1.5;
+}
+
+@media (max-width: 640px) {
+  .tampering-warning {
+    padding: 12px;
+    gap: 10px;
+  }
+
+  .warning-icon {
+    font-size: 20px;
+  }
+
+  .warning-text {
+    font-size: 13px;
+  }
+
+  .reference-id {
+    font-size: 11px;
+  }
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-in {
+  animation: fade-in 0.3s ease-out;
+}
+
+/* Enhanced Animations */
+@keyframes shake {
+
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+
+  25% {
+    transform: translateX(-5px);
+  }
+
+  75% {
+    transform: translateX(5px);
+  }
+}
+
+.animate-shake {
+  animation: shake 0.2s ease-in-out 0s 2;
+}
+
+.animate-in {
+  animation-duration: 0.5s;
+  animation-fill-mode: both;
+}
+
+.fade-in {
+  animation-name: fadeIn;
+}
+
+.slide-in-from-bottom-4 {
+  animation-name: slideInBottom;
+}
+
+@keyframes slideInBottom {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* ...........................siva growx................................. */
+
+.gx-main-layout {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  background-position: center;
+  background-size: cover;
+  background-repeat: no-repeat;
+  width: 100%;
+  min-height: 100vh;
+  overflow: hidden;
+  background-image:
+    radial-gradient(circle at 12% 18%, rgba(255, 255, 255, 0.16), transparent 42%),
+    radial-gradient(circle at 88% 82%, rgba(255, 255, 255, 0.12), transparent 46%),
+    linear-gradient(135deg, #2597c4 0%, #28abdc 50%, #29a4df 100%);
+}
+
+.gx-welcome {
+  font-weight: 600;
+  font-size: 12px;
+  line-height: 100%;
+  letter-spacing: 2px;
+  text-align: center;
+  vertical-align: middle;
+  text-transform: uppercase;
+  margin-top: 20px;
+  color: #1B52AEb2;
+}
+
+.gx-sub {
+  font-size: 22px;
+  font-weight: 400;
+  line-height: 32px;
+  margin-top: 12px;
+  letter-spacing: -1.5px;
+  text-align: center;
+  text-transform: capitalize;
+}
+
+.gx-get-started {
+  font-weight: 600;
+  font-size: 22px;
+  line-height: 32px;
+  letter-spacing: -1.5px;
+  text-align: center;
+  text-transform: capitalize;
+}
+
+*:focus,
+*:focus-visible {
+  outline: none !important;
+  outline-offset: initial !important;
+  --tw-ring-color: initial !important;
+  --tw-ring-offset-color: initial !important;
+}
+
+.border-primary {
+  --tw-border-opacity: unset !important;
+  border-color: unset !important;
+  border-color: unset !important;
+}

@@ -1,0 +1,44 @@
+{
+  "_comment": [
+    "Pre-existing defects found during the refactor.",
+    "Entries here are reported by contract_check.py as KNOWN rather than FAIL, so a",
+    "regression introduced later is never lost in the noise of pre-existing issues.",
+    "_resolved_in_stage_a records what has since been fixed."
+  ],
+  "_resolved_in_stage_a": [
+    "documentpage.py normalize_extracted_data (2 dead copies at 289, 595) \u2014 removed; live copy at 2348 verified byte-identical",
+    "documentpage.py get_display_document_name (dead copy at 168) \u2014 removed; live copy verified byte-identical",
+    "documentpage.py line 19 `from app.services.data_normalizer import normalize_extracted_data` \u2014 dead import, shadowed by the local definition; removed",
+    "ocr_service.py identify_document_type_from_text (dead copy at 361) \u2014 removed; live copy verified byte-identical",
+    "ocr_service.py identify_document_type_from_file (dead copy at 457) \u2014 removed; live copy verified byte-identical",
+    "chat.py: added missing `import asyncio` \u2014 POST /chat/upload-documents raised NameError on 2+ file uploads",
+    "chatupload.py:9195: update_onboarding_status -> update_user_onboarding_status(req.email, True, 'onboarding_complete'). Impact was limited: the /cross-validation/run endpoint is never called by the frontend; the live path (self-declaration/confirm) already marked completion correctly",
+    "handle_reply.py: bound `ext` from the filename, dropped the undefined `model` arg (run_ocr defaults it), and used ejari_extractor.EjariExtractor \u2014 the unknown-document text-extraction block had always raised NameError into a bare except",
+    "Register.jsx (509 lines) deleted along with its /register route in App.jsx \u2014 orphaned page whose only API call (POST /register) hit a non-existent endpoint. Live flow is Signup.jsx -> POST /register/signup",
+    "chat.py: first get_chat_history renamed to get_chat_history_by_email to clear the name collision with the handler at line 614. Route path/method/response unchanged; baseline re-recorded deliberately (handler name only)",
+    "documentpage.py _find_commercial_output: adopted chatupload.py's most-recent-by-created_at selection. Previously returned the FIRST match in arbitrary filesystem order, so preview and onboarding could disagree about which commercial licence was current after a re-upload",
+    "Dashboard.jsx: stat-card icon classes changed from template-literal construction to complete literal strings. Tailwind's JIT cannot see dynamically-built class names, so bg-sky-50/text-sky-600 were never generated and the 'Today Signup' icon rendered uncoloured",
+    "handle_reply.py:1885 \u2014 .eq(\"email\") -> .eq(\"user_email\") on the conversations table. The column does not exist, so Supabase errored, the surrounding except swallowed it, and process_user_reply built every LLM prompt with NO conversation history. Fixed with Srini's sign-off; this is a genuine behaviour change (the model now receives up to 6 prior turns)."
+  ],
+  "frontend_orphans": [
+    {
+      "files": [
+        "frontend/src/components/layout/Layout.jsx (18 lines)",
+        "frontend/src/components/layout/Navbar.jsx (167 lines)",
+        "frontend/src/components/layout/Footer.jsx (25 lines)"
+      ],
+      "issue": "Layout.jsx became unreferenced when the orphaned Register.jsx was deleted \u2014 Register was its only consumer. Navbar and Footer are imported ONLY by Layout, so all three are now dead (~210 lines).",
+      "decision_needed": "Delete all three, or keep Layout as the intended page chrome and adopt it in Login/Signup/Dashboard. Not decided unilaterally: this is a design question about whether the app is meant to have a shared header/footer shell, not a cleanup.",
+      "note": "contract_check reports Layout.jsx as an orphaned-module WARNING (not a failure) until this is resolved."
+    },
+    {
+      "files": [
+        "frontend/src/features/onboarding/components/cards/UboConfirmCard.jsx (91 lines)",
+        "frontend/src/features/onboarding/components/status/StageTransitionDisplay.jsx (46 lines)"
+      ],
+      "issue": "Both were already dead inside AIAssistant.jsx before Stage B7 — each was defined exactly once and never rendered anywhere in the 8,536-line file. Splitting the file into modules did not orphan them; it made pre-existing orphans visible, which is one of the points of the split.",
+      "decision_needed": "UboConfirmCard is the more interesting of the two: the backend endpoint POST /chatupload/member/ubo-confirm exists and OnboardingPage calls confirmUbo(), so UBO confirmation IS wired up — just not through this card. Either the card is a superseded design that should be deleted, or it is the intended UI for a flow currently handled inline. StageTransitionDisplay looks straightforwardly superseded.",
+      "note": "Deliberately NOT deleted. Deleting a component that renders a regulated compliance step, on the strength of a static reference count, is exactly the kind of call that needs a human who knows the product. Reported as orphaned-module WARNINGs."
+    }
+  ]
+}

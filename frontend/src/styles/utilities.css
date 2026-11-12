@@ -1,0 +1,112 @@
+/* frontend/src/styles/utilities.css
+ * Single-purpose helpers — text, spacing, border, shadow and transition
+ * utilities. Most duplicate Tailwind utilities that are already available;
+ * they are kept because existing markup references them by name.
+ *
+ * The two keyframes at the end (`slideDown`, `pulse`) sat here in the original
+ * file, below the utility classes and above the tampering section. They are
+ * left in place rather than moved to animations.css: `pulse` in particular
+ * shares its name with Tailwind's own keyframes, so where it falls in the
+ * cascade decides which definition wins.
+ */
+
+/* ============================================================================
+   UTILITY CLASSES
+   ============================================================================ */
+
+/* Text Utilities */
+.text-ellipsis {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.text-clamp-2 {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.text-clamp-3 {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* Spacing Utilities */
+.spacing-sm {
+  padding: 0.5rem;
+  margin: 0.5rem;
+}
+
+.spacing-md {
+  padding: 1rem;
+  margin: 1rem;
+}
+
+.spacing-lg {
+  padding: 1.5rem;
+  margin: 1.5rem;
+}
+
+/* Border Utilities */
+.border-dashed-custom {
+  border-style: dashed;
+  border-width: 2px;
+  border-color: #d1d5db;
+}
+
+/* Shadow Utilities */
+.shadow-custom {
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.15);
+}
+
+.shadow-custom-lg {
+  box-shadow: 0 8px 24px rgba(102, 126, 234, 0.2);
+}
+
+/* Transition Utilities */
+.transition-all-smooth {
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.transition-transform-smooth {
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Slide-down animation for verification banner */
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-20px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-slideDown {
+  animation: slideDown 0.5s ease-out;
+}
+
+/* Pulse animation for new content */
+@keyframes pulse {
+
+  0%,
+  100% {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: 0.8;
+  }
+}
+
+.animate-pulse-slow {
+  animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+

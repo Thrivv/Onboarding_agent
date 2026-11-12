@@ -1,0 +1,39 @@
+# ============================================================================
+# Backend dependencies — Thrivv Onboarding Agent
+# ============================================================================
+
+# ── Web framework & server ──────────────────────────────────────────────────
+fastapi
+uvicorn[standard]
+pydantic[email]
+slowapi                     
+python-multipart            
+
+email-validator             
+bcrypt                      
+
+# ── HTTP clients ────────────────────────────────────────────────────────────
+requests
+
+# ── Configuration & data store ──────────────────────────────────────────────
+python-dotenv
+supabase
+
+# ── Document processing ─────────────────────────────────────────────────────
+pymupdf                     
+PyPDF2
+fpdf2                       
+reportlab                   
+pillow>=10.0.0              
+
+# ── Tampering detection / image forensics ───────────────────────────────────
+opencv-python-headless     
+numpy
+scipy
+
+# ── Orchestration — LangGraph (see docs/langgraph-migration/) ───────────────
+
+langgraph                   
+langgraph-checkpoint-postgres  
+psycopg[binary]              
+                            

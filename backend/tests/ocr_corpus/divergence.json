@@ -1,0 +1,84 @@
+{
+  "bvi_extractor": {
+    "api_method": {
+      "body_sha": "4c5f25ad328ffd87b34bad4afce1ceb2331a5485",
+      "max_tokens": 3000,
+      "name": "_call_api",
+      "temperature": 0.0,
+      "timeout_config_key": "config.BVI_API_TIMEOUT_SECONDS",
+      "timeout_symbol": "API_TIMEOUT_SECONDS"
+    },
+    "text_method": {
+      "body_sha": "7a727183f30382cfc4f9c44032fdc39bdc553003",
+      "empty_text_guard": false,
+      "finally_close": false,
+      "name": "extract_text_from_pdf",
+      "page_markers": true,
+      "per_page_try": false
+    }
+  },
+  "ejari_extractor": {
+    "api_method": {
+      "body_sha": "a58dcdff3bc6a5bd70c4479d1892e561650aa14b",
+      "max_tokens": 3500,
+      "name": "call_ai_api",
+      "temperature": 0.0,
+      "timeout_config_key": "config.EJARI_API_TIMEOUT_SECONDS",
+      "timeout_symbol": "API_TIMEOUT_SECONDS"
+    },
+    "text_method": {
+      "body_sha": "4de1495e4f8b50f3e8308b1c656d84b3f2588888",
+      "empty_text_guard": false,
+      "finally_close": false,
+      "name": "extract_text_from_pdf",
+      "page_markers": false,
+      "per_page_try": false
+    }
+  },
+  "moa_extractor": {
+    "api_method": {
+      "body_sha": "9cf78e9a6be82d57606638263690aa22f97fa9dd",
+      "max_tokens": 4500,
+      "name": "call_ai_api",
+      "temperature": 0.0,
+      "timeout_config_key": "config.MOA_API_TIMEOUT_SECONDS",
+      "timeout_symbol": "API_TIMEOUT_SECONDS"
+    },
+    "text_method": {
+      "body_sha": "e35f9ce8515ddf335b9e6e5c59747df05a8a3c1d",
+      "empty_text_guard": false,
+      "finally_close": false,
+      "name": "extract_text_from_pdf",
+      "page_markers": true,
+      "per_page_try": false
+    }
+  },
+  "passport_extractor": {
+    "api_method": {
+      "body_sha": "7767bebd6bd95346627b69cf93ef1cd9d03000b2",
+      "max_tokens": "MAX_TOKENS=800",
+      "name": "extract_from_image",
+      "temperature": 0.0,
+      "timeout_config_key": "config.PASSPORT_API_TIMEOUT_SECONDS",
+      "timeout_symbol": "API_TIMEOUT"
+    }
+  },
+  "trade_extractor": {
+    "api_method": {
+      "body_sha": "63c09f2325b30bb9c9dfa267ee044b513bf18277",
+      "max_tokens": "<max_tokens>",
+      "name": "call_ai_api",
+      "temperature": 0.0,
+      "timeout_config_key": "config.TRADE_LICENSE_API_TIMEOUT_SECONDS",
+      "timeout_symbol": "REQUEST_TIMEOUT"
+    },
+    "text_method": {
+      "body_sha": "8bdda6a5b60f28fcbd30f835052780119d86b068",
+      "empty_text_guard": true,
+      "finally_close": true,
+      "name": "extract_text_from_pdf",
+      "page_markers": false,
+      "per_page_try": true
+    }
+  }
+}

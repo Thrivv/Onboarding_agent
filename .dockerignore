@@ -1,0 +1,21 @@
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.Python
+.env
+.venv
+venv/
+*.egg-info/
+dist/
+build/
+.DS_Store
+documents/
+*.log
+
+# Exclude host node_modules — Docker installs its own inside the image
+frontend/node_modules
+frontend/build
+
+# Pre-cleanup source snapshots — never part of the build context
+_backup_*/

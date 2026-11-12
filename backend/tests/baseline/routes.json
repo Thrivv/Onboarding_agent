@@ -1,0 +1,831 @@
+[
+  {
+    "handler": "login",
+    "is_async": true,
+    "method": "POST",
+    "module": "auth",
+    "params": [
+      "request",
+      "body",
+      "response"
+    ],
+    "path": "/onboarding/ai/api/auth/login"
+  },
+  {
+    "handler": "logout",
+    "is_async": true,
+    "method": "POST",
+    "module": "auth",
+    "params": [
+      "body",
+      "response",
+      "session_id_cookie"
+    ],
+    "path": "/onboarding/ai/api/auth/logout"
+  },
+  {
+    "handler": "request_password_reset",
+    "is_async": true,
+    "method": "POST",
+    "module": "auth",
+    "params": [
+      "request",
+      "body"
+    ],
+    "path": "/onboarding/ai/api/auth/request-password-reset"
+  },
+  {
+    "handler": "reset_password",
+    "is_async": true,
+    "method": "POST",
+    "module": "auth",
+    "params": [
+      "request",
+      "body"
+    ],
+    "path": "/onboarding/ai/api/auth/reset-password"
+  },
+  {
+    "handler": "signup",
+    "is_async": true,
+    "method": "POST",
+    "module": "auth",
+    "params": [
+      "request",
+      "body"
+    ],
+    "path": "/onboarding/ai/api/auth/signup"
+  },
+  {
+    "handler": "verify_session",
+    "is_async": true,
+    "method": "GET",
+    "module": "auth",
+    "params": [
+      "session_id_cookie",
+      "x_session_id"
+    ],
+    "path": "/onboarding/ai/api/auth/verify-session"
+  },
+  {
+    "handler": "chat_with_bot",
+    "is_async": false,
+    "method": "POST",
+    "module": "chat",
+    "params": [
+      "request"
+    ],
+    "path": "/onboarding/ai/api/chat/chat"
+  },
+  {
+    "handler": "get_chat_history_by_email",
+    "is_async": false,
+    "method": "GET",
+    "module": "chat",
+    "params": [
+      "email"
+    ],
+    "path": "/onboarding/ai/api/chat/chat-history/{email}"
+  },
+  {
+    "handler": "confirm_document",
+    "is_async": false,
+    "method": "GET",
+    "module": "chat",
+    "params": [
+      "email",
+      "filename"
+    ],
+    "path": "/onboarding/ai/api/chat/confirm-document"
+  },
+  {
+    "handler": "get_document_status",
+    "is_async": false,
+    "method": "GET",
+    "module": "chat",
+    "params": [
+      "email"
+    ],
+    "path": "/onboarding/ai/api/chat/document-status/{email}"
+  },
+  {
+    "handler": "get_chat_history",
+    "is_async": false,
+    "method": "GET",
+    "module": "chat",
+    "params": [
+      "user_email"
+    ],
+    "path": "/onboarding/ai/api/chat/history/{user_email}"
+  },
+  {
+    "handler": "resubmit_document",
+    "is_async": false,
+    "method": "GET",
+    "module": "chat",
+    "params": [
+      "email",
+      "filename"
+    ],
+    "path": "/onboarding/ai/api/chat/resubmit-document"
+  },
+  {
+    "handler": "resume_session",
+    "is_async": true,
+    "method": "POST",
+    "module": "chat",
+    "params": [
+      "req"
+    ],
+    "path": "/onboarding/ai/api/chat/resume"
+  },
+  {
+    "handler": "upload_documents",
+    "is_async": true,
+    "method": "POST",
+    "module": "chat",
+    "params": [
+      "email",
+      "files",
+      "background_tasks"
+    ],
+    "path": "/onboarding/ai/api/chat/upload-documents"
+  },
+  {
+    "handler": "verify_user_email",
+    "is_async": false,
+    "method": "POST",
+    "module": "chat",
+    "params": [
+      "request"
+    ],
+    "path": "/onboarding/ai/api/chat/verify-user"
+  },
+  {
+    "handler": "chat_conversational",
+    "is_async": true,
+    "method": "POST",
+    "module": "onboarding/conversation",
+    "params": [
+      "request"
+    ],
+    "path": "/onboarding/ai/api/chatupload/chat-conversational"
+  },
+  {
+    "handler": "clear_welcome_message",
+    "is_async": true,
+    "method": "DELETE",
+    "module": "onboarding/conversation",
+    "params": [
+      "user_email"
+    ],
+    "path": "/onboarding/ai/api/chatupload/clear-welcome-message/{user_email}"
+  },
+  {
+    "handler": "get_conversation_logs",
+    "is_async": true,
+    "method": "GET",
+    "module": "onboarding/conversation",
+    "params": [
+      "email",
+      "limit",
+      "channel",
+      "exclude_welcome"
+    ],
+    "path": "/onboarding/ai/api/chatupload/conversation-logs/{email}"
+  },
+  {
+    "handler": "run_cross_validation",
+    "is_async": true,
+    "method": "POST",
+    "module": "onboarding/upload",
+    "params": [
+      "req"
+    ],
+    "path": "/onboarding/ai/api/chatupload/cross-validation/run"
+  },
+  {
+    "handler": "fatca_not_applicable",
+    "is_async": true,
+    "method": "POST",
+    "module": "onboarding/compliance",
+    "params": [
+      "req"
+    ],
+    "path": "/onboarding/ai/api/chatupload/fatca/not-applicable"
+  },
+  {
+    "handler": "fatca_status",
+    "is_async": true,
+    "method": "GET",
+    "module": "onboarding/compliance",
+    "params": [
+      "user_email"
+    ],
+    "path": "/onboarding/ai/api/chatupload/fatca/status/{user_email}"
+  },
+  {
+    "handler": "fatca_submit",
+    "is_async": true,
+    "method": "POST",
+    "module": "onboarding/compliance",
+    "params": [
+      "req"
+    ],
+    "path": "/onboarding/ai/api/chatupload/fatca/submit"
+  },
+  {
+    "handler": "get_document_for_preview",
+    "is_async": true,
+    "method": "GET",
+    "module": "onboarding/upload",
+    "params": [
+      "email",
+      "doc_type",
+      "filename",
+      "member_name"
+    ],
+    "path": "/onboarding/ai/api/chatupload/get-document/{email}/{doc_type}/{filename}"
+  },
+  {
+    "handler": "get_onboarding_status_endpoint",
+    "is_async": true,
+    "method": "GET",
+    "module": "onboarding/conversation",
+    "params": [
+      "email"
+    ],
+    "path": "/onboarding/ai/api/chatupload/get-onboarding-status/{email}"
+  },
+  {
+    "handler": "health_check",
+    "is_async": true,
+    "method": "GET",
+    "module": "onboarding/conversation",
+    "params": [],
+    "path": "/onboarding/ai/api/chatupload/health"
+  },
+  {
+    "handler": "ki_add",
+    "is_async": true,
+    "method": "POST",
+    "module": "onboarding/key_individuals",
+    "params": [
+      "req"
+    ],
+    "path": "/onboarding/ai/api/chatupload/ki/add"
+  },
+  {
+    "handler": "ki_add_ai",
+    "is_async": true,
+    "method": "POST",
+    "module": "onboarding/key_individuals",
+    "params": [
+      "req"
+    ],
+    "path": "/onboarding/ai/api/chatupload/ki/add-ai"
+  },
+  {
+    "handler": "ki_contact_info",
+    "is_async": true,
+    "method": "POST",
+    "module": "onboarding/key_individuals",
+    "params": [
+      "req"
+    ],
+    "path": "/onboarding/ai/api/chatupload/ki/contact-info"
+  },
+  {
+    "handler": "ki_list",
+    "is_async": true,
+    "method": "GET",
+    "module": "onboarding/key_individuals",
+    "params": [
+      "user_email"
+    ],
+    "path": "/onboarding/ai/api/chatupload/ki/list/{user_email}"
+  },
+  {
+    "handler": "ki_loop_finalize",
+    "is_async": true,
+    "method": "POST",
+    "module": "onboarding/key_individuals",
+    "params": [
+      "req"
+    ],
+    "path": "/onboarding/ai/api/chatupload/ki/loop-finalize"
+  },
+  {
+    "handler": "ki_moa_as_selection",
+    "is_async": true,
+    "method": "POST",
+    "module": "onboarding/key_individuals",
+    "params": [
+      "req"
+    ],
+    "path": "/onboarding/ai/api/chatupload/ki/moa-as-selection"
+  },
+  {
+    "handler": "ki_so_as_selection",
+    "is_async": true,
+    "method": "POST",
+    "module": "onboarding/key_individuals",
+    "params": [
+      "req"
+    ],
+    "path": "/onboarding/ai/api/chatupload/ki/so-as-selection"
+  },
+  {
+    "handler": "ki_verify",
+    "is_async": true,
+    "method": "POST",
+    "module": "onboarding/key_individuals",
+    "params": [
+      "req"
+    ],
+    "path": "/onboarding/ai/api/chatupload/ki/verify"
+  },
+  {
+    "handler": "get_member_progress",
+    "is_async": true,
+    "method": "GET",
+    "module": "onboarding/upload",
+    "params": [
+      "email"
+    ],
+    "path": "/onboarding/ai/api/chatupload/member-progress/{email}"
+  },
+  {
+    "handler": "member_ubo_confirm",
+    "is_async": true,
+    "method": "POST",
+    "module": "onboarding/ownership",
+    "params": [
+      "req"
+    ],
+    "path": "/onboarding/ai/api/chatupload/member/ubo-confirm"
+  },
+  {
+    "handler": "member_ubo_status",
+    "is_async": true,
+    "method": "GET",
+    "module": "onboarding/ownership",
+    "params": [
+      "user_email"
+    ],
+    "path": "/onboarding/ai/api/chatupload/member/ubo-status/{user_email}"
+  },
+  {
+    "handler": "mismatch_assign_role",
+    "is_async": true,
+    "method": "POST",
+    "module": "onboarding/ownership",
+    "params": [
+      "req"
+    ],
+    "path": "/onboarding/ai/api/chatupload/mismatch/assign-role"
+  },
+  {
+    "handler": "save_ownership_type",
+    "is_async": true,
+    "method": "POST",
+    "module": "onboarding/ownership",
+    "params": [
+      "req"
+    ],
+    "path": "/onboarding/ai/api/chatupload/ownership-type/save"
+  },
+  {
+    "handler": "pep_not_applicable",
+    "is_async": true,
+    "method": "POST",
+    "module": "onboarding/compliance",
+    "params": [
+      "req"
+    ],
+    "path": "/onboarding/ai/api/chatupload/pep/not-applicable"
+  },
+  {
+    "handler": "pep_status",
+    "is_async": true,
+    "method": "GET",
+    "module": "onboarding/compliance",
+    "params": [
+      "user_email"
+    ],
+    "path": "/onboarding/ai/api/chatupload/pep/status/{user_email}"
+  },
+  {
+    "handler": "pep_submit",
+    "is_async": true,
+    "method": "POST",
+    "module": "onboarding/compliance",
+    "params": [
+      "req"
+    ],
+    "path": "/onboarding/ai/api/chatupload/pep/submit"
+  },
+  {
+    "handler": "preview_document",
+    "is_async": true,
+    "method": "GET",
+    "module": "onboarding/upload",
+    "params": [
+      "email",
+      "filename"
+    ],
+    "path": "/onboarding/ai/api/chatupload/preview/{email}/{filename}"
+  },
+  {
+    "handler": "get_product_package_recommendation",
+    "is_async": true,
+    "method": "GET",
+    "module": "onboarding/products",
+    "params": [
+      "email"
+    ],
+    "path": "/onboarding/ai/api/chatupload/product-package/recommend"
+  },
+  {
+    "handler": "save_product_package",
+    "is_async": true,
+    "method": "POST",
+    "module": "onboarding/products",
+    "params": [
+      "req"
+    ],
+    "path": "/onboarding/ai/api/chatupload/product-package/save"
+  },
+  {
+    "handler": "get_product_package_status",
+    "is_async": true,
+    "method": "GET",
+    "module": "onboarding/products",
+    "params": [
+      "user_email"
+    ],
+    "path": "/onboarding/ai/api/chatupload/product-package/status/{user_email}"
+  },
+  {
+    "handler": "resume_conversation",
+    "is_async": true,
+    "method": "GET",
+    "module": "onboarding/conversation",
+    "params": [
+      "user_email"
+    ],
+    "path": "/onboarding/ai/api/chatupload/resume-conversation/{user_email}"
+  },
+  {
+    "handler": "self_declaration_confirm",
+    "is_async": true,
+    "method": "POST",
+    "module": "onboarding/compliance",
+    "params": [
+      "req"
+    ],
+    "path": "/onboarding/ai/api/chatupload/self-declaration/confirm"
+  },
+  {
+    "handler": "self_declaration_status",
+    "is_async": true,
+    "method": "GET",
+    "module": "onboarding/compliance",
+    "params": [
+      "user_email"
+    ],
+    "path": "/onboarding/ai/api/chatupload/self-declaration/status/{user_email}"
+  },
+  {
+    "handler": "self_declaration_summary",
+    "is_async": true,
+    "method": "GET",
+    "module": "onboarding/compliance",
+    "params": [
+      "user_email"
+    ],
+    "path": "/onboarding/ai/api/chatupload/self-declaration/summary/{user_email}"
+  },
+  {
+    "handler": "start_conversation",
+    "is_async": true,
+    "method": "POST",
+    "module": "onboarding/conversation",
+    "params": [
+      "request"
+    ],
+    "path": "/onboarding/ai/api/chatupload/start-conversation"
+  },
+  {
+    "handler": "download_summary_pdf",
+    "is_async": true,
+    "method": "GET",
+    "module": "onboarding/upload",
+    "params": [
+      "user_email"
+    ],
+    "path": "/onboarding/ai/api/chatupload/summary/pdf/{user_email}"
+  },
+  {
+    "handler": "upload_conversational",
+    "is_async": true,
+    "method": "POST",
+    "module": "onboarding/upload",
+    "params": [
+      "email",
+      "language",
+      "member_name",
+      "is_ki_loop_add_eid",
+      "files"
+    ],
+    "path": "/onboarding/ai/api/chatupload/upload-conversational"
+  },
+  {
+    "handler": "upload_conversational_bulk",
+    "is_async": true,
+    "method": "POST",
+    "module": "onboarding/upload",
+    "params": [
+      "email",
+      "language",
+      "files"
+    ],
+    "path": "/onboarding/ai/api/chatupload/upload-conversational-bulk"
+  },
+  {
+    "handler": "validate_ref",
+    "is_async": true,
+    "method": "POST",
+    "module": "onboarding/conversation",
+    "params": [
+      "req"
+    ],
+    "path": "/onboarding/ai/api/chatupload/validate-ref"
+  },
+  {
+    "handler": "check_confirmation_status",
+    "is_async": true,
+    "method": "GET",
+    "module": "documents/status",
+    "params": [
+      "email"
+    ],
+    "path": "/onboarding/ai/api/documentupload/check-confirmation-status/{email}"
+  },
+  {
+    "handler": "debug_document_data",
+    "is_async": true,
+    "method": "GET",
+    "module": "documents/core",
+    "params": [
+      "email",
+      "doc_type"
+    ],
+    "path": "/onboarding/ai/api/documentupload/debug-document/{email}/{doc_type}"
+  },
+  {
+    "handler": "get_document_history_endpoint",
+    "is_async": true,
+    "method": "GET",
+    "module": "documents/preview",
+    "params": [
+      "email",
+      "document_type",
+      "member_name"
+    ],
+    "path": "/onboarding/ai/api/documentupload/document-history/{email}/{document_type}"
+  },
+  {
+    "handler": "get_document_status",
+    "is_async": true,
+    "method": "GET",
+    "module": "documents/status",
+    "params": [
+      "email"
+    ],
+    "path": "/onboarding/ai/api/documentupload/document-status/{email}"
+  },
+  {
+    "handler": "download_document",
+    "is_async": true,
+    "method": "GET",
+    "module": "documents/preview",
+    "params": [
+      "email",
+      "doc_type",
+      "member_name"
+    ],
+    "path": "/onboarding/ai/api/documentupload/download-document/{email}/{doc_type}"
+  },
+  {
+    "handler": "get_document_preview",
+    "is_async": true,
+    "method": "GET",
+    "module": "documents/preview",
+    "params": [
+      "email",
+      "doc_type",
+      "member_name"
+    ],
+    "path": "/onboarding/ai/api/documentupload/get-document-preview/{email}/{doc_type}"
+  },
+  {
+    "handler": "get_document_requirements",
+    "is_async": true,
+    "method": "POST",
+    "module": "documents/core",
+    "params": [
+      "request"
+    ],
+    "path": "/onboarding/ai/api/documentupload/get-document-requirements"
+  },
+  {
+    "handler": "get_document_file",
+    "is_async": true,
+    "method": "GET",
+    "module": "documents/preview",
+    "params": [
+      "email",
+      "doc_type",
+      "member_name",
+      "version"
+    ],
+    "path": "/onboarding/ai/api/documentupload/get-document/{email}/{doc_type}"
+  },
+  {
+    "handler": "get_extracted_data",
+    "is_async": false,
+    "method": "GET",
+    "module": "documents/preview",
+    "params": [
+      "user_email",
+      "doc_type"
+    ],
+    "path": "/onboarding/ai/api/documentupload/get-extracted-data/{user_email}/{doc_type}"
+  },
+  {
+    "handler": "health_check",
+    "is_async": true,
+    "method": "GET",
+    "module": "documents/core",
+    "params": [],
+    "path": "/onboarding/ai/api/documentupload/health"
+  },
+  {
+    "handler": "get_member_list",
+    "is_async": true,
+    "method": "GET",
+    "module": "documents/status",
+    "params": [
+      "email"
+    ],
+    "path": "/onboarding/ai/api/documentupload/member-list/{email}"
+  },
+  {
+    "handler": "send_completion_email_endpoint",
+    "is_async": true,
+    "method": "POST",
+    "module": "documents/status",
+    "params": [
+      "request"
+    ],
+    "path": "/onboarding/ai/api/documentupload/send-completion-email"
+  },
+  {
+    "handler": "upload_document",
+    "is_async": true,
+    "method": "POST",
+    "module": "documents/core",
+    "params": [
+      "email",
+      "member_name",
+      "files"
+    ],
+    "path": "/onboarding/ai/api/documentupload/upload-document"
+  },
+  {
+    "handler": "validate_before_confirmation",
+    "is_async": true,
+    "method": "POST",
+    "module": "documents/status",
+    "params": [
+      "request"
+    ],
+    "path": "/onboarding/ai/api/documentupload/validate-before-confirmation"
+  },
+  {
+    "handler": "get_validation_status",
+    "is_async": true,
+    "method": "GET",
+    "module": "documents/status",
+    "params": [
+      "email"
+    ],
+    "path": "/onboarding/ai/api/documentupload/validation-status/{email}"
+  },
+  {
+    "handler": "log_frontend_error",
+    "is_async": true,
+    "method": "POST",
+    "module": "frontend_logs",
+    "params": [
+      "request",
+      "payload"
+    ],
+    "path": "/onboarding/ai/api/logs/frontend"
+  },
+  {
+    "handler": "generate_otp_endpoint",
+    "is_async": true,
+    "method": "POST",
+    "module": "otp",
+    "params": [
+      "request"
+    ],
+    "path": "/onboarding/ai/api/otp/generate-otp"
+  },
+  {
+    "handler": "verify_otp_endpoint",
+    "is_async": true,
+    "method": "POST",
+    "module": "otp",
+    "params": [
+      "request"
+    ],
+    "path": "/onboarding/ai/api/otp/verify-otp"
+  },
+  {
+    "handler": "account_type_summary",
+    "is_async": false,
+    "method": "GET",
+    "module": "register",
+    "params": [],
+    "path": "/onboarding/ai/api/register/account-type-summary"
+  },
+  {
+    "handler": "pending_verification_count",
+    "is_async": false,
+    "method": "GET",
+    "module": "register",
+    "params": [],
+    "path": "/onboarding/ai/api/register/get-pending-verification-count"
+  },
+  {
+    "handler": "total_users",
+    "is_async": false,
+    "method": "GET",
+    "module": "register",
+    "params": [],
+    "path": "/onboarding/ai/api/register/get-total-users"
+  },
+  {
+    "handler": "verified_user_count",
+    "is_async": false,
+    "method": "GET",
+    "module": "register",
+    "params": [],
+    "path": "/onboarding/ai/api/register/get-verified-users-count"
+  },
+  {
+    "handler": "list_all_users",
+    "is_async": false,
+    "method": "GET",
+    "module": "register",
+    "params": [],
+    "path": "/onboarding/ai/api/register/list-users"
+  },
+  {
+    "handler": "onboarding_summary",
+    "is_async": false,
+    "method": "GET",
+    "module": "register",
+    "params": [],
+    "path": "/onboarding/ai/api/register/onboarding-summary"
+  },
+  {
+    "handler": "users_registered_this_week",
+    "is_async": false,
+    "method": "GET",
+    "module": "register",
+    "params": [],
+    "path": "/onboarding/ai/api/register/regisetered-this-week"
+  },
+  {
+    "handler": "users_registered_today",
+    "is_async": false,
+    "method": "GET",
+    "module": "register",
+    "params": [],
+    "path": "/onboarding/ai/api/register/registered-today"
+  },
+  {
+    "handler": "signup",
+    "is_async": true,
+    "method": "POST",
+    "module": "register",
+    "params": [
+      "request"
+    ],
+    "path": "/onboarding/ai/api/register/signup"
+  }
+]

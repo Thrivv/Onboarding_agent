@@ -1,0 +1,94 @@
+
+--- auth.py ---
+  POST    /onboarding/ai/api/auth/login                                     -> login
+  POST    /onboarding/ai/api/auth/logout                                    -> logout
+  POST    /onboarding/ai/api/auth/signup                                    -> signup
+  GET     /onboarding/ai/api/auth/verify-session                            -> verify_session
+
+--- chat.py ---
+  POST    /onboarding/ai/api/chat/chat                                      -> chat_with_bot  [SYNC]
+  GET     /onboarding/ai/api/chat/chat-history/{email}                      -> get_chat_history  [SYNC]
+  GET     /onboarding/ai/api/chat/confirm-document                          -> confirm_document  [SYNC]
+  GET     /onboarding/ai/api/chat/document-status/{email}                   -> get_document_status  [SYNC]
+  GET     /onboarding/ai/api/chat/history/{user_email}                      -> get_chat_history  [SYNC]
+  GET     /onboarding/ai/api/chat/resubmit-document                         -> resubmit_document  [SYNC]
+  POST    /onboarding/ai/api/chat/resume                                    -> resume_session
+  POST    /onboarding/ai/api/chat/upload-documents                          -> upload_documents
+  POST    /onboarding/ai/api/chat/verify-user                               -> verify_user_email  [SYNC]
+
+--- chatupload.py ---
+  POST    /onboarding/ai/api/chatupload/chat-conversational                 -> chat_conversational
+  DELETE  /onboarding/ai/api/chatupload/clear-welcome-message/{user_email}  -> clear_welcome_message
+  GET     /onboarding/ai/api/chatupload/conversation-logs/{email}           -> get_conversation_logs
+  POST    /onboarding/ai/api/chatupload/cross-validation/run                -> run_cross_validation
+  POST    /onboarding/ai/api/chatupload/fatca/not-applicable                -> fatca_not_applicable
+  GET     /onboarding/ai/api/chatupload/fatca/status/{user_email}           -> fatca_status
+  POST    /onboarding/ai/api/chatupload/fatca/submit                        -> fatca_submit
+  GET     /onboarding/ai/api/chatupload/get-document/{email}/{doc_type}/{filename} -> get_document_for_preview
+  GET     /onboarding/ai/api/chatupload/get-onboarding-status/{email}       -> get_onboarding_status_endpoint
+  GET     /onboarding/ai/api/chatupload/health                              -> health_check
+  POST    /onboarding/ai/api/chatupload/ki/add                              -> ki_add
+  POST    /onboarding/ai/api/chatupload/ki/add-ai                           -> ki_add_ai
+  POST    /onboarding/ai/api/chatupload/ki/contact-info                     -> ki_contact_info
+  GET     /onboarding/ai/api/chatupload/ki/list/{user_email}                -> ki_list
+  POST    /onboarding/ai/api/chatupload/ki/loop-finalize                    -> ki_loop_finalize
+  POST    /onboarding/ai/api/chatupload/ki/moa-as-selection                 -> ki_moa_as_selection
+  POST    /onboarding/ai/api/chatupload/ki/so-as-selection                  -> ki_so_as_selection
+  POST    /onboarding/ai/api/chatupload/ki/verify                           -> ki_verify
+  GET     /onboarding/ai/api/chatupload/member-progress/{email}             -> get_member_progress
+  POST    /onboarding/ai/api/chatupload/member/ubo-confirm                  -> member_ubo_confirm
+  GET     /onboarding/ai/api/chatupload/member/ubo-status/{user_email}      -> member_ubo_status
+  POST    /onboarding/ai/api/chatupload/mismatch/assign-role                -> mismatch_assign_role
+  POST    /onboarding/ai/api/chatupload/ownership-type/save                 -> save_ownership_type
+  POST    /onboarding/ai/api/chatupload/pep/not-applicable                  -> pep_not_applicable
+  GET     /onboarding/ai/api/chatupload/pep/status/{user_email}             -> pep_status
+  POST    /onboarding/ai/api/chatupload/pep/submit                          -> pep_submit
+  GET     /onboarding/ai/api/chatupload/preview/{email}/{filename}          -> preview_document
+  GET     /onboarding/ai/api/chatupload/product-package/recommend           -> get_product_package_recommendation
+  POST    /onboarding/ai/api/chatupload/product-package/save                -> save_product_package
+  GET     /onboarding/ai/api/chatupload/product-package/status/{user_email} -> get_product_package_status
+  GET     /onboarding/ai/api/chatupload/resume-conversation/{user_email}    -> resume_conversation
+  POST    /onboarding/ai/api/chatupload/self-declaration/confirm            -> self_declaration_confirm
+  GET     /onboarding/ai/api/chatupload/self-declaration/status/{user_email} -> self_declaration_status
+  GET     /onboarding/ai/api/chatupload/self-declaration/summary/{user_email} -> self_declaration_summary
+  POST    /onboarding/ai/api/chatupload/start-conversation                  -> start_conversation
+  GET     /onboarding/ai/api/chatupload/summary/pdf/{user_email}            -> download_summary_pdf
+  POST    /onboarding/ai/api/chatupload/upload-conversational               -> upload_conversational
+  POST    /onboarding/ai/api/chatupload/validate-ref                        -> validate_ref
+
+--- documentpage.py ---
+  GET     /onboarding/ai/api/documentupload/check-confirmation-status/{email} -> check_confirmation_status
+  GET     /onboarding/ai/api/documentupload/debug-document/{email}/{doc_type} -> debug_document_data
+  GET     /onboarding/ai/api/documentupload/document-history/{email}/{document_type} -> get_document_history_endpoint
+  GET     /onboarding/ai/api/documentupload/document-status/{email}         -> get_document_status
+  GET     /onboarding/ai/api/documentupload/download-document/{email}/{doc_type} -> download_document
+  GET     /onboarding/ai/api/documentupload/get-document-preview/{email}/{doc_type} -> get_document_preview
+  POST    /onboarding/ai/api/documentupload/get-document-requirements       -> get_document_requirements
+  GET     /onboarding/ai/api/documentupload/get-document/{email}/{doc_type} -> get_document_file
+  GET     /onboarding/ai/api/documentupload/get-extracted-data/{user_email}/{doc_type} -> get_extracted_data  [SYNC]
+  GET     /onboarding/ai/api/documentupload/health                          -> health_check
+  GET     /onboarding/ai/api/documentupload/member-list/{email}             -> get_member_list
+  POST    /onboarding/ai/api/documentupload/send-completion-email           -> send_completion_email_endpoint
+  POST    /onboarding/ai/api/documentupload/upload-document                 -> upload_document
+  POST    /onboarding/ai/api/documentupload/validate-before-confirmation    -> validate_before_confirmation
+  GET     /onboarding/ai/api/documentupload/validation-status/{email}       -> get_validation_status
+
+--- frontend_logs.py ---
+  POST    /onboarding/ai/api/logs/frontend                                  -> log_frontend_error
+
+--- otp.py ---
+  POST    /onboarding/ai/api/otp/generate-otp                               -> generate_otp_endpoint
+  POST    /onboarding/ai/api/otp/verify-otp                                 -> verify_otp_endpoint
+
+--- register.py ---
+  GET     /onboarding/ai/api/register/account-type-summary                  -> account_type_summary  [SYNC]
+  GET     /onboarding/ai/api/register/get-pending-verification-count        -> pending_verification_count  [SYNC]
+  GET     /onboarding/ai/api/register/get-total-users                       -> total_users  [SYNC]
+  GET     /onboarding/ai/api/register/get-verified-users-count              -> verified_user_count  [SYNC]
+  GET     /onboarding/ai/api/register/list-users                            -> list_all_users  [SYNC]
+  GET     /onboarding/ai/api/register/onboarding-summary                    -> onboarding_summary  [SYNC]
+  GET     /onboarding/ai/api/register/regisetered-this-week                 -> users_registered_this_week  [SYNC]
+  GET     /onboarding/ai/api/register/registered-today                      -> users_registered_today  [SYNC]
+  POST    /onboarding/ai/api/register/signup                                -> signup
+
+Total: 78 routes across 7 modules
