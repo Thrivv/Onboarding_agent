@@ -86,19 +86,6 @@ def is_account_owner(email: str, name: Optional[str]) -> bool:
 # SAVE / UPSERT ONE KI
 # ============================================================================
 
-def _to_iso_date(value):
-    """'' / None / unparseable -> None; DD/MM/YYYY, DD-MM-YYYY, YYYY-MM-DD -> 'YYYY-MM-DD'."""
-    if not value:
-        return None
-    text = str(value).strip()
-    for fmt in ("%Y-%m-%d", "%d/%m/%Y", "%d-%m-%Y", "%d.%m.%Y", "%Y/%m/%d"):
-        try:
-            return datetime.strptime(text, fmt).date().isoformat()
-        except ValueError:
-            continue
-    return None
-
-
 def save_key_individual(email: str, ki_data: Dict) -> Dict:
     """
     Save or update a Key Individual record.
@@ -149,12 +136,6 @@ def save_key_individual(email: str, ki_data: Dict) -> Dict:
     try:
         db_record = {k: v for k, v in ki_data.items()
                      if k not in ("created_at", "updated_at")}
-        # DATE columns: OCR gives "" when missing and DD/MM/YYYY otherwise.
-        # Postgres rejects "" (failing the whole upsert) and would read
-        # 07/11/2026 as July 11 — normalize to ISO or NULL.
-        for _date_col in ("id_expiry_date", "date_of_birth"):
-            if _date_col in db_record:
-                db_record[_date_col] = _to_iso_date(db_record[_date_col])
         # Upsert by id
         KeyIndividualRepository.upsert(db_record)
         logger.info(f"[KI] Saved to Supabase: {ki_data['display_name']}")

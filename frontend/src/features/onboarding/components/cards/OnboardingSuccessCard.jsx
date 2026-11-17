@@ -1,11 +1,9 @@
 import React from 'react';
-import { useLanguage } from '../../../../context/LanguageContext';
 import { motion } from 'framer-motion';
 import { Clock, Copy, Mail, ShieldCheck } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 const OnboardingSuccessCard = ({ content }) => {
-  const { t } = useLanguage();
   // Extract reference number if present (e.g., REF-2026-KV4VVA)
   const refMatch = content?.match(/REF-[\d]{4}-[A-Z0-9]+/);
   const referenceNumber = refMatch ? refMatch[0] : null;
@@ -22,24 +20,24 @@ const OnboardingSuccessCard = ({ content }) => {
           <div className="h-8 w-8 bg-white/20 backdrop-blur-md rounded-xl flex items-center justify-center border border-white/20">
             <ShieldCheck className="h-5 w-5 text-white" />
           </div>
-          <h2 className="text-xs font-black text-white tracking-widest uppercase">{t('ui.onboardingComplete')}</h2>
+          <h2 className="text-xs font-black text-white tracking-widest uppercase">Onboarding Complete</h2>
         </div>
         <div className="h-2 w-2 rounded-full bg-white animate-pulse" />
       </div>
 
       <div className="p-6">
         <p className="text-slate-500 text-[11px] font-bold leading-relaxed mb-5 text-center px-2">
-          {cleanContent || t('ui.allVerifiedActive')}
+          {cleanContent || "All documents verified. Your profile is active and activation is in progress."}
         </p>
 
         {referenceNumber && (
           <div className="mb-6 p-4 bg-slate-50 rounded-2xl border border-slate-100 flex flex-col gap-2">
             <div className="flex items-center justify-between">
-              <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">{t('ui.yourReferenceId')}</span>
+              <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Your Reference ID</span>
               <button
                 onClick={() => {
                   navigator.clipboard.writeText(referenceNumber);
-                  toast.success(t('ui.referenceCopied'));
+                  toast.success('Reference ID copied!');
                 }}
                 className="p-1.5 hover:bg-slate-200 rounded-lg transition-colors text-slate-400 hover:text-slate-900 active:scale-90"
               >
@@ -58,8 +56,8 @@ const OnboardingSuccessCard = ({ content }) => {
               <Mail className="h-3.5 w-3.5" />
             </div>
             <div>
-              <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">{t('ui.status')}</p>
-              <p className="text-[10px] font-black text-slate-800">{t('ui.emailSent')}</p>
+              <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">Status</p>
+              <p className="text-[10px] font-black text-slate-800">Email Sent</p>
             </div>
           </div>
           <div className="p-3 bg-slate-50 rounded-2xl border border-slate-100 flex items-center gap-2.5">
@@ -67,8 +65,8 @@ const OnboardingSuccessCard = ({ content }) => {
               <Clock className="h-3.5 w-3.5" />
             </div>
             <div>
-              <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">{t('ui.timeline')}</p>
-              <p className="text-[10px] font-black text-slate-800">{t('ui.threeFourDays')}</p>
+              <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">Timeline</p>
+              <p className="text-[10px] font-black text-slate-800">3-4 Days</p>
             </div>
           </div>
         </div>

@@ -1,7 +1,7 @@
 {
   "bvi_extractor": {
     "api_method": {
-      "body_sha": "4c5f25ad328ffd87b34bad4afce1ceb2331a5485",
+      "body_sha": "774830a180dfc1d084a4282807cecc67db1702d3",
       "max_tokens": 3000,
       "name": "_call_api",
       "temperature": 0.0,
@@ -19,7 +19,7 @@
   },
   "ejari_extractor": {
     "api_method": {
-      "body_sha": "a58dcdff3bc6a5bd70c4479d1892e561650aa14b",
+      "body_sha": "a7cb7cd82dfd234134ba880981ed0d395cce9c8a",
       "max_tokens": 3500,
       "name": "call_ai_api",
       "temperature": 0.0,
@@ -37,7 +37,7 @@
   },
   "moa_extractor": {
     "api_method": {
-      "body_sha": "9cf78e9a6be82d57606638263690aa22f97fa9dd",
+      "body_sha": "6291cf3df62c2811b64170984e44c10a74ec8937",
       "max_tokens": 4500,
       "name": "call_ai_api",
       "temperature": 0.0,
@@ -55,7 +55,7 @@
   },
   "passport_extractor": {
     "api_method": {
-      "body_sha": "7767bebd6bd95346627b69cf93ef1cd9d03000b2",
+      "body_sha": "a934349b18efffaf749f8f403c980799b842fa73",
       "max_tokens": "MAX_TOKENS=800",
       "name": "extract_from_image",
       "temperature": 0.0,
@@ -65,10 +65,10 @@
   },
   "trade_extractor": {
     "api_method": {
-      "body_sha": "63c09f2325b30bb9c9dfa267ee044b513bf18277",
+      "body_sha": "10ad744799bb9a045695d12ce2c9fd9d5ee51241",
       "max_tokens": "<max_tokens>",
       "name": "call_ai_api",
-      "temperature": 0.0,
+      "temperature": 0.1,
       "timeout_config_key": "config.TRADE_LICENSE_API_TIMEOUT_SECONDS",
       "timeout_symbol": "REQUEST_TIMEOUT"
     },

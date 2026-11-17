@@ -14,12 +14,10 @@ from pydantic import BaseModel
 
 class FatcaNoRequest(BaseModel):
     email: str
-    language: Optional[str] = "english"
 
 
 class FatcaYesRequest(BaseModel):
     email: str
-    language: Optional[str] = "english"
     entity_type: Optional[str] = None
     country_of_tax_residence: Optional[str] = "UAE"
     passive_nffe_us_ownership: Optional[str] = None
@@ -34,7 +32,6 @@ class FatcaYesRequest(BaseModel):
 
 class PepRequest(BaseModel):
     email: str
-    language: Optional[str] = "english"
     domestic_pep: Optional[dict] = None   # {status, name, position}
     foreign_pep:  Optional[dict] = None   # {status, country, name, position}
 

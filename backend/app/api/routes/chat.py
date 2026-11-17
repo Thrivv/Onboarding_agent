@@ -17,7 +17,8 @@ from app.services.ocr_service import process_document
 from app.services.email_sender import send_email
 from app.repositories.conversation_repository import ConversationRepository
 from app.repositories.user_repository import UserRepository
-from app.schemas.chat import UserVerifyRequest, ResumeRequest
+from app.schemas.chat import ChatRequest, ChatResponse, UserVerifyRequest, ResumeRequest
+from app.domain.onboarding.stage_table import ACCOUNT_CORPORATE
 from app.domain.exceptions import (
     DomainError,
     NotFoundError,
@@ -46,11 +47,53 @@ def get_user_by_email(email: str) -> dict:
         logger.error(f"Failed to get user: {e}")
         return None
 
-# NOTE (prompt-remediation Phase 4): build_chat_prompt() used to live here --
-# confirmed dead (defined, never called anywhere in the codebase) and removed.
-# Prompt-building for the actual conversation pipeline the frontend calls
-# (/chatupload/chat-conversational in conversation.py) lives in
-# message_generator.py / run_model.py, not in this module.
+def build_chat_prompt(user_message: str, context: str = "", registration_data: dict = None) -> str:
+    """Build chat-specific prompt"""
+    onboarding_step = "welcome"
+    if context and context.startswith("Onboarding Step:"):
+        try:
+            onboarding_step = context.split("\n")[0].split(":")[1].strip()
+        except:
+            pass
+
+    reg_details = ""
+    if registration_data:
+        reg_details = (
+            f"- Name: {registration_data.get('name', 'N/A')}\n"
+            f"- Account Type: {registration_data.get('account_type', 'N/A')}\n"
+            f"- Business Name: {registration_data.get('business_name', 'N/A')}\n"
+        )
+
+    account_type = registration_data.get('account_type') if registration_data else None
+    if account_type == ACCOUNT_CORPORATE:
+        doc_info = "Required documents: Emirates ID, Commercial Registration, Tenancy Contract (Ejari), Memorandum of Association (MOA)"
+    else:
+        doc_info = "Required documents: Emirates ID, Commercial Registration, Tenancy Contract (Ejari), Memorandum of Association (MOA)"
+
+    prompt = f"""You are a helpful onboarding assistant at Thrivv Bank. Answer questions directly and concisely.
+
+Current onboarding step: {onboarding_step}
+
+User details:
+{reg_details}
+
+{doc_info}
+
+User question: "{user_message}"
+
+Context from previous conversation:
+{context}
+
+Instructions:
+- Be direct and helpful
+- Keep responses concise (2-4 sentences)
+- No formal email signatures
+- If asked about documents, mention all 4 required documents
+- If asked about timeline, mention 3-4 business days for verification
+
+Answer:"""
+    
+    return prompt.strip()
 
 def check_documents_status(email: str) -> dict:
     """Check current document status for user"""
@@ -233,15 +276,44 @@ def verify_user_email(request: UserVerifyRequest):
         logger.error(f"User verification error: {e}")
         raise DomainError(context=str(e))
 
-# NOTE (prompt-remediation Phase 4): POST /chat (chat_with_bot, delegated to
-# onboarding_chat_service.generate_chat_response) and GET /chat-history/{email}
-# (get_chat_history_by_email, delegated to onboarding_chat_service.
-# get_chat_history_for_user) used to live here. Removed: confirmed via a
-# repo-wide grep of frontend/src that neither route is called anywhere --
-# the frontend's chat UI talks exclusively to /chatupload/chat-conversational
-# and /chatupload/conversation-logs/{email} in conversation.py, which is the
-# one actual conversation pipeline. onboarding_chat_service.py (only ever
-# imported from these two now-removed routes) was deleted alongside this.
+@router.post("/chat", response_model=ChatResponse)
+def chat_with_bot(request: ChatRequest):
+    """
+    Onboarding chat endpoint.
+    Delegates to onboarding_chat_service which handles:
+      - Loading chat history from Supabase
+      - Loading current_step and context_data from the users table
+      - Filling and submitting the improved system prompt
+      - Persisting the conversation turn
+    """
+    from app.services.onboarding_chat_service import generate_chat_response
+
+    try:
+        response_text = generate_chat_response(
+            email        = request.email,
+            user_message = request.message,
+        )
+        return ChatResponse(response=response_text, success=True)
+
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.error(f"[CHAT] Unexpected error for {request.email}: {exc}")
+        raise DomainError("Chat service error. Please try again.")
+
+@router.get("/chat-history/{email}")
+def get_chat_history_by_email(email: str):
+    """Get cleaned chat history for a user.
+
+    Renamed from `get_chat_history` to clear a name collision: a SECOND handler
+    further down this module (GET /history/{user_email}) had the same function
+    name, so the module-level name only ever referred to the later one. Both
+    endpoints worked — FastAPI binds the function object at decoration time —
+    but the shadowing made the file misleading to read. The route path, method
+    and response are unchanged.
+    """
+    from app.services.onboarding_chat_service import get_chat_history_for_user
+    return {"conversations": get_chat_history_for_user(email)}
 
 @router.post("/upload-documents")
 async def upload_documents(

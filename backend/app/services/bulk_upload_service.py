@@ -215,7 +215,6 @@ def build_bulk_success_message(
     member_name: Optional[str] = None,
     remaining_docs: Optional[List[str]] = None,
     suppress_next_step: bool = False,
-    language: Optional[str] = None,
 ) -> str:
     """
     Deterministic per-file acknowledgment for a bulk-upload result, worded to
@@ -258,16 +257,10 @@ def build_bulk_success_message(
     special case for a mid-batch MOA result.
     """
     from app.services.chatupload_helpers import get_display_document_name
-    from app.i18n import render_message, doc_label
-    from app.utils.language import normalize_language
 
-    # i18n: rendered from the EN/AR/ES catalog (app/i18n/messages.py) in the
-    # request's language (X-User-Language); the returned LocalizedStr also
-    # carries the other two renderings so a language toggle can swap it
-    # without an LLM call. Still a plain str to every existing caller.
-    lang = normalize_language(language)
     doc_type_l = (doc_type or "").lower()
     display_name = get_display_document_name(doc_type_l) if doc_type_l else "Document"
+    member_context = f" for {member_name}" if member_name else ""
     remaining = [] if suppress_next_step else (remaining_docs or [])
 
     # ── MOA validated with nothing else outstanding ─────────────────────────
@@ -280,19 +273,24 @@ def build_bulk_success_message(
     # "next step" sentence is being held back for the final message instead.
     is_moa = doc_type_l in ("moa", "memorandum")
     if is_moa and not remaining and not suppress_next_step:
-        return render_message("bulk.moa_done", lang)
+        return (
+            "Your Memorandum of Association has been successfully validated "
+            "and accepted. Next, once you have approved these documents, we "
+            "will move to the member verification stage where Emirates ID or "
+            "Passport for all partners will be required to proceed further."
+        )
 
     # ── Standard path ────────────────────────────────────────────────────────
-    member_ctx = render_message("bulk.member_ctx", lang, name=member_name) if member_name else ""
-    next_step = render_message("bulk.next", lang, doc=doc_label(remaining[0], lang)) if remaining else ""
-    return render_message("bulk.received", lang, doc=doc_label(display_name, lang),
-                          member=member_ctx, next=next_step)
-
-
-def _duplicate_message(doc_type: str):
-    from app.i18n import render_message, doc_label
-    from app.services.chatupload_helpers import get_display_document_name
-    return render_message("bulk.duplicate", None, doc=doc_label(get_display_document_name(doc_type)))
+    # Same shape as generate_dynamic_valid_document_response's STANDARD PATH
+    # prompt's own worked example: "Your Emirates ID / Passport has been
+    # received and validated successfully. Document details are currently
+    # being processed. Next, please upload your Commercial License."
+    next_step = f" Next, please upload your {remaining[0]}." if remaining else ""
+    return (
+        f"Your {display_name} has been received and validated successfully"
+        f"{member_context}. Document details are currently being processed."
+        f"{next_step}"
+    )
 
 
 def dedupe_by_document_type(raw_results: List[dict]) -> List[dict]:
@@ -319,7 +317,10 @@ def dedupe_by_document_type(raw_results: List[dict]) -> List[dict]:
                 "is_valid": False,
                 "success": False,
                 "duplicate_in_batch": True,
-                "message": _duplicate_message(doc_type),
+                "message": (
+                    f"Another file in this batch was already accepted as "
+                    f"{doc_type}. This one was skipped."
+                ),
             })
             continue
         if is_valid:

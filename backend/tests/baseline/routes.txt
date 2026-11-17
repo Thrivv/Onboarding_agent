@@ -73,6 +73,17 @@
   POST    /onboarding/ai/api/documentupload/validate-before-confirmation    -> validate_before_confirmation
   GET     /onboarding/ai/api/documentupload/validation-status/{email}       -> get_validation_status
 
+--- growx_integration.py ---
+  GET     /onboarding/ai/api/growx/ping                                     -> ping_growx_apis
+  GET     /onboarding/ai/api/growx/preview/api1_user_create/{email}         -> preview_api1_user_create
+  GET     /onboarding/ai/api/growx/preview/api2_set_password/{email}        -> preview_api2_set_password
+  GET     /onboarding/ai/api/growx/preview/api3_sme_create/{email}          -> preview_api3_sme_create
+  GET     /onboarding/ai/api/growx/preview/{email}                          -> preview_growx_payloads
+  POST    /onboarding/ai/api/growx/set-password                             -> growx_set_password
+  POST    /onboarding/ai/api/growx/sme-create                               -> growx_sme_create
+  POST    /onboarding/ai/api/growx/submit                                   -> submit_to_growx
+  POST    /onboarding/ai/api/growx/user-create                              -> growx_user_create
+
 --- frontend_logs.py ---
   POST    /onboarding/ai/api/logs/frontend                                  -> log_frontend_error
 
@@ -91,4 +102,4 @@
   GET     /onboarding/ai/api/register/registered-today                      -> users_registered_today  [SYNC]
   POST    /onboarding/ai/api/register/signup                                -> signup
 
-Total: 78 routes across 7 modules
+Total: 87 routes across 8 modules

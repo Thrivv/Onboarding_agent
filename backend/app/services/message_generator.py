@@ -6,14 +6,12 @@ Pure LLM-based generation with NO fallback templates
 All messages enforce professional banking standards
 
 FIXED: Welcome messages now support emojis
-FIXED: Welcome message uses the configured brand name (config.BRAND_NAME),
-       no Upload Order section
+FIXED: Welcome message uses "MyBank" (not "Thrivv"), no Upload Order section
 FIXED: Last document message ends with 'Please type "okay" to continue.'
 FIXED: MOA success message ends with 'Please type "okay" to continue.'
 """
 
 from app.services.run_model import call_local_llm
-from app.utils.language import normalize_language
 import logging
 from typing import Optional, Dict, List
 import time
@@ -47,9 +45,9 @@ TECHNICAL_ERROR_MESSAGE = (
 # ============================================================================
 # PROFESSIONAL BANKING CONTEXT - Prepended to ALL Prompts
 # ============================================================================
-PROFESSIONAL_BANKING_CONTEXT = f"""
+PROFESSIONAL_BANKING_CONTEXT = """
 CRITICAL SYSTEM IDENTITY:
-You are an AI assistant for {config.BRAND_NAME}, a regulated financial institution in the UAE.
+You are an AI assistant for MyBank, a regulated financial institution in the UAE.
 
 ❌ ABSOLUTE PROHIBITIONS - NEVER INCLUDE:
 1. GREETINGS AT START:
@@ -61,8 +59,8 @@ You are an AI assistant for {config.BRAND_NAME}, a regulated financial instituti
 2. SIGN-OFFS AT END:
    - "Kind regards," "Best regards," "Sincerely," "Regards,"
    - "Thank you," as a closing statement
-   - "{config.BRAND_NAME}" as a signature
-   - "The Team," "Support Team," "The {config.BRAND_NAME} Team"
+   - "MyBank" as a signature
+   - "The Team," "Support Team," "The MyBank Team"
    - Any formal letter-style closing
 
 3. CASUAL/CELEBRATORY LANGUAGE:
@@ -104,7 +102,7 @@ STRUCTURE GUIDELINES:
 Your Emirates ID has been received and validated successfully. Document details are currently being processed.
 
 Kind regards,
-{config.BRAND_NAME}"
+MyBank"
 
 CORRECT FORMAT (DIRECT CONTENT ONLY):
 "Your Emirates ID has been received and validated successfully. Document details are currently being processed. Next, please upload your Commercial License."
@@ -129,7 +127,7 @@ ACCEPTABLE LANGUAGE EXAMPLES:
 UNACCEPTABLE LANGUAGE EXAMPLES:
 ✗ "Dear [Name]," (NO formal greetings)
 ✗ "Kind regards," (NO sign-offs)
-✗ "{config.BRAND_NAME}" (NO signature at end)
+✗ "MyBank" (NO signature at end)
 ✗ "Great job! 🎉" (NO celebration/emojis - except welcome messages)
 ✗ "Awesome progress!" (NO casual enthusiasm)
 ✗ "Oops! Something went wrong." (NO informal expressions)
@@ -171,27 +169,18 @@ class MessageGenerator:
     def _generate_with_retry(prompt: str, message_type: str) -> str:
         """
         Core retry logic with smart pattern detection.
-        Includes post-generation brand-name correction to guarantee the
-        single configured brand (config.BRAND_NAME).
+        Includes post-generation brand-name correction to guarantee "MyBank".
         """
         import re as _re
 
-        # ARCHITECTURE FIX (prompt-remediation Phase 2): PROFESSIONAL_BANKING_
-        # CONTEXT used to be textually prepended into the USER turn on every
-        # single call here (full_prompt = f"{PROFESSIONAL_BANKING_CONTEXT}\n\n
-        # {prompt}"). Some callers (document_messaging.py) ALSO prepended it
-        # themselves into the `prompt` they pass in, so those calls sent it
-        # TWICE per request -- once from the caller, once from here. It now
-        # goes through the model's actual system role exactly once, at a
-        # lower temperature (0.3, down from the shared 0.7 default) that
-        # suits these heavily format-locked, often verbatim-phrase-required
-        # outputs better than a temperature tuned for open-ended chat.
+        full_prompt = f"{PROFESSIONAL_BANKING_CONTEXT}\n\n{prompt}"
+        
         for attempt in range(1, MessageGenerator.MAX_RETRIES + 1):
             try:
                 logger.info(f"[{message_type}] Attempt {attempt}/{MessageGenerator.MAX_RETRIES}")
                 
                 # Call LLM
-                response = call_local_llm(prompt, system_prompt=PROFESSIONAL_BANKING_CONTEXT, temperature=0.3)
+                response = call_local_llm(full_prompt)
                 
                 if not response:
                     logger.warning(f"[{message_type}] Attempt {attempt}: Empty response")
@@ -205,24 +194,15 @@ class MessageGenerator:
                 original_response = response
 
                 # ============================================================
-                # FIX #1 (brand safety): the model has, at various points in
-                # this codebase's history, seen "Thrivv", "DigiOB", and
-                # "MyBank" all used as the assistant's name in different
-                # prompts, so any of them can leak into a completion as a
-                # hallucinated brand name. Replace every wrong-brand variant
-                # with the single configured identity (config.BRAND_NAME)
-                # before further validation, rather than hardcoding one
-                # literal target -- this stays correct whichever name a
-                # deployment configures.
+                # FIX #1 (brand safety): Replace any "Thrivv" variant with
+                # "MyBank" before further validation.  The LLM may hallucinate
+                # the product name from fine-tuning data; this is a hard guard.
                 # ============================================================
-                _wrong_brand_names = {"Thrivv", "DigiOB", "MyBank"}
-                _wrong_brand_names.discard(config.BRAND_NAME)
-                if _wrong_brand_names:
-                    _wrong_brand_pattern = _re.compile(
-                        r'\b(?:' + '|'.join(_re.escape(n) for n in _wrong_brand_names)
-                        + r')(?:\.ai|\.com|[- ]?[Bb]ank)?\b'
-                    )
-                    response = _wrong_brand_pattern.sub(config.BRAND_NAME, response)
+                response = _re.sub(
+                    r'\bThrivv(?:\.ai|\.com|[- ]?[Bb]ank)?\b',
+                    'MyBank',
+                    response
+                )
 
                 # CLEAN OUTPUT - Remove greetings/sign-offs
                 response = MessageGenerator._validate_and_clean_output(response)
@@ -302,14 +282,8 @@ class MessageGenerator:
         violations = []
         
         # 1. CHECK FOR GREETINGS AT START
-        # Localized (Phase 5, multilingual rollout): the English-only check
-        # below never caught Spanish/Arabic greetings, so Spanish output has
-        # been shipping without this guardrail — extended alongside Arabic
-        # support rather than left as an English-only safety net.
-        if re.match(r'^\s*(Dear|Hello|Hi|Greetings|Estimad[oa]|Apreciad[oa]|Hola)', text, re.IGNORECASE):
+        if re.match(r'^\s*(Dear|Hello|Hi|Greetings)', text, re.IGNORECASE):
             violations.append("Contains greeting at start")
-        if re.match(r'^\s*(عزيزي|عزيزتي|مرحبا|السلام عليكم|أهلا)', text):
-            violations.append("Contains greeting at start (Arabic)")
         
         # 2. CHECK FOR SIGN-OFFS AT END
         lines = text.split('\n')
@@ -321,15 +295,6 @@ class MessageGenerator:
             r'Sincerely',
             r'Regards',
             r'Thank you\s*$',
-            # Spanish / Arabic equivalents — see the greeting note above.
-            r'Atentamente',
-            r'Saludos cordiales',
-            r'Cordialmente',
-            r'Gracias\s*$',
-            r'مع تحياتنا',
-            r'تحياتنا',
-            r'مع خالص التحية',
-            r'شكرا\s*$',
         ]
         
         for pattern in sign_off_patterns:
@@ -339,9 +304,8 @@ class MessageGenerator:
         # 3. CHECK FOR SIGNATURE AT END
         last_two_lines = '\n'.join(lines[-2:]) if len(lines) >= 2 else text
         
-        _brand_escaped = re.escape(config.BRAND_NAME)
-        if re.search(rf'\n\s*{_brand_escaped}\s+Bank\s*$', last_two_lines, re.IGNORECASE):
-            violations.append(f"Contains '{config.BRAND_NAME}' as signature")
+        if re.search(r'\n\s*MyBank\s+Bank\s*$', last_two_lines, re.IGNORECASE):
+            violations.append("Contains 'MyBank' as signature")
         
         if re.search(r'\n\s*(The\s+Team|Support\s+Team)\s*$', last_two_lines, re.IGNORECASE):
             violations.append("Contains team signature")
@@ -391,18 +355,12 @@ class MessageGenerator:
             r'^Hi\s+[^,\n]+,?\s*\n*',
             r'^Greetings,?\s*\n*',
             r'^Good\s+(morning|afternoon|evening)\s+[^,\n]*,?\s*\n*',
-            # Spanish / Arabic equivalents (Phase 5, multilingual rollout).
-            r'^Estimad[oa]\s+[^,\n]+,?\s*\n*',
-            r'^Hola\s+[^,\n]*,?\s*\n*',
-            r'^(عزيزي|عزيزتي)\s+[^,\n]+,?\s*\n*',
-            r'^(مرحبا|السلام عليكم|أهلا)\s*[^,\n]*,?\s*\n*',
         ]
         
         for pattern in greeting_patterns:
             text = re.sub(pattern, '', text, flags=re.IGNORECASE | re.MULTILINE)
         
         # Remove sign-offs from end
-        _brand_escaped = re.escape(config.BRAND_NAME)
         sign_off_patterns = [
             r'\n+\s*Kind regards,?\s*$',
             r'\n+\s*Best regards,?\s*$',
@@ -410,21 +368,12 @@ class MessageGenerator:
             r'\n+\s*Regards,?\s*$',
             r'\n+\s*Thank you,?\s*$',
             r'\n+\s*Thanks,?\s*$',
-            rf'\n+\s*{_brand_escaped}\s*$',
+            r'\n+\s*MyBank\s*$',
             r'\n+\s*The Team\s*$',
             r'\n+\s*Support Team\s*$',
-            rf'\n+\s*The {_brand_escaped} Team\s*$',
-            rf'\n+\s*Kind regards,?\s*\n+\s*{_brand_escaped}\s*$',
-            rf'\n+\s*Best regards,?\s*\n+\s*{_brand_escaped}\s*$',
-            # Spanish / Arabic equivalents (Phase 5, multilingual rollout).
-            r'\n+\s*Atentamente,?\s*$',
-            r'\n+\s*Saludos cordiales,?\s*$',
-            r'\n+\s*Cordialmente,?\s*$',
-            r'\n+\s*Gracias,?\s*$',
-            r'\n+\s*مع تحياتنا\s*$',
-            r'\n+\s*تحياتنا\s*$',
-            r'\n+\s*مع خالص التحية\s*$',
-            r'\n+\s*شكرا\s*$',
+            r'\n+\s*The MyBank Team\s*$',
+            r'\n+\s*Kind regards,?\s*\n+\s*MyBank\s*$',
+            r'\n+\s*Best regards,?\s*\n+\s*MyBank\s*$',
         ]
         
         for pattern in sign_off_patterns:
@@ -448,16 +397,14 @@ class MessageGenerator:
     def _build_language_instruction(language: str) -> str:
         lang_display = {
             "english": "English",
-            "spanish": "Spanish (Español)",
-            "arabic": "Arabic (العربية)"
+            "spanish": "Spanish (Español)"
         }
         
         target_lang = lang_display.get(language.lower(), "English")
         
         example_responses = {
             "english": "Your document has been successfully verified. Please proceed with uploading the next required document.",
-            "spanish": "Su documento ha sido verificado exitosamente. Por favor, proceda con la carga del siguiente documento requerido.",
-            "arabic": "تم التحقق من مستندك بنجاح. يُرجى المتابعة لتحميل المستند المطلوب التالي."
+            "spanish": "Su documento ha sido verificado exitosamente. Por favor, proceda con la carga del siguiente documento requerido."
         }
         
         example = example_responses.get(language.lower(), example_responses["english"])
@@ -515,42 +462,46 @@ Your response must be in {target_lang} ONLY.
         Returns:
             str: Welcome message (instant, deterministic)
         """
-        language = normalize_language(language)
+        language = language.lower().strip()
+        if language not in ["english", "spanish"]:
+            language = "english"
 
         raw_name = user_data.get("name", "").strip()
         account_type = user_data.get("account_type", "")
+        ownership_type = user_data.get("ownership_type", "")
 
-        # All three renderings are built and returned as one LocalizedStr
-        # (app/i18n), so a later language switch swaps the welcome from the
-        # stored variants instead of an LLM translation.
-        #
-        # Ownership type (Single Owner vs Partnership/Multiple Owners) is no
-        # longer asked upfront — it is inferred from the Commercial License
-        # once uploaded — so the welcome can't branch on it.
-        from app.i18n import localized
-        name_en = raw_name or "there"
-        name_es = raw_name or "estimado cliente"
-        name_ar = raw_name or "عميلنا الكريم"
+        if language == "spanish":
+            user_name = raw_name or "estimado cliente"
 
+            # CHANGED: Ownership type (Single Owner vs Partnership/Multiple
+            # Owners) is no longer asked upfront. The AI now infers it
+            # automatically from the Commercial License once it's uploaded and
+            # verified (see the auto-classification logic in chatupload.py's
+            # upload handler), so the welcome message can no longer branch on
+            # ownership_type — it isn't known yet at this point. One generic
+            # Corporate greeting for both branches; the AI announces the
+            # detected ownership type (and next document) in a follow-up
+            # message right after the Commercial License is processed.
+            if account_type == ACCOUNT_CORPORATE:
+                return f"""Un gusto tenerte aquí, {user_name}.
+
+Vamos a configurar tu cuenta. Te guiaré de principio a fin — para empezar, necesitaré tu Licencia Comercial para verificar tu negocio y definir los próximos pasos."""
+
+            else:
+                return f"¡Bienvenido {user_name}! 👋\n\nEstoy aquí para ayudarte con la incorporación de tu cuenta {account_type}. ¡Comencemos!"
+
+        # English (default)
+        user_name = raw_name or "there"
+
+        # CHANGED: see the Spanish branch above for why this no longer
+        # branches on ownership_type.
         if account_type == ACCOUNT_CORPORATE:
-            return localized(
-                language,
-                en=(f"Good to have you here, {name_en}.\n\n"
-                    "Let's get your account set up. I'll guide you through it end to end — first up, "
-                    "I'll need your Commercial License to verify your business and pull the next steps for you."),
-                es=(f"Un gusto tenerte aquí, {name_es}.\n\n"
-                    "Vamos a configurar tu cuenta. Te guiaré de principio a fin — para empezar, necesitaré "
-                    "tu Licencia Comercial para verificar tu negocio y definir los próximos pasos."),
-                ar=(f"يسعدنا وجودك معنا، {name_ar}.\n\n"
-                    "سنقوم الآن بإعداد حسابك. سأرافقك خطوة بخطوة حتى الانتهاء — وسنبدأ بالحصول على "
-                    "رخصتك التجارية للتحقق من نشاطك التجاري وتحديد الخطوات التالية."),
-            )
-        return localized(
-            language,
-            en=f"Welcome {name_en}! 👋\n\nI'm here to help you with your {account_type} account onboarding. Let's get started!",
-            es=f"¡Bienvenido {name_es}! 👋\n\nEstoy aquí para ayudarte con la incorporación de tu cuenta {account_type}. ¡Comencemos!",
-            ar=f"مرحباً بك {name_ar}! 👋\n\nأنا هنا لمساعدتك في إكمال إجراءات فتح حساب {account_type} الخاص بك. لنبدأ!",
-        )
+            return f"""Good to have you here, {user_name}.
+
+Let's get your account set up. I'll guide you through it end to end — first up, I'll need your Commercial License to verify your business and pull the next steps for you."""
+
+        else:
+            return f"Welcome {user_name}! 👋\n\nI'm here to help you with your {account_type} account onboarding. Let's get started!"
 
     # ────────────────────────────────────────────────────────────────────────
     # Former LLM-based implementation, kept for reference only — not called.
@@ -560,7 +511,9 @@ Your response must be in {target_lang} ONLY.
     # ────────────────────────────────────────────────────────────────────────
     @staticmethod
     def _generate_welcome_message_via_llm_DEPRECATED(user_data: dict, language: str = "english") -> str:
-        language = normalize_language(language)
+        language = language.lower().strip()
+        if language not in ["english", "spanish"]:
+            language = "english"
 
         raw_name = user_data.get("name", "").strip()
         # Build personalised greeting: use name if available, else plain "Welcome!"
@@ -707,7 +660,9 @@ Generate the registration confirmation:"""
         Returns:
             str: LLM-generated success message
         """
-        language = normalize_language(language)
+        language = language.lower().strip()
+        if language not in ["english", "spanish"]:
+            language = "english"
 
         name = user.get("name", "valued customer")
         member_context = f" for member {member_name}" if member_name else ""
@@ -943,7 +898,9 @@ Generate the registration confirmation:"""
         language: str = "english"
     ) -> str:
         """Generate message for onboarding stage transition with UBO annotation"""
-        language = normalize_language(language)
+        language = language.lower().strip()
+        if language not in ["english", "spanish"]:
+            language = "english"
 
         name = user.get("name", "valued customer")
         members = context_data.get("members", [])
@@ -1002,7 +959,9 @@ Generate the registration confirmation:"""
         language: str = "english"
     ) -> str:
         """Generate professional error message for document issues"""
-        language = normalize_language(language)
+        language = language.lower().strip()
+        if language not in ["english", "spanish"]:
+            language = "english"
         
         name = user.get("name", "valued customer")
         missing_fields = error_details.get("missing_fields", [])
@@ -1046,7 +1005,9 @@ Generate the error message:"""
     @staticmethod
     def generate_completion_message(user: dict, language: str = "english") -> str:
         """Generate completion message for successful onboarding"""
-        language = normalize_language(language)
+        language = language.lower().strip()
+        if language not in ["english", "spanish"]:
+            language = "english"
         
         name = user.get("name", "valued customer")
         account_type = user.get("account_type", "account")
@@ -1067,7 +1028,7 @@ MESSAGE REQUIREMENTS:
 1. Confirm all documents have been verified successfully
 2. State they will receive confirmation email shortly
 3. Mention account activation timeline (3-4 business days)
-4. Welcome them to {config.BRAND_NAME} professionally
+4. Welcome them to MyBank professionally
 5. Length: 4-5 sentences
 6. Tone: Professional, positive, welcoming
 
@@ -1084,7 +1045,9 @@ Generate the completion message:"""
         language: str = "english"
     ) -> str:
         """Generate cross-validation failure message"""
-        language = normalize_language(language)
+        language = language.lower().strip()
+        if language not in ["english", "spanish"]:
+            language = "english"
         
         mismatch_list = "\n".join([f"  - {m}" for m in mismatches])
         language_instruction = MessageGenerator._build_language_instruction(language)
@@ -1119,7 +1082,9 @@ Generate the message:"""
         language: str = "english"
     ) -> str:
         """Generate the cross-validation-passed / onboarding-complete message."""
-        language = normalize_language(language)
+        language = language.lower().strip()
+        if language not in ["english", "spanish"]:
+            language = "english"
 
         language_instruction = MessageGenerator._build_language_instruction(language)
 
@@ -1151,7 +1116,9 @@ Generate the message:"""
         language: str = "english"
     ) -> str:
         """Generate progress update for multi-member accounts"""
-        language = normalize_language(language)
+        language = language.lower().strip()
+        if language not in ["english", "spanish"]:
+            language = "english"
         
         percentage = int((completed / total) * 100) if total > 0 else 0
         language_instruction = MessageGenerator._build_language_instruction(language)
@@ -1183,7 +1150,9 @@ Generate the progress update:"""
         language: str = "english"
     ) -> str:
         """Generate SurePass government verification failure message"""
-        language = normalize_language(language)
+        language = language.lower().strip()
+        if language not in ["english", "spanish"]:
+            language = "english"
         
         language_instruction = MessageGenerator._build_language_instruction(language)
         
@@ -1218,7 +1187,9 @@ Generate the message:"""
         language: str = "english"
     ) -> str:
         """Generate general error message"""
-        language = normalize_language(language)
+        language = language.lower().strip()
+        if language not in ["english", "spanish"]:
+            language = "english"
         
         language_instruction = MessageGenerator._build_language_instruction(language)
         
@@ -1252,7 +1223,9 @@ Generate the error message:"""
         language: str = "english"
     ) -> str:
         """Generate verification success message"""
-        language = normalize_language(language)
+        language = language.lower().strip()
+        if language not in ["english", "spanish"]:
+            language = "english"
 
         # Map internal type names to human-readable display names
         _doc_display_names = {
@@ -1322,7 +1295,9 @@ Generate the message:"""
         language: str = "english"
     ) -> str:
         """Generate REJECT message for tampered documents"""
-        language = normalize_language(language)
+        language = language.lower().strip()
+        if language not in ["english", "spanish"]:
+            language = "english"
         
         test_report_id = tampering_result.test_report_id
         overall_score = tampering_result.overall_tampering_score
@@ -1399,7 +1374,9 @@ Generate the rejection message:"""
         language: str = "english"
     ) -> str:
         """Generate ESCALATE message for documents requiring manual review"""
-        language = normalize_language(language)
+        language = language.lower().strip()
+        if language not in ["english", "spanish"]:
+            language = "english"
         
         test_report_id = tampering_result.test_report_id
         overall_score = tampering_result.overall_tampering_score
@@ -1483,7 +1460,9 @@ Generate the escalation message:"""
         Generate alert message when corporate shareholders are detected on a
         Joint Ownership Commercial License.
         """
-        language = normalize_language(language)
+        language = language.lower().strip()
+        if language not in ["english", "spanish"]:
+            language = "english"
 
         name = user.get("name", "valued customer")
         corp_list_text = "\n".join([f"  - {c}" for c in corp_names])
@@ -1532,7 +1511,9 @@ Generate the corporate shareholder alert message:"""
         Generate a message requesting the Certificate of Incorporation upload
         for a specific corporate shareholder.
         """
-        language = normalize_language(language)
+        language = language.lower().strip()
+        if language not in ["english", "spanish"]:
+            language = "english"
 
         name = user.get("name", "valued customer")
         progress_note = f"{corp_index} of {total_corps}" if total_corps > 1 else "1 of 1"
@@ -1581,7 +1562,9 @@ Generate the CoI upload request message:"""
         Generate acknowledgment after a Certificate of Incorporation is
         successfully extracted and validated.
         """
-        language = normalize_language(language)
+        language = language.lower().strip()
+        if language not in ["english", "spanish"]:
+            language = "english"
 
         name = user.get("name", "valued customer")
         jurisdiction = coi_data.get("jurisdiction", "")
@@ -1637,7 +1620,9 @@ Generate the CoI success message:"""
         Generate a message presenting the expanded ownership structure and
         identified UBOs after all CoIs have been collected and analysed.
         """
-        language = normalize_language(language)
+        language = language.lower().strip()
+        if language not in ["english", "spanish"]:
+            language = "english"
 
         name = user.get("name", "valued customer")
 
@@ -1701,7 +1686,9 @@ Generate the ownership expansion summary message:"""
         Generate the stage transition message from corporate_shareholder_docs
         to member_eids for a Type-2 (corporate shareholder expansion) flow.
         """
-        language = normalize_language(language)
+        language = language.lower().strip()
+        if language not in ["english", "spanish"]:
+            language = "english"
 
         name = user.get("name", "valued customer")
 
@@ -1887,16 +1874,15 @@ Generate the prompt:"""
 
     @staticmethod
     def ki_moa_as_saved(language: str = "english") -> str:
-        """Confirm MOA AS selections saved and state the ID-upload next step (unused by the MOA route since the i18n catalog; kept for compatibility)."""
+        """Confirm MOA AS selections saved and ask about external individuals."""
         language_instruction = MessageGenerator._build_language_instruction(language)
         prompt = f"""{language_instruction}
 
-TASK: Confirm AS selections saved and state the next step.
+TASK: Confirm AS selections saved and ask about additional external Key Individuals.
 
 MESSAGE REQUIREMENTS:
 1. Confirm Authorised Signatory selections have been saved.
-2. State that the next step is uploading the Emirates ID or Passport for each listed individual.
-   Do NOT ask whether there are additional/external Key Individuals — that is asked later by a dedicated card.
+2. Ask if there are any external Key Individuals NOT in the MOA member list to add.
 3. Length: 2 sentences.
 4. Tone: Professional, clear.
 

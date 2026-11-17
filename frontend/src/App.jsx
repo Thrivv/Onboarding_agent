@@ -4,15 +4,12 @@ import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { Toaster, toast } from 'react-hot-toast';
 import { AuthProvider } from './context/AuthContext';
-import { LanguageProvider } from './context/LanguageContext';
-import { tStatic } from './i18n/tStatic';
 import ProtectedRoute from './components/auth/ProtectedRoute';
 import AdminProtectedRoute from './components/auth/AdminProtectedRoute';
 
 // Pages
 import Login from './pages/Login';
 import Signup from './pages/Signup';
-import ResetPassword from './pages/ResetPassword';
 import Dashboard from './pages/Dashboard';
 import AIAssistant from './features/onboarding/OnboardingPage';
 import NotFound from './pages/NotFound';
@@ -20,7 +17,6 @@ import NotFound from './pages/NotFound';
 function App() {
   return (
     <Router basename={process.env.PUBLIC_URL || '/onboarding/ai'}>
-      <LanguageProvider>
       <AuthProvider>
         <div className="min-h-screen bg-brand-primary">
           <Toaster 
@@ -60,7 +56,7 @@ function App() {
                     }}
                     className="flex-shrink-0 px-3 py-1.5 bg-gray-50 hover:bg-gray-100 text-gray-500 hover:text-gray-900 rounded-lg transition-all text-xs font-black border border-gray-200"
                   >
-                    {tStatic('ui.close').toUpperCase()}
+                    CLOSE
                   </button>
                 )}
               </div>
@@ -71,10 +67,6 @@ function App() {
             {/* Public Routes */}
             <Route path="/login" element={<Login />} />
             <Route path="/signup" element={<Signup />} />
-            {/* Added alongside the bcrypt password-hashing migration — see
-                ResetPassword.jsx and app/api/routes/auth.py's
-                request-password-reset / reset-password endpoints. */}
-            <Route path="/reset-password" element={<ResetPassword />} />
             {/* /register removed: Register.jsx was orphaned — nothing linked to
                 or navigated to it, and its only API call (POST /register) hit an
                 endpoint that does not exist, so the page 404'd on submit. The
@@ -115,7 +107,6 @@ function App() {
           </Routes>
         </div>
       </AuthProvider>
-      </LanguageProvider>
     </Router>
   );
 }

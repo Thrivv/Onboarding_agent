@@ -79,25 +79,6 @@ class AuthError(DomainError):
     default_detail = "Not authorised."
 
 
-class PasswordResetRequiredError(DomainError):
-    """
-    The account's stored credential predates the current password-hashing
-    scheme (or was invalidated by the migration script) and can never verify
-    successfully — the caller must go through POST /auth/request-password-reset
-    and POST /auth/reset-password instead of retrying login.
-
-    Deliberately a distinct code from AuthError so the frontend can route the
-    user to the reset flow instead of just showing "wrong password" — see
-    `code` on DomainError and AuthContext.jsx's handling of it.
-    """
-
-    status_code = 403
-    default_detail = (
-        "For your security we've upgraded how passwords are protected. "
-        "Please reset your password to continue."
-    )
-
-
 class PermissionError_(DomainError):
     """
     Authenticated, but not allowed to touch this record.
@@ -120,7 +101,7 @@ class ConflictError(DomainError):
 
 class UpstreamError(DomainError):
     """
-    A third party we depend on failed: Supabase, AWS Bedrock, SMTP, OCR.
+    A third party we depend on failed: Supabase, OpenRouter, SMTP, OCR.
 
     502 rather than 500 on purpose — it tells the caller the fault is not in
     this service, and it keeps genuine internal bugs visible in the 500 rate
@@ -143,7 +124,6 @@ __all__ = [
     "NotFoundError",
     "ValidationError",
     "AuthError",
-    "PasswordResetRequiredError",
     "PermissionError_",
     "ConflictError",
     "UpstreamError",

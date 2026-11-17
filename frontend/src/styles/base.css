@@ -29,17 +29,6 @@
 }
 
 /* ---------------------------------------------------------------------------
- * Arabic RTL support (multilingual rollout — docs/multilingual-support-plan.html,
- * Phase 3). `dir` is set on <html> by context/LanguageContext.jsx whenever the
- * user picks Arabic; nothing else in the app needs to know the current
- * language to get the right font. Tailwind's built-in `rtl:`/`ltr:` variants
- * (v3.3+) key off this same [dir] attribute for layout mirroring.
- * ------------------------------------------------------------------------ */
-[dir="rtl"] {
-  font-family: 'IBM Plex Sans Arabic', 'Segoe UI', Tahoma, Arial, sans-serif;
-}
-
-/* ---------------------------------------------------------------------------
  * Moved here from the end of the stylesheet during the B9 split.
  *
  * `@layer components` must sit in the same file as the `@tailwind components`

@@ -4,10 +4,8 @@ import Sidebar from '../../../../components/layout/Sidebar';
 import { CheckCircle, Edit, Loader, Package } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { CONFIDENCE_STYLES, PACKAGE_DEFINITIONS, PACKAGE_ICONS } from '../../config/packages';
-import { useLanguage } from '../../../../context/LanguageContext';
 
 const ProductPackageCard = ({ userEmail, onConfirmed }) => {
-  const { t } = useLanguage();
   // ── package selection state ──────────────────────────────────────────────
   const [selected, setSelected] = useState(null);
   const [availedProducts, setAvailedProducts] = useState([]);
@@ -79,9 +77,9 @@ const ProductPackageCard = ({ userEmail, onConfirmed }) => {
   };
 
   const handleConfirm = async () => {
-    if (!selected) { toast.error(t('cards.productPackage.toastSelectPackage')); return; }
+    if (!selected) { toast.error('Please select a package'); return; }
     if (availedProducts.length === 0) {
-      toast.error(t('cards.productPackage.toastSelectPackage'));
+      toast.error('Please select a package');
       return;
     }
     setIsSaving(true);
@@ -95,14 +93,14 @@ const ProductPackageCard = ({ userEmail, onConfirmed }) => {
         setSaved(true);
         setSavedPackage(selected);
         setSavedProducts([...availedProducts]);
-        toast.success(t('cards.productPackage.toastSelectedSuccess', { name: selected }));
+        toast.success(`${selected} package selected successfully`);
         window.dispatchEvent(new Event('compliance-updated')); // Trigger Sidebar refresh
         if (onConfirmed) onConfirmed(res.data);
       } else {
-        toast.error(t('cards.productPackage.toastSaveFailed'));
+        toast.error('Failed to save package selection');
       }
     } catch (e) {
-      toast.error(e.response?.data?.detail || t('cards.productPackage.toastSaveFailed'));
+      toast.error(e.response?.data?.detail || 'Failed to save package selection');
     } finally {
       setIsSaving(false);
     }
@@ -117,14 +115,14 @@ const ProductPackageCard = ({ userEmail, onConfirmed }) => {
             <div className="p-1.5 bg-indigo-100 rounded-lg">
               <Package className="h-3.5 w-3.5 text-indigo-600" />
             </div>
-            <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">{t('cards.productPackage.packageSelection')}</h3>
+            <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Package selection</h3>
           </div>
           <button
             onClick={() => setSaved(false)}
             className="flex items-center gap-2 px-4 py-2.5 bg-brand-primary hover:opacity-90 rounded-xl text-[10px] font-black text-white uppercase tracking-widest transition-all active:scale-95 shadow-lg shadow-indigo-200"
           >
             <Edit className="h-3.5 w-3.5" />
-            {t('cards.productPackage.editPackage')}
+            Edit Package
           </button>
         </div>
         <div className="p-6">
@@ -134,16 +132,16 @@ const ProductPackageCard = ({ userEmail, onConfirmed }) => {
             </div>
             <div className="pt-2">
               <p className="text-2xl font-black text-slate-900 tracking-tight leading-none">
-                {t('cards.productPackage.packageLabel', { name: savedPackage })}
+                {savedPackage} Package
               </p>
               <p className="text-[11px] font-bold text-indigo-600 uppercase tracking-widest mt-2 bg-indigo-50 px-2 py-0.5 rounded-md w-fit">
-                {t('cards.productPackage.confirmed')}
+                Confirmed
               </p>
             </div>
           </div>
           {savedProducts.length > 0 && (
             <div className="space-y-3">
-              <p className="text-[10px] font-black text-slate-400 uppercase tracking-wider ml-1">{t('cards.productPackage.includedServices')}</p>
+              <p className="text-[10px] font-black text-slate-400 uppercase tracking-wider ml-1">Included Services</p>
               <div className="flex flex-wrap gap-2">
                 {savedProducts.map((prod, idx) => (
                   <div key={idx} className="px-3 py-1.5 bg-slate-50 border border-slate-100 rounded-xl flex items-center gap-2 transition-all hover:border-indigo-200 group">
@@ -165,16 +163,16 @@ const ProductPackageCard = ({ userEmail, onConfirmed }) => {
       <div className="mt-3 rounded-xl border-2 border-indigo-200 overflow-hidden bg-white">
         <div className="px-4 py-3 bg-brand-primary text-white">
           <p className="text-sm font-bold flex items-center gap-2">
-            <Loader className="h-4 w-4 animate-spin" /> {t('cards.productPackage.aiAnalysing')}
+            <Loader className="h-4 w-4 animate-spin" /> AI Analysing Your Business Profile
           </p>
-          <p className="text-xs opacity-80 mt-0.5">{t('cards.productPackage.matchingBusiness')}</p>
+          <p className="text-xs opacity-80 mt-0.5">Matching your nature of business to the right package…</p>
         </div>
         <div className="p-5 space-y-3">
           {[
-            t('cards.productPackage.stepReadingNob'),
-            t('cards.productPackage.stepMatching'),
-            t('cards.productPackage.stepGenerating'),
-            t('cards.productPackage.stepConfidence'),
+            'Reading your nature of business',
+            'Matching to banking packages',
+            'Generating recommendation',
+            'Calculating confidence score',
           ].map((step, i) => (
             <div key={i} className="flex items-center gap-3">
               <div className={`h-2 w-2 rounded-full flex-shrink-0 ${i === 0 ? 'bg-indigo-500 animate-pulse' : 'bg-gray-200'}`} />
@@ -196,9 +194,9 @@ const ProductPackageCard = ({ userEmail, onConfirmed }) => {
     <div className="mt-3 rounded-xl border-2 border-blue-200 overflow-hidden bg-white">
       {/* Header */}
       <div className="px-4 py-3 bg-brand-primary text-white">
-        <p className="text-sm font-bold">{t('cards.productPackage.selectYourPackage')}</p>
+        <p className="text-sm font-bold">Select Your Product Package</p>
         <p className="text-xs opacity-80 mt-0.5">
-          {aiRec ? t('cards.productPackage.aiSuggested') : t('cards.productPackage.chooseFits')}
+          {aiRec ? 'AI has suggested a package based on your business profile' : 'Choose the package that best fits your business needs'}
         </p>
       </div>
 
@@ -208,7 +206,7 @@ const ProductPackageCard = ({ userEmail, onConfirmed }) => {
           {/* Banner top bar */}
           <div className="bg-indigo-600 px-3 py-2 flex items-center gap-2">
             <span className="text-base">🤖</span>
-            <span className="text-[11px] font-black text-white uppercase tracking-widest">{t('cards.productPackage.aiRecommended')}</span>
+            <span className="text-[11px] font-black text-white uppercase tracking-widest">AI Recommended</span>
             {confStyle && (
               <span className={`ml-auto text-[10px] font-bold px-2 py-0.5 rounded-full ${confStyle.bg} ${confStyle.text}`}>
                 {confStyle.label}
@@ -222,22 +220,22 @@ const ProductPackageCard = ({ userEmail, onConfirmed }) => {
             <div className="flex items-center gap-2 mb-2">
               <span className="text-2xl">{PACKAGE_ICONS[aiRec.recommended_package]}</span>
               <div>
-                <p className="text-base font-black text-slate-900 leading-none">{t('cards.productPackage.packageLabel', { name: aiRec.recommended_package })}</p>
-                <p className="text-[10px] text-indigo-500 font-semibold mt-0.5">✨ {t('cards.productPackage.aiPickForProfile')}</p>
+                <p className="text-base font-black text-slate-900 leading-none">{aiRec.recommended_package} Package</p>
+                <p className="text-[10px] text-indigo-500 font-semibold mt-0.5">✨ AI Pick for your profile</p>
               </div>
             </div>
 
             {/* NOB context */}
             {nobDisplay && (
               <p className="text-[10px] text-slate-500 mb-2">
-                <span className="font-semibold text-slate-600">{t('cards.productPackage.basedOn')} </span>{nobDisplay}
+                <span className="font-semibold text-slate-600">Based on: </span>{nobDisplay}
               </p>
             )}
 
             {/* Reasoning */}
             {aiRec.reasoning && (
               <div className="bg-white rounded-lg p-2.5 mb-2 border border-indigo-100">
-                <p className="text-[9px] font-black text-indigo-400 uppercase tracking-widest mb-1">✨ {t('cards.productPackage.whyThisPackage')}</p>
+                <p className="text-[9px] font-black text-indigo-400 uppercase tracking-widest mb-1">✨ Why this package?</p>
                 <p className="text-[11px] text-slate-600 leading-relaxed">{aiRec.reasoning}</p>
               </div>
             )}
@@ -260,7 +258,7 @@ const ProductPackageCard = ({ userEmail, onConfirmed }) => {
       <div className={`${aiRec && !recError ? 'mt-3' : 'mt-0'}`}>
         {aiRec && !recError && (
           <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest px-4 mb-2">
-            {t('cards.productPackage.orChooseDifferent')}
+            Or choose a different package
           </p>
         )}
         <div className="grid grid-cols-2 gap-3 px-4 pb-2">
@@ -279,7 +277,7 @@ const ProductPackageCard = ({ userEmail, onConfirmed }) => {
                 {/* AI Pick ribbon */}
                 {isAiPick && (
                   <span className="absolute top-0 right-0 bg-indigo-600 text-white text-[8px] font-black px-2 py-0.5 rounded-bl-lg rounded-tr-xl uppercase tracking-wider">
-                    ✨ {t('cards.productPackage.aiPick')}
+                    ✨ AI Pick
                   </span>
                 )}
 
@@ -316,8 +314,8 @@ const ProductPackageCard = ({ userEmail, onConfirmed }) => {
           className="w-full py-2.5 bg-brand-primary text-white rounded-xl font-semibold text-sm hover:opacity-90 transition-all disabled:opacity-40 flex items-center justify-center gap-2"
         >
           {isSaving
-            ? <><Loader className="h-4 w-4 animate-spin" /> {t('cards.common.saving')}</>
-            : <><CheckCircle className="h-4 w-4" /> {selected ? t('cards.productPackage.confirmPackage', { name: selected }) : t('cards.productPackage.confirmPackageSelection')}</>
+            ? <><Loader className="h-4 w-4 animate-spin" /> Saving...</>
+            : <><CheckCircle className="h-4 w-4" /> Confirm {selected ? `${selected} Package` : 'Package Selection'}</>
           }
         </button>
       </div>

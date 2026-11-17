@@ -4,10 +4,8 @@ import { saveKeyIndividualContactInfo } from '../../../../api/keyIndividuals';
 import Sidebar from '../../../../components/layout/Sidebar';
 import { CheckCircle, Loader, Mail, Phone, PieChart, Send, ShieldCheck } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { useLanguage } from '../../../../context/LanguageContext';
 
 const KiDetailsCard = ({ userEmail, kiName, kiRole, onConfirmed }) => {
-  const { t } = useLanguage();
   const [contactEmail, setContactEmail] = useState('');
   const [otpSent, setOtpSent] = useState(false);
   const [otpDigits, setOtpDigits] = useState(['', '', '', '', '', '']);
@@ -23,9 +21,9 @@ const KiDetailsCard = ({ userEmail, kiName, kiRole, onConfirmed }) => {
 
   const displayRole = (() => {
     const r = String(kiRole || '').toUpperCase().replace(/_/g, ' ');
-    if (r === 'AS' || r === 'AUTHORISED SIGNATORY') return t('cards.common.authorisedSignatory');
-    if (r === 'MEMBER') return t('cards.common.member');
-    return kiRole || t('cards.common.keyIndividual');
+    if (r === 'AS' || r === 'AUTHORISED SIGNATORY') return 'Authorised Signatory';
+    if (r === 'MEMBER') return 'Member';
+    return kiRole || 'Key Individual';
   })();
 
   const initials = (kiName || '?').split(' ').slice(0, 2).map(w => w[0]).join('').toUpperCase();
@@ -33,7 +31,7 @@ const KiDetailsCard = ({ userEmail, kiName, kiRole, onConfirmed }) => {
   // ── OTP: send ──────────────────────────────────────────────────────────
   const handleSendOtp = async () => {
     if (!contactEmail.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(contactEmail.trim())) {
-      toast.error(t('cards.kiDetails.toastEnterValidEmail'));
+      toast.error('Enter a valid email address first');
       return;
     }
     setIsSendingOtp(true);
@@ -41,10 +39,10 @@ const KiDetailsCard = ({ userEmail, kiName, kiRole, onConfirmed }) => {
     try {
       await generateOtp({ email: contactEmail.trim() });
       setOtpSent(true);
-      toast.success(t('cards.kiDetails.toastOtpSent'));
+      toast.success('OTP sent — check your email (dev: 123456)');
       setTimeout(() => otpRefs.current[0]?.focus(), 100);
     } catch (err) {
-      toast.error(t('cards.kiDetails.toastOtpFailed'));
+      toast.error('Failed to send OTP');
     } finally {
       setIsSendingOtp(false);
     }
@@ -78,9 +76,9 @@ const KiDetailsCard = ({ userEmail, kiName, kiRole, onConfirmed }) => {
     try {
       await verifyOtp({ email: contactEmail.trim(), otp: pin });
       setOtpVerified(true);
-      toast.success(t('cards.kiDetails.toastEmailVerified'));
+      toast.success('Email verified');
     } catch (err) {
-      setOtpError(t('cards.kiDetails.otpInvalid'));
+      setOtpError('Invalid OTP — try again');
       setOtpDigits(['', '', '', '', '', '']);
       setTimeout(() => otpRefs.current[0]?.focus(), 100);
     } finally {
@@ -90,11 +88,11 @@ const KiDetailsCard = ({ userEmail, kiName, kiRole, onConfirmed }) => {
 
   // ── Confirm all details ────────────────────────────────────────────────
   const handleConfirm = async () => {
-    if (!otpVerified) { toast.error(t('cards.kiDetails.toastEmailFirst')); return; }
-    if (!phoneNumber.trim()) { toast.error(t('cards.kiDetails.toastPhoneRequired')); return; }
+    if (!otpVerified) { toast.error('Please verify your email first'); return; }
+    if (!phoneNumber.trim()) { toast.error('Phone number is required'); return; }
     const sharePct = sharePercentage !== '' ? parseFloat(sharePercentage) : null;
     if (sharePercentage !== '' && (isNaN(sharePct) || sharePct < 0 || sharePct > 100)) {
-      toast.error(t('cards.kiDetails.toastShareRange'));
+      toast.error('Share percentage must be between 0 and 100');
       return;
     }
     setIsSaving(true);
@@ -119,7 +117,7 @@ const KiDetailsCard = ({ userEmail, kiName, kiRole, onConfirmed }) => {
         message: res.data?.message || '',
       });
     } catch (err) {
-      toast.error(t('cards.kiDetails.toastSaveFailed'));
+      toast.error('Failed to save details — please try again');
     } finally {
       setIsSaving(false);
     }
@@ -134,7 +132,7 @@ const KiDetailsCard = ({ userEmail, kiName, kiRole, onConfirmed }) => {
           <div className="h-6 w-6 rounded-full bg-emerald-500 flex items-center justify-center flex-shrink-0">
             <CheckCircle className="h-3.5 w-3.5 text-white" />
           </div>
-          <p className="text-[12px] font-black text-emerald-700 uppercase tracking-tight">{t('cards.kiDetails.detailsSavedFor', { name: kiName })}</p>
+          <p className="text-[12px] font-black text-emerald-700 uppercase tracking-tight">Details saved for {kiName}</p>
         </div>
         <div className="grid grid-cols-1 gap-1.5 pl-8">
           <div className="flex items-center gap-2 text-[11px] text-slate-500">
@@ -148,11 +146,11 @@ const KiDetailsCard = ({ userEmail, kiName, kiRole, onConfirmed }) => {
           {sharePct !== null && (
             <div className="flex items-center gap-2 text-[11px] text-slate-500">
               <PieChart className="h-3 w-3 text-purple-400 flex-shrink-0" />
-              <span>{t('cards.kiDetails.share')} <span className="font-black text-brand-secondary bg-blue-50 border border-blue-100 px-1.5 py-0.5 rounded-lg">{sharePct}%</span></span>
+              <span>Share: <span className="font-black text-brand-secondary bg-blue-50 border border-blue-100 px-1.5 py-0.5 rounded-lg">{sharePct}%</span></span>
             </div>
           )}
         </div>
-        <p className="text-[10px] text-slate-400 pl-8 italic">{t('cards.kiDetails.savedToRecord')}</p>
+        <p className="text-[10px] text-slate-400 pl-8 italic">Saved to individual record.</p>
       </div>
     );
   }
@@ -175,7 +173,7 @@ const KiDetailsCard = ({ userEmail, kiName, kiRole, onConfirmed }) => {
         {otpVerified && (
           <div className="flex items-center gap-1.5 px-2.5 py-1 bg-emerald-50 border border-emerald-100 rounded-full">
             <div className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
-            <span className="text-[9px] font-black text-emerald-600 uppercase tracking-wider">{t('cards.kiDetails.verified')}</span>
+            <span className="text-[9px] font-black text-emerald-600 uppercase tracking-wider">Verified</span>
           </div>
         )}
       </div>
@@ -187,7 +185,7 @@ const KiDetailsCard = ({ userEmail, kiName, kiRole, onConfirmed }) => {
         <div className="flex items-center justify-between">
           <label className="text-[10px] font-black uppercase tracking-[0.1em] text-slate-400 flex items-center gap-1.5">
             <Mail className="h-3 w-3" />
-            {t('cards.kiDetails.emailAddress')}
+            Email Address
           </label>
         </div>
 
@@ -205,7 +203,7 @@ const KiDetailsCard = ({ userEmail, kiName, kiRole, onConfirmed }) => {
           />
           {otpSent && !otpVerified && (
             <p className="mt-1.5 ml-2 text-[10px] font-bold text-brand-primary animate-in fade-in slide-in-from-top-1 duration-300">
-              {t('cards.kiDetails.otpSentToEmail')}
+              OTP sent to the email address
             </p>
           )}
           <Mail className={`absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 transition-colors ${otpVerified ? 'text-emerald-500' : 'text-slate-300 group-focus-within:text-blue-500'}`} />
@@ -217,7 +215,7 @@ const KiDetailsCard = ({ userEmail, kiName, kiRole, onConfirmed }) => {
                 disabled={isSendingOtp || !contactEmail.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(contactEmail.trim())}
                 className="h-8 px-4 rounded-xl bg-brand-primary text-[10px] font-black uppercase tracking-wider disabled:opacity-30 hover:bg-brand-secondary transition-all active:scale-95 shadow-md shadow-blue-100 flex items-center gap-2"
               >
-                {isSendingOtp ? <Loader className="h-3 w-3 animate-spin" /> : <><Send className="h-3 w-3" /> {otpSent ? t('cards.kiDetails.resend') : t('cards.kiDetails.sendOtp')}</>}
+                {isSendingOtp ? <Loader className="h-3 w-3 animate-spin" /> : <><Send className="h-3 w-3" /> {otpSent ? 'Resend' : 'Send OTP'}</>}
               </button>
             )}
             {otpVerified && (
@@ -234,7 +232,7 @@ const KiDetailsCard = ({ userEmail, kiName, kiRole, onConfirmed }) => {
           <div className="space-y-3 pt-1 animate-in fade-in slide-in-from-top-2 duration-500">
             <p className="text-[10px] text-slate-500 font-bold flex items-center gap-1.5 ml-1">
               <ShieldCheck className="h-3 w-3 text-blue-500" />
-              {t('cards.kiDetails.enterCode')} <span className="text-slate-300 font-medium">{t('cards.kiDetails.devHint')}</span>
+              Enter the 6-digit code <span className="text-slate-300 font-medium">(Dev: 123456)</span>
             </p>
             <div className="flex gap-2">
               {otpDigits.map((d, idx) => (
@@ -267,7 +265,7 @@ const KiDetailsCard = ({ userEmail, kiName, kiRole, onConfirmed }) => {
       <div className="space-y-2">
         <label className="text-[10px] font-black uppercase tracking-[0.1em] text-slate-400 flex items-center gap-1.5">
           <Phone className="h-3 w-3" />
-          {t('cards.kiDetails.phoneNumber')}
+          Phone Number
         </label>
         <div className="relative group">
           <input
@@ -284,8 +282,8 @@ const KiDetailsCard = ({ userEmail, kiName, kiRole, onConfirmed }) => {
       {/* Share Percentage Input */}
       <div className="space-y-2">
         <label className="text-[10px] font-black uppercase tracking-[0.1em] text-slate-400 flex items-center justify-between">
-          <span className="flex items-center gap-1.5"><PieChart className="h-3 w-3" /> {t('cards.kiDetails.sharePercentage')}</span>
-          <span className="text-slate-300 normal-case font-medium">{t('cards.kiDetails.optional')}</span>
+          <span className="flex items-center gap-1.5"><PieChart className="h-3 w-3" /> Share Percentage</span>
+          <span className="text-slate-300 normal-case font-medium">optional</span>
         </label>
         <div className="flex items-center gap-3">
           <div className="relative group w-32">
@@ -303,7 +301,7 @@ const KiDetailsCard = ({ userEmail, kiName, kiRole, onConfirmed }) => {
           </div>
           {sharePercentage !== '' && !isNaN(parseFloat(sharePercentage)) && (
             <div className="flex-1 px-4 py-2 bg-blue-50/50 border border-blue-100 rounded-2xl flex items-center justify-between animate-in zoom-in duration-300">
-              <span className="text-[11px] font-bold text-brand-primary">{t('cards.kiDetails.ownership')}</span>
+              <span className="text-[11px] font-bold text-brand-primary">Ownership</span>
               <span className="text-[13px] font-black text-brand-secondary">{parseFloat(sharePercentage)}%</span>
             </div>
           )}
@@ -320,9 +318,9 @@ const KiDetailsCard = ({ userEmail, kiName, kiRole, onConfirmed }) => {
           }`}
       >
         {isSaving ? (
-          <><Loader className="h-4 w-4 animate-spin" /> {t('cards.kiDetails.savingDetails')}</>
+          <><Loader className="h-4 w-4 animate-spin" /> Saving Details…</>
         ) : (
-          <><CheckCircle className="h-4 w-4" /> {t('cards.kiDetails.confirmContinue')}</>
+          <><CheckCircle className="h-4 w-4" /> Confirm & Continue</>
         )}
       </button>
     </div>

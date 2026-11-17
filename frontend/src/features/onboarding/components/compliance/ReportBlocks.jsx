@@ -3,11 +3,8 @@ import { confirmSelfDeclaration, getSelfDeclarationStatus, getSelfDeclarationSum
 import { Building, CheckCircle, ChevronDown, Clock, Copy, FileText, Globe, History, Home, Loader, Package, Phone, Plus, ShieldCheck, User } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { InfoRow } from '../../../../components/ui/InfoRow';
-import logger from '../../../../utils/logger';
-import { useReportI18n } from '../../utils/reportI18n';
 
 const FATCAReportBlock = ({ data }) => {
-  const { L, R } = useReportI18n();
   if (!data) return null;
   const bool = (v) => v == null ? 'N/A' : (v === true || v === 'yes' || v === 'true') ? 'Yes' : 'No';
   return (
@@ -17,7 +14,7 @@ const FATCAReportBlock = ({ data }) => {
           <div className="flex items-center justify-between px-4 py-3 bg-brand-primary border-b border-indigo-100">
             <div className="flex items-center gap-2">
               <ShieldCheck className="h-4 w-4 text-indigo-600" />
-              <p className="text-[10px] font-black text-indigo-800 uppercase tracking-widest">{R('headings.documentForensics')}</p>
+              <p className="text-[10px] font-black text-indigo-800 uppercase tracking-widest">Document Forensics</p>
             </div>
             <div className={`px-2.5 py-1 rounded-full text-[9px] font-black uppercase tracking-tighter ${data.tampering.status === 'AUTHENTIC' ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'
               }`}>
@@ -26,37 +23,36 @@ const FATCAReportBlock = ({ data }) => {
           </div>
           <div className="p-4 bg-white grid grid-cols-2 gap-x-6 gap-y-3">
             <div className="flex justify-between items-center text-[11px]">
-              <span className="text-slate-400 font-bold uppercase tracking-tighter">{R('headings.forensicScore')}</span>
+              <span className="text-slate-400 font-bold uppercase tracking-tighter">Forensic Score</span>
               <span className="font-black text-slate-700">{data.tampering.score}</span>
             </div>
             <div className="flex justify-between items-center text-[11px]">
-              <span className="text-slate-400 font-bold uppercase tracking-tighter">{R('headings.decision')}</span>
+              <span className="text-slate-400 font-bold uppercase tracking-tighter">Decision</span>
               <span className="font-black text-slate-700">{data.tampering.decision}</span>
             </div>
             <div className="col-span-2 text-[10px] py-1 px-3 bg-slate-50 rounded-lg text-slate-500 border border-slate-100">
-              {R('idPrefix', { id: data.tampering.case_id })}
+              ID: {data.tampering.case_id}
             </div>
           </div>
         </div>
       )}
       <div className="grid grid-cols-2 gap-4">
-        <InfoRow label={L('Entity Type')} value={data.entity_type} icon={Building} />
-        <InfoRow label={L('Tax Residence')} value={data.country_of_tax_residence} icon={Globe} />
-        <InfoRow label={L('US Incorporated')} value={bool(data.entity_incorporated_in_usa)} icon={ShieldCheck} />
-        <InfoRow label={L('US Ownership')} value={bool(data.entity_has_us_ownership)} icon={User} />
-        <InfoRow label={L('Passive NFFE')} value={data.passive_nffe_us_ownership} icon={ShieldCheck} />
-        <InfoRow label={L('US Address/Phone')} value={bool(data.address_or_phone_in_usa)} icon={Home} />
-        <InfoRow label={L('US Payment Inst')} value={bool(data.payment_instruction_to_usa)} icon={Clock} />
-        <InfoRow label={L('US Income')} value={bool(data.income_from_us_sources)} icon={CheckCircle} />
-        <InfoRow label={L('IRS Form Obtained')} value={bool(data.irs_form_obtained)} icon={FileText} />
-        <InfoRow label={L('US Tax ID')} value={data.us_tax_id} icon={ShieldCheck} />
+        <InfoRow label="Entity Type" value={data.entity_type} icon={Building} />
+        <InfoRow label="Tax Residence" value={data.country_of_tax_residence} icon={Globe} />
+        <InfoRow label="US Incorporated" value={bool(data.entity_incorporated_in_usa)} icon={ShieldCheck} />
+        <InfoRow label="US Ownership" value={bool(data.entity_has_us_ownership)} icon={User} />
+        <InfoRow label="Passive NFFE" value={data.passive_nffe_us_ownership} icon={ShieldCheck} />
+        <InfoRow label="US Address/Phone" value={bool(data.address_or_phone_in_usa)} icon={Home} />
+        <InfoRow label="US Payment Inst" value={bool(data.payment_instruction_to_usa)} icon={Clock} />
+        <InfoRow label="US Income" value={bool(data.income_from_us_sources)} icon={CheckCircle} />
+        <InfoRow label="IRS Form Obtained" value={bool(data.irs_form_obtained)} icon={FileText} />
+        <InfoRow label="US Tax ID" value={data.us_tax_id} icon={ShieldCheck} />
       </div>
     </div>
   );
 };
 
 const PEPReportBlock = ({ data }) => {
-  const { L } = useReportI18n();
   if (!data) return null;
 
   const getStatus = (pepVal) => {
@@ -79,21 +75,20 @@ const PEPReportBlock = ({ data }) => {
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-2 gap-4">
-        <InfoRow label={L('Domestic PEP Status')} value={domesticStatus} icon={ShieldCheck} />
-        {domesticStatus === 'Identified' && <InfoRow label={L('Domestic Name')} value={domesticName} icon={User} />}
-        {domesticStatus === 'Identified' && <InfoRow label={L('Domestic Role')} value={domesticPosition} icon={ShieldCheck} />}
+        <InfoRow label="Domestic PEP Status" value={domesticStatus} icon={ShieldCheck} />
+        {domesticStatus === 'Identified' && <InfoRow label="Domestic Name" value={domesticName} icon={User} />}
+        {domesticStatus === 'Identified' && <InfoRow label="Domestic Role" value={domesticPosition} icon={ShieldCheck} />}
 
-        <InfoRow label={L('Foreign PEP Status')} value={foreignStatus} icon={Globe} />
-        {foreignStatus === 'Identified' && <InfoRow label={L('PEP Jurisdiction')} value={foreignCountry} icon={Globe} />}
-        {foreignStatus === 'Identified' && <InfoRow label={L('Foreign Name')} value={foreignName} icon={User} />}
-        {foreignStatus === 'Identified' && <InfoRow label={L('Foreign Role')} value={foreignPosition} icon={ShieldCheck} />}
+        <InfoRow label="Foreign PEP Status" value={foreignStatus} icon={Globe} />
+        {foreignStatus === 'Identified' && <InfoRow label="PEP Jurisdiction" value={foreignCountry} icon={Globe} />}
+        {foreignStatus === 'Identified' && <InfoRow label="Foreign Name" value={foreignName} icon={User} />}
+        {foreignStatus === 'Identified' && <InfoRow label="Foreign Role" value={foreignPosition} icon={ShieldCheck} />}
       </div>
     </div>
   );
 };
 
 const ProductPackageReportBlock = ({ data }) => {
-  const { R } = useReportI18n();
   if (!data) return null;
   const pkg = data.selected_package || '—';
   const products = data.availed_products || [];
@@ -102,7 +97,7 @@ const ProductPackageReportBlock = ({ data }) => {
     <div className="space-y-3">
       <div className="flex items-center gap-2">
         <span className="text-lg">{ICONS[pkg] || '📦'}</span>
-        <span className="text-sm font-black text-slate-800">{R('packageName', { name: pkg })}</span>
+        <span className="text-sm font-black text-slate-800">{pkg} Package</span>
       </div>
       {products.length > 0 && (
         <div className="flex flex-wrap gap-1.5">
@@ -122,10 +117,9 @@ const ProductPackageReportBlock = ({ data }) => {
 // ============================================================================
 
 const RegisteredIndividualsReportBlock = ({ data, roleVault }) => {
-  const { R, role: roleLabel } = useReportI18n();
   if (!data || !data.all_members) return null;
 
-  logger.log('[SIDEBAR-DEBUG-DATA] OwnershipMap:', data.ownershipMap, 'MemberRoles:', data.member_roles || data.member_role_map, 'RoleVault:', roleVault);
+  console.log('[SIDEBAR-DEBUG-DATA] OwnershipMap:', data.ownershipMap, 'MemberRoles:', data.member_roles || data.member_role_map, 'RoleVault:', roleVault);
 
   return (
 
@@ -172,10 +166,8 @@ const RegisteredIndividualsReportBlock = ({ data, roleVault }) => {
         // Format role for display (e.g., AS -> Authorised Signatory)
         const roleNorm = String(role || '').toUpperCase().replace(/_/g, ' ');
         const displayRole = (roleNorm === 'AS' || roleNorm === 'AUTHORISED SIGNATORY') ? 'Authorised Signatory' : (roleNorm === 'MEMBER' ? 'Member' : role);
-        // Colour by role CODE, not by the (now translated) display text.
-        const isMemberRole = roleNorm === 'MEMBER' || roleNorm.includes('MEMBER');
 
-        logger.log(`[SIDEBAR-DEBUG] Member: ${name} | Normalized: ${normalizedName} | Role: ${role} | Display: ${displayRole} | Share: ${ownership}`);
+        console.log(`[SIDEBAR-DEBUG] Member: ${name} | Normalized: ${normalizedName} | Role: ${role} | Display: ${displayRole} | Share: ${ownership}`);
 
 
         return (
@@ -198,19 +190,19 @@ const RegisteredIndividualsReportBlock = ({ data, roleVault }) => {
                     </span>
                   )}
                   <span className={`text-[8px] font-black uppercase tracking-[0.1em] px-2 py-0.5 rounded-full ${isVerified ? 'bg-emerald-50 text-emerald-600' : 'bg-slate-50 text-slate-400'}`}>
-                    {isVerified ? R('verified') : R('pending')}
+                    {isVerified ? 'Verified' : 'Pending'}
                   </span>
                 </div>
               </div>
               {/* Role row */}
               <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1 flex items-center gap-2">
-                <span className={isMemberRole ? 'text-indigo-400' : 'text-purple-400'}>
-                  {roleLabel(displayRole)}
+                <span className={displayRole.toLowerCase().includes('member') ? 'text-indigo-400' : 'text-purple-400'}>
+                  {displayRole}
                 </span>
                 {ownership === '—' && (
                   <>
                     <span className="text-slate-200">|</span>
-                    <span className="text-slate-300 text-[9px]">{R('shareNone')}</span>
+                    <span className="text-slate-300 text-[9px]">Share: —</span>
                   </>
                 )}
               </p>
@@ -223,11 +215,12 @@ const RegisteredIndividualsReportBlock = ({ data, roleVault }) => {
 };
 
 
+// const REDIRECT_URL = 'https://demo.growx.global/onboarding/verificationProgress';
+
 const SummaryDeclarationReportBlock = ({ userEmail, onConfirmed }) => {
-  const { R } = useReportI18n();
   const [isChecked, setIsChecked] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [, setSummary] = useState(null);
+  const [summary, setSummary] = useState(null);
   const [isAlreadyConfirmed, setIsAlreadyConfirmed] = useState(false);
   const [referenceId, setReferenceId] = useState(() => sessionStorage.getItem('final_ref_number') || '');
   const [justConfirmed, setJustConfirmed] = useState(false);
@@ -239,7 +232,7 @@ const SummaryDeclarationReportBlock = ({ userEmail, onConfirmed }) => {
     // Fetch summary text
     getSelfDeclarationSummary(userEmail)
       .then(res => setSummary(res.data))
-      .catch(e => logger.error(e));
+      .catch(e => console.error(e));
 
     // Fetch actual confirmation status
     getSelfDeclarationStatus(userEmail)
@@ -254,7 +247,7 @@ const SummaryDeclarationReportBlock = ({ userEmail, onConfirmed }) => {
           setRedirectCountdown(3);
         }
       })
-      .catch(e => logger.error(e));
+      .catch(e => console.error(e));
   }, [userEmail]);
 
   // Auto-redirect countdown after fresh confirmation
@@ -271,7 +264,7 @@ const SummaryDeclarationReportBlock = ({ userEmail, onConfirmed }) => {
   const copyToClipboard = () => {
     if (referenceId) {
       navigator.clipboard.writeText(referenceId);
-      toast.success(R('declaration.refCopied'));
+      toast.success('Reference ID copied!');
     }
   };
 
@@ -282,7 +275,7 @@ const SummaryDeclarationReportBlock = ({ userEmail, onConfirmed }) => {
       setIsSubmitting(true);
       try {
         const res = await confirmSelfDeclaration({ email: userEmail });
-        toast.success(R('declaration.submitted'));
+        toast.success('Declaration submitted successfully');
         const ref = res.data?.reference_number || sessionStorage.getItem('final_ref_number') || '';
         setReferenceId(ref);
         if (ref) sessionStorage.setItem('final_ref_number', ref);
@@ -294,8 +287,8 @@ const SummaryDeclarationReportBlock = ({ userEmail, onConfirmed }) => {
           // window.location.href = REDIRECT_URL;
         }, 3000);
       } catch (err) {
-        logger.error(err);
-        toast.error(R('declaration.submitFailed'));
+        console.error(err);
+        toast.error('Failed to submit declaration');
         setIsChecked(false);
       } finally {
         setIsSubmitting(false);
@@ -312,7 +305,7 @@ const SummaryDeclarationReportBlock = ({ userEmail, onConfirmed }) => {
           <ShieldCheck className="h-20 w-20 text-amber-600" />
         </div>
         <p className="text-[13px] text-slate-700 italic leading-relaxed font-semibold relative z-10">
-          {R('declaration.text')}
+          {summary?.declaration_text || "I confirm that all information and documents submitted during this onboarding process are accurate, complete, and truthful to the best of my knowledge. I understand that providing false information may result in rejection of my application."}
         </p>
       </div>
 
@@ -333,36 +326,36 @@ const SummaryDeclarationReportBlock = ({ userEmail, onConfirmed }) => {
           )}
         </div>
         <label htmlFor="declaration-check" className={`text-[15px] font-black uppercase tracking-tight select-none ${isAlreadyConfirmed ? 'text-emerald-700 cursor-default' : 'text-slate-800 cursor-pointer'}`}>
-          {isAlreadyConfirmed ? R('declaration.confirmed') : isSubmitting ? R('declaration.submitting') : R('declaration.agree')}
+          {isAlreadyConfirmed ? 'Declaration Confirmed' : isSubmitting ? 'Submitting Declaration...' : 'I agree to the declaration above'}
         </label>
       </div>
 
       {(isAlreadyConfirmed || justConfirmed) && referenceId && (
         <div className="mt-8 p-6 bg-slate-50 border border-slate-100 rounded-3xl shadow-sm animate-in zoom-in-95 duration-500 text-left">
           <div className="flex items-center justify-between mb-2">
-            <p className="text-[11px] font-black text-slate-400 uppercase tracking-widest">{R('declaration.referenceNumber')}</p>
+            <p className="text-[11px] font-black text-slate-400 uppercase tracking-widest">Reference Number</p>
             <button
               onClick={copyToClipboard}
               className="p-1 hover:bg-slate-200 rounded-lg transition-colors text-slate-400 hover:text-slate-600"
-              title={R('declaration.copyReference')}
+              title="Copy Reference Number"
             >
               <Copy className="h-3.5 w-3.5" />
             </button>
           </div>
           <p className="text-2xl font-black text-slate-900 tracking-tight font-mono break-all">{referenceId}</p>
           <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-2 italic">
-            {R('declaration.referenceNote')}
+            * Note: This is your reference number
           </p>
           {justConfirmed && redirectCountdown !== null && (
             <div className="mt-4 pt-4 border-t border-slate-200 flex items-center justify-between">
               <p className="text-[11px] text-slate-400">
-                {R('declaration.redirectingIn')} <span className="font-black text-slate-600">{redirectCountdown}s</span>…
+                Redirecting in <span className="font-black text-slate-600">{redirectCountdown}s</span>…
               </p>
               <button
                 onClick={() => setRedirectCountdown(null)}
                 className="text-[11px] text-slate-400 underline hover:text-slate-600 transition-colors"
               >
-                {R('declaration.cancel')}
+                Cancel
               </button>
             </div>
           )}
@@ -380,7 +373,6 @@ const SummaryDeclarationReportBlock = ({ userEmail, onConfirmed }) => {
 // ============================================================================
 
 const ComplianceHistoryToggle = ({ history, userEmail }) => {
-  const { R } = useReportI18n();
   const [open, setOpen] = useState(false);
   return (
     <div className="bg-white border border-slate-100 rounded-2xl overflow-hidden shadow-sm transition-all hover:border-indigo-100">
@@ -392,7 +384,7 @@ const ComplianceHistoryToggle = ({ history, userEmail }) => {
           <div className="p-1.5 bg-blue-50 rounded-lg">
             <History className="h-4 w-4 text-brand-primary" />
           </div>
-          <span className="text-[11px] font-black text-slate-700 uppercase tracking-widest">{R('declaration.historyLogs')}</span>
+          <span className="text-[11px] font-black text-slate-700 uppercase tracking-widest">Compliance History Logs</span>
         </div>
         <ChevronDown className={`h-4 w-4 text-slate-400 transition-transform duration-300 ${open ? 'rotate-180' : ''}`} />
       </button>
@@ -401,7 +393,7 @@ const ComplianceHistoryToggle = ({ history, userEmail }) => {
           {(!history || history.length === 0) ? (
             <div className="py-8 text-center">
               <History className="h-8 w-8 text-slate-200 mx-auto mb-2 opacity-40" />
-              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{R('declaration.noLogs')}</p>
+              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">No historical logs available</p>
             </div>
           ) : (
             <div className="space-y-2">
@@ -409,7 +401,7 @@ const ComplianceHistoryToggle = ({ history, userEmail }) => {
                 <div key={i} className="bg-white p-3 rounded-xl border border-slate-100 shadow-sm flex items-start gap-3">
                   <div className="mt-1 h-1.5 w-1.5 rounded-full bg-blue-400 shrink-0" />
                   <div className="flex-1 min-w-0">
-                    <p className="text-[11px] font-black text-slate-800 uppercase leading-none mb-1">{h.action || R('declaration.configUpdated')}</p>
+                    <p className="text-[11px] font-black text-slate-800 uppercase leading-none mb-1">{h.action || 'Configuration Updated'}</p>
                     <div className="flex items-center gap-2">
                       <Clock className="h-3 w-3 text-slate-300" />
                       <p className="text-[9px] font-bold text-slate-400">{h.timestamp || new Date().toLocaleString()}</p>

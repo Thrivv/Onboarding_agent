@@ -9,8 +9,6 @@ import { AUTH, OTP, REGISTER } from '../config/endpoints';
 export const login = (credentials) => api.post(AUTH.LOGIN, credentials);
 export const logout = (payload) => api.post(AUTH.LOGOUT, payload);
 export const verifySession = (config) => api.get(AUTH.VERIFY_SESSION, config);
-export const requestPasswordReset = (payload) => api.post(AUTH.REQUEST_PASSWORD_RESET, payload);
-export const resetPassword = (payload) => api.post(AUTH.RESET_PASSWORD, payload);
 
 export const signup = (payload) => api.post(REGISTER.SIGNUP, payload);
 
@@ -27,4 +25,3 @@ export const getRegisteredToday = () => api.get(REGISTER.REGISTERED_TODAY);
 export const getRegisteredThisWeek = () => api.get(REGISTER.REGISTERED_THIS_WEEK);
 export const getAccountTypeSummary = () => api.get(REGISTER.ACCOUNT_TYPE_SUMMARY);
 export const getOnboardingSummary = () => api.get(REGISTER.ONBOARDING_SUMMARY);
-export const getBedrockStatus = () => api.get(REGISTER.BEDROCK_STATUS);

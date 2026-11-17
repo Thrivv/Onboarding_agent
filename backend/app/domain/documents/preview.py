@@ -13,24 +13,8 @@ from typing import List, Optional
 from app.domain.documents.discovery import find_user_documents_directory
 from app.domain.documents.normalizer import normalize_extracted_data
 from app.domain.documents.status import extract_pdf_metadata
-from app import config
-from app.utils.pii_masker import mask_pii
 
 logger = logging.getLogger(__name__)
-
-
-def _for_log(data):
-    """Mask extracted-field data before it goes into a log line. Controlled
-    by config.PII_LOG_MASKING_ENABLED (see backend/docs — PII masking plan)
-    so raw logging can be restored quickly while debugging extraction."""
-    if not config.PII_LOG_MASKING_ENABLED:
-        return data
-    try:
-        return mask_pii(data)
-    except Exception:
-        # Never let a masking bug take down the actual request — fall back
-        # to omitting the payload entirely rather than risk logging it raw.
-        return "<pii-masking-error: value withheld>"
 
 def format_document_preview(doc_type: str, extracted_data: dict, member_name: Optional[str] = None, pdf_metadata: Optional[dict] = None) -> dict:
     """
@@ -269,13 +253,13 @@ def get_document_preview_data(email: str, doc_type: str, member_name: Optional[s
                 
                 if not extracted_data or not isinstance(extracted_data, dict):
                     logger.error(f"No valid extracted data found!")
-                    logger.debug(f"extracted_data value: {_for_log(extracted_data)}")
+                    logger.debug(f"extracted_data value: {extracted_data}")
                     extracted_data = {}
                 else:
                     logger.info(f"\n[DEBUG] BEFORE NORMALIZATION:")
                     logger.debug(f"Type: {type(extracted_data)}")
                     logger.debug(f"Keys: {list(extracted_data.keys())[:5]}")
-                    logger.debug(f"Sample data: {_for_log(dict(list(extracted_data.items())[:2]))}")
+                    logger.debug(f"Sample data: {dict(list(extracted_data.items())[:2])}")
                     
                     # ✅ Call normalize function
                     extracted_data = normalize_extracted_data(extracted_data, stored_doc_type)
@@ -283,7 +267,7 @@ def get_document_preview_data(email: str, doc_type: str, member_name: Optional[s
                     logger.info(f"\n[DEBUG] AFTER NORMALIZATION:")
                     logger.debug(f"Type: {type(extracted_data)}")
                     logger.debug(f"Keys: {list(extracted_data.keys())[:5]}")
-                    logger.debug(f"Sample data: {_for_log(dict(list(extracted_data.items())[:2]))}")
+                    logger.debug(f"Sample data: {dict(list(extracted_data.items())[:2])}")
                     logger.debug(f"Total fields: {len(extracted_data)}")
                 
                 # ============================================================================

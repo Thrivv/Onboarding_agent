@@ -1,12 +1,8 @@
 import React from 'react';
 import { CheckCircle, FileText, ShieldCheck, Upload, User, Users } from 'lucide-react';
-import logger from '../../../../utils/logger';
-import { useLanguage } from '../../../../context/LanguageContext';
-import { translateDocName } from '../../utils/reportI18n';
 
 const NextDocumentCard = ({ msgId, nextDoc, remainingDocs, onUploadTrigger, currentStepId, hasTriggers, membersInfo, verifiedDocType, extractedData }) => {
-  const { t } = useLanguage();
-  logger.log(`[NEXT-DOC-DEBUG] ID: ${msgId}, verifiedDocType: ${verifiedDocType}, hasExtracted: ${!!extractedData}`);
+  console.log(`[NEXT-DOC-DEBUG] ID: ${msgId}, verifiedDocType: ${verifiedDocType}, hasExtracted: ${!!extractedData}`);
 
   // Only show if this is the MOST RECENT progression card
 
@@ -19,7 +15,15 @@ const NextDocumentCard = ({ msgId, nextDoc, remainingDocs, onUploadTrigger, curr
   // Early exit ONLY if it's not finished and we have no data
   if (!isActuallyFinished && !nextDocType && (!remainingDocs || remainingDocs.length === 0)) return null;
 
-  const formatName = (str) => translateDocName(t, str);
+  const formatName = (str) => {
+    if (!str) return '';
+    const lower = str.toLowerCase();
+    if (lower.includes('ejari')) return 'Ejari';
+    if (lower.includes('eid') || lower.includes('passport') || lower.includes('identity')) {
+      return 'Emirates ID or Passport';
+    }
+    return str.replace(/_/g, ' ').split(' ').map(w => w[0].toUpperCase() + w.substr(1)).join(' ');
+  };
 
   // Try to find a person's name for identity documents
   const isIdentityDoc = (verifiedDocType || '').toLowerCase().includes('eid') || (verifiedDocType || '').toLowerCase().includes('passport') || (verifiedDocType || '').toLowerCase().includes('identity');
@@ -38,14 +42,14 @@ const NextDocumentCard = ({ msgId, nextDoc, remainingDocs, onUploadTrigger, curr
               </div>
               <div>
                 <h2 className="text-[10px] font-black text-white uppercase tracking-[0.25em] opacity-70 mb-0.5">
-                  {personName ? t('ui.nameVerified', { name: personName }) : verifiedDocType ? t('ui.nameVerified', { name: formatName(verifiedDocType) }) : t('ui.verifiedMovingForward')}
+                  {personName ? `${personName} Verified` : verifiedDocType ? `${formatName(verifiedDocType)} Verified` : 'Verified & Moving Forward'}
                 </h2>
-                <p className="text-white text-[16px] font-black leading-tight tracking-tight">{t('ui.progression')}</p>
+                <p className="text-white text-[16px] font-black leading-tight tracking-tight">Onboarding Progression</p>
               </div>
             </div>
             <div className="flex items-center gap-1.5 bg-white/10 px-3 py-1.5 rounded-full border border-white/10">
               <div className="w-2 h-2 bg-emerald-400 rounded-full shadow-md shadow-emerald-400/50" />
-              <span className="text-[10px] font-black text-white uppercase tracking-[0.1em] leading-none">{t('ui.complete')}</span>
+              <span className="text-[10px] font-black text-white uppercase tracking-[0.1em] leading-none">Complete</span>
             </div>
           </div>
 
@@ -55,14 +59,14 @@ const NextDocumentCard = ({ msgId, nextDoc, remainingDocs, onUploadTrigger, curr
                 <CheckCircle className="h-10 w-10 animate-pulse" />
               </div>
               <h3 className="text-[18px] font-black text-slate-800 leading-tight tracking-tight mb-2">
-                {personName ? t('ui.nameVerifiedBang', { name: personName }) : verifiedDocType ? t('ui.nameVerifiedBang', { name: formatName(verifiedDocType) }) : t('ui.allDocumentsVerified')}
+                {personName ? `${personName} Verified!` : verifiedDocType ? `${formatName(verifiedDocType)} Verified!` : 'All Documents Verified!'}
               </h3>
               <p className="text-[12px] font-bold text-slate-500 leading-relaxed max-w-[240px]">
                 {personName
-                  ? t('ui.identityCapturedFor', { name: personName })
+                  ? `Identity credentials for ${personName} have been successfully captured and verified.`
                   : verifiedDocType
-                    ? t('ui.docCaptured', { doc: formatName(verifiedDocType) })
-                    : t('ui.allCaptured')}
+                    ? `Your ${formatName(verifiedDocType)} details have been successfully captured and verified.`
+                    : "Your identity and business credentials have been successfully captured and verified."}
               </p>
             </div>
           </div>
@@ -87,18 +91,18 @@ const NextDocumentCard = ({ msgId, nextDoc, remainingDocs, onUploadTrigger, curr
               <Upload className="h-5 w-5 text-white" />
             </div>
             <div>
-              <h2 className="text-[10px] font-black text-white uppercase tracking-[0.25em] opacity-70 mb-0.5">{t('ui.captureRequired')}</h2>
-              <p className="text-white text-[16px] font-black leading-tight tracking-tight">{t('ui.progression')}</p>
+              <h2 className="text-[10px] font-black text-white uppercase tracking-[0.25em] opacity-70 mb-0.5">Capture Required</h2>
+              <p className="text-white text-[16px] font-black leading-tight tracking-tight">Onboarding Progression</p>
             </div>
           </div>
           <div className="flex items-center gap-1.5 bg-white/10 px-3 py-1.5 rounded-full border border-white/10">
             <div className="w-2 h-2 bg-emerald-400 rounded-full animate-pulse shadow-md shadow-emerald-400/50" />
             {membersInfo && membersInfo.total > 1 ? (
               <span className="text-[10px] font-black text-white uppercase tracking-[0.1em] leading-none">
-                {t('ui.idsCount', { count: membersInfo.verified, total: membersInfo.total })}
+                {membersInfo.verified}/{membersInfo.total} IDs
               </span>
             ) : (
-              <span className="text-[10px] font-black text-white uppercase tracking-[0.1em] leading-none">{t('ui.inProgress')}</span>
+              <span className="text-[10px] font-black text-white uppercase tracking-[0.1em] leading-none">In-Progress</span>
             )}
           </div>
         </div>
@@ -111,14 +115,14 @@ const NextDocumentCard = ({ msgId, nextDoc, remainingDocs, onUploadTrigger, curr
                 <FileText className="h-7 w-7" />
               </div>
               <div className="flex-1 min-w-0">
-                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">{t('ui.requiredNextDocument')}</p>
+                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Required Next Document</p>
                 <h3 className="text-[17px] font-black text-slate-800 leading-tight tracking-tight">
                   {formatName(nextDocType)}
                 </h3>
                 {memberName && (
                   <div className="mt-2 flex items-center gap-1.5 py-1 px-2.5 bg-blue-50 border border-blue-100 rounded-lg w-fit">
                     <User className="h-3 w-3 text-brand-primary" />
-                    <span className="text-[11px] font-black text-brand-secondary uppercase tracking-tight">{t('ui.forMember', { name: memberName })}</span>
+                    <span className="text-[11px] font-black text-brand-secondary uppercase tracking-tight">For: {memberName}</span>
                   </div>
                 )}
               </div>
@@ -132,9 +136,9 @@ const NextDocumentCard = ({ msgId, nextDoc, remainingDocs, onUploadTrigger, curr
                   <div className="p-1 bg-indigo-600 rounded-lg">
                     <Users className="h-3 w-3 text-white" />
                   </div>
-                  <h4 className="text-[10px] font-black text-indigo-900 uppercase tracking-[0.2em]">{t('ui.identityVerification')}</h4>
+                  <h4 className="text-[10px] font-black text-indigo-900 uppercase tracking-[0.2em]">Identity Verification</h4>
                 </div>
-                <span className="text-[10px] font-black text-indigo-400">{t('ui.verifiedCount', { count: membersInfo.verified, total: membersInfo.total })}</span>
+                <span className="text-[10px] font-black text-indigo-400">{membersInfo.verified}/{membersInfo.total} VERIFIED</span>
               </div>
 
               <div className="space-y-2.5 relative">
@@ -163,7 +167,7 @@ const NextDocumentCard = ({ msgId, nextDoc, remainingDocs, onUploadTrigger, curr
 
                       {/* Member Info Card */}
                       <div className={`flex-1 flex items-center justify-between py-2.5 px-4 rounded-xl border transition-all duration-300 ${isVerified ? 'bg-emerald-50/50 border-emerald-100/50' :
-                        isCurrent ? 'bg-white border-indigo-200 shadow-md ltr:translate-x-1 rtl:-translate-x-1' :
+                        isCurrent ? 'bg-white border-indigo-200 shadow-md translate-x-1' :
                           'bg-transparent border-transparent opacity-60'
                         }`}>
                         <span className={`text-[12px] font-black tracking-tight ${isVerified ? 'text-emerald-800' :
@@ -173,9 +177,9 @@ const NextDocumentCard = ({ msgId, nextDoc, remainingDocs, onUploadTrigger, curr
                           {member}
                         </span>
                         {isVerified ? (
-                          <span className="text-[8px] font-black text-emerald-600 uppercase tracking-widest bg-white/80 px-2 py-0.5 rounded-full border border-emerald-100 italic">{t('ui.verified')}</span>
+                          <span className="text-[8px] font-black text-emerald-600 uppercase tracking-widest bg-white/80 px-2 py-0.5 rounded-full border border-emerald-100 italic">Verified</span>
                         ) : isCurrent && (
-                          <span className="text-[8px] font-black text-indigo-600 uppercase tracking-widest bg-indigo-50 px-2 py-0.5 rounded-full border border-indigo-100">{t('ui.current')}</span>
+                          <span className="text-[8px] font-black text-indigo-600 uppercase tracking-widest bg-indigo-50 px-2 py-0.5 rounded-full border border-indigo-100">Current</span>
                         )}
                       </div>
                     </div>
@@ -188,8 +192,8 @@ const NextDocumentCard = ({ msgId, nextDoc, remainingDocs, onUploadTrigger, curr
           {remainingDocs && remainingDocs.length > 0 && (
             <div className="space-y-3 bg-slate-50/50 p-4 rounded-[24px] border border-slate-100">
               <div className="flex items-center justify-between mb-1">
-                <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.15em] pl-1">{t('ui.remainingRequirements')}</h4>
-                <span className="text-[10px] font-black text-slate-400">{t('ui.totalCount', { count: remainingDocs.length })}</span>
+                <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.15em] pl-1">Remaining Requirements</h4>
+                <span className="text-[10px] font-black text-slate-400">{remainingDocs.length} TOTAL</span>
               </div>
               <div className="flex flex-col gap-2">
                 {remainingDocs.map((rd, i) => (
@@ -198,7 +202,7 @@ const NextDocumentCard = ({ msgId, nextDoc, remainingDocs, onUploadTrigger, curr
                       <div className={`h-2 w-2 rounded-full ${i === 0 ? 'bg-blue-500 shadow-[0_0_8px_rgba(37,99,235,0.5)]' : 'bg-slate-200'}`} />
                       <span className="flex-1">{formatName(rd)}</span>
                       {i === 0 && (
-                        <span className="text-[8px] font-black text-brand-primary uppercase tracking-widest bg-blue-50 px-2 py-0.5 rounded-full">{t('ui.comingUp')}</span>
+                        <span className="text-[8px] font-black text-brand-primary uppercase tracking-widest bg-blue-50 px-2 py-0.5 rounded-full">Coming Up</span>
                       )}
                     </div>
                   </div>
@@ -209,7 +213,7 @@ const NextDocumentCard = ({ msgId, nextDoc, remainingDocs, onUploadTrigger, curr
 
           <div className="pt-2 flex flex-col items-center">
             <p className="text-center text-[10px] font-bold text-slate-400 mt-2 uppercase tracking-[0.1em] opacity-60">
-              {t('ui.idProcessingActive')}
+              Identity Verification Processing Active
             </p>
           </div>
         </div>

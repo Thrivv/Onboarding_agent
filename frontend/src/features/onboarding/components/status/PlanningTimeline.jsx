@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import { ShieldCheck } from 'lucide-react';
-import { useLanguage } from '../../../../context/LanguageContext';
 
 const ChecklistItem = ({ text, isStep = false, isLast = false, delay = 0, isActive = false, isPast = false }) => (
   <motion.div
@@ -10,9 +9,9 @@ const ChecklistItem = ({ text, isStep = false, isLast = false, delay = 0, isActi
     transition={{ delay }}
     className="relative flex items-start gap-4 py-2"
   >
-    {/* Vertical Line Connector — start-anchored so it mirrors in RTL */}
+    {/* Vertical Line Connector */}
     {!isLast && (
-      <div className={`absolute ltr:left-[5px] rtl:right-[5px] top-4 w-[2px] h-full ${isPast ? 'bg-emerald-500' : 'bg-gray-100'}`} />
+      <div className={`absolute left-[5px] top-4 w-[2px] h-full ${isPast ? 'bg-emerald-500' : 'bg-gray-100'}`} />
     )}
 
     {/* Step Icon/Dot */}
@@ -35,16 +34,16 @@ const ChecklistItem = ({ text, isStep = false, isLast = false, delay = 0, isActi
   </motion.div>
 );
 
-// Step keys, not step text: the text comes from translations
-// (cards.planning.*), so a language switch while a document is uploading
-// re-renders the labels in place without resetting the animation position.
-const STEP_KEYS = ['step1', 'step2', 'step3', 'step4', 'step5'];
-
 const PlanningTimeline = () => {
-  const { t } = useLanguage();
   const [activeStep, setActiveStep] = useState(0);
 
-  const steps = STEP_KEYS.map((k) => t(`cards.planning.${k}`));
+  const steps = [
+    "Securely connecting to document vault...",
+    "Starting security & tampering verification...",
+    "Extracting document metadata & fields...",
+    "Validating authenticity against registry...",
+    "Completing final identity security checks..."
+  ];
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -60,12 +59,12 @@ const PlanningTimeline = () => {
         <div className="animate-spin-slow">
           <ShieldCheck className="h-4 w-4" />
         </div>
-        {t('cards.planning.title')}
+        Planning
       </div>
       <div className="ml-1">
         {steps.map((step, i) => (
           <ChecklistItem
-            key={STEP_KEYS[i]}
+            key={i}
             text={step}
             isActive={activeStep === i}
             isPast={activeStep > i}

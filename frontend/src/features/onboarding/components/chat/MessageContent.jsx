@@ -6,7 +6,6 @@ import { TypewriterDisplay } from './TypewriterDisplay';
 import { PlanningTimeline } from '../status/PlanningTimeline';
 import { SuccessDisplay } from '../status/SuccessDisplay';
 import { ValidationErrorDisplay } from '../status/ValidationErrorDisplay';
-import logger from '../../../../utils/logger';
 
 const MessageContent = (props) => {
   const {
@@ -21,8 +20,8 @@ const MessageContent = (props) => {
   } = props;
 
   if (role === 'assistant' && (id?.includes('success') || extractedData || documentType)) {
-    logger.log(`[MSG-CONTENT-DEBUG] ID: ${id}, hasExtractedData: ${!!extractedData}, docType: ${documentType}`);
-    if (extractedData) logger.log('[MSG-CONTENT-DEBUG] Extracted Data Keys:', Object.keys(extractedData));
+    console.log(`[MSG-CONTENT-DEBUG] ID: ${id}, hasExtractedData: ${!!extractedData}, docType: ${documentType}`);
+    if (extractedData) console.log('[MSG-CONTENT-DEBUG] Extracted Data Keys:', Object.keys(extractedData));
   }
 
 

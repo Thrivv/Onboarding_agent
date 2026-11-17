@@ -9,8 +9,6 @@ Professional banking tone enforced throughout
 from typing import Optional, Dict, List
 from pathlib import Path
 import os
-from app import config
-from app.utils.pii_masker import mask_pii
 from app.services.run_model import call_local_llm
 from app.services.message_generator import MessageGenerator, PROFESSIONAL_BANKING_CONTEXT
 from app.services.chatupload_helpers import (
@@ -59,7 +57,7 @@ def build_conversational_prompt(
     language_instruction = MessageGenerator._build_language_instruction(language)
     
     # Build context
-    context = f"""You are a professional banking assistant at {config.BRAND_NAME}, a regulated financial institution.
+    context = f"""You are a professional banking assistant at DigiOB, a regulated financial institution.
 
 USER INFORMATION:
 - Name: {name}
@@ -83,7 +81,7 @@ USER INFORMATION:
 
     context += f"\nCUSTOMER'S CURRENT MESSAGE: {user_message}\n"
     
-    context += f"""
+    context += """
 INSTRUCTIONS:
 - Respond professionally as a bank representative
 - Be clear, concise, and helpful
@@ -95,7 +93,7 @@ INSTRUCTIONS:
 FORMATTING RULES:
 - NO greetings ("Dear...", "Hi...", "Hello...")
 - NO sign-offs ("Kind regards", "Best regards", "Sincerely")
-- NO bank signature ("{config.BRAND_NAME}", "The Team")
+- NO bank signature ("DigiOB", "The Team")
 - Start directly with the message content
 - End when the message is complete
 
@@ -154,7 +152,9 @@ def generate_dynamic_valid_document_response(
     # ========================================================================
     is_moa = doc_type_norm in ("moa", "memorandum", "memorandum of association")
     if is_moa and len(remaining_docs) == 0:
-        prompt = f"""{language_instruction}
+        prompt = f"""{PROFESSIONAL_BANKING_CONTEXT}
+
+{language_instruction}
 
 TASK: Generate a professional acknowledgment after the Memorandum of Association (MOA)
 has been validated, informing the customer that the process is moving to the next stage
@@ -199,7 +199,9 @@ NOW GENERATE THE MESSAGE (start directly, no greeting, no sign-off):"""
             if remaining_count > 0
             else "Please proceed with uploading the Certificate of Incorporation."
         )
-        prompt = f"""{language_instruction}
+        prompt = f"""{PROFESSIONAL_BANKING_CONTEXT}
+
+{language_instruction}
 
 TASK: Generate a professional acknowledgment after a Commercial License has been
 validated and corporate shareholders were identified, requesting the Certificate of
@@ -243,7 +245,9 @@ REMAINING DOCUMENTS: {', '.join(remaining_docs) if remaining_docs else 'None - a
 """
 
     # Build prompt for LLM
-    prompt = f"""{language_instruction}
+    prompt = f"""{PROFESSIONAL_BANKING_CONTEXT}
+
+{language_instruction}
 
 TASK: Generate a professional acknowledgment for successful document upload and validation.
 
@@ -263,7 +267,7 @@ MESSAGE REQUIREMENTS:
 Your Emirates ID has been received and validated successfully. Document details are currently being processed.
 
 Kind regards,
-{config.BRAND_NAME}"
+DigiOB"
 
 CORRECT - WRITE LIKE THIS:
 "Your Emirates ID / Passport has been received and validated successfully. Document details are currently being processed. Next, please upload your Commercial License."
@@ -346,7 +350,9 @@ def generate_dynamic_invalid_document_response(
         language_instruction = MessageGenerator._build_language_instruction(language)
         
         # Build LLM prompt for tampering explanation
-        prompt = f"""{language_instruction}
+        prompt = f"""{PROFESSIONAL_BANKING_CONTEXT}
+
+{language_instruction}
 
 TASK: Generate a professional security verification failure message.
 
@@ -382,7 +388,7 @@ MESSAGE REQUIREMENTS:
 FORMATTING RULES:
 - NO greetings ("Dear...", "Hi...", "Hello...")
 - NO sign-offs ("Kind regards", "Best regards", "Sincerely")
-- NO bank signature ("{config.BRAND_NAME}", "The Team")
+- NO bank signature ("DigiOB", "The Team")
 - Start directly with the message content
 - End when the message is complete
 
@@ -412,7 +418,9 @@ Generate the security failure message:"""
     required_docs_list = "\n".join([f"  - {doc}" for doc in allowed_info["required_docs"]])
     remaining_docs_list = "\n".join([f"  - {doc}" for doc in remaining_docs]) if remaining_docs else "None"
     
-    prompt = f"""{language_instruction}
+    prompt = f"""{PROFESSIONAL_BANKING_CONTEXT}
+
+{language_instruction}
 
 TASK: Generate a professional message for incorrect document type upload.
 
@@ -434,7 +442,7 @@ MESSAGE REQUIREMENTS:
 FORMATTING RULES:
 - NO greetings ("Dear...", "Hi...", "Hello...")
 - NO sign-offs ("Kind regards", "Best regards", "Sincerely")
-- NO bank signature ("{config.BRAND_NAME}", "The Team")
+- NO bank signature ("DigiOB", "The Team")
 - Start directly with the message content
 - End when the message is complete
 
@@ -501,12 +509,7 @@ def generate_ai_reasoning_for_invalid_document(
         context_parts.append(f"DOCUMENT TYPE: {doc_type.upper()}")
     
     # 2. Extracted Text Sample
-    # PII MASKING (prompt-remediation Phase 1, item #1): this reasoning call
-    # only needs to explain what's missing/wrong with the document, not see
-    # the real EID/phone/email/MRZ values embedded in it -- mask_pii() runs
-    # its free-text regex pass over the sample before it enters the prompt.
     text_sample = raw_text[:1500] if len(raw_text) > 1500 else raw_text
-    text_sample = mask_pii(text_sample)
     context_parts.append(f"\nEXTRACTED TEXT FROM DOCUMENT:\n{text_sample}")
     
     # 3. Validation Results
@@ -531,13 +534,7 @@ def generate_ai_reasoning_for_invalid_document(
             context_parts.append(f"Validation Reason: {val_reason}")
     
     # 4. Extracted vs Expected Fields
-    # PII MASKING: extracted_fields is the structured output of a prior
-    # extraction call -- mask_pii() here masks by field name (email, phone,
-    # dob, personal names) while preserving business identifiers, dates,
-    # and structural fields, so the reasoning explanation still names which
-    # FIELDS were missing/invalid without repeating their real values.
     if extracted_fields:
-        extracted_fields = mask_pii(extracted_fields)
         context_parts.append("\nEXTRACTED FIELDS:")
         for key, value in extracted_fields.items():
             if isinstance(value, dict):
@@ -553,7 +550,9 @@ def generate_ai_reasoning_for_invalid_document(
     full_context = "\n".join(context_parts)
     
     # Create LLM prompt
-    prompt = f"""{language_instruction}
+    prompt = f"""{PROFESSIONAL_BANKING_CONTEXT}
+
+{language_instruction}
 
 TASK: Generate a professional explanation for document validation failure.
 
@@ -572,7 +571,7 @@ Based on the validation logs above, generate a clear explanation of why this doc
 FORMATTING RULES:
 - NO greetings ("Dear...", "Hi...", "Hello...")
 - NO sign-offs ("Kind regards", "Best regards", "Sincerely")
-- NO bank signature ("{config.BRAND_NAME}", "The Team")
+- NO bank signature ("DigiOB", "The Team")
 - Start directly with the message content
 - End when the message is complete
 
@@ -626,21 +625,16 @@ def generate_unknown_document_reasoning(
         file_size_mb = os.path.getsize(file_path) / (1024 * 1024)
     
     # Check if text was extracted
-    # PII MASKING (prompt-remediation Phase 1, item #1): this call only
-    # needs to recognize what TYPE of document was uploaded (structural
-    # cues -- headers, labels, document titles), not the real values of any
-    # ID numbers, phone numbers, emails, or MRZ lines that happen to be
-    # printed on it. mask_pii()'s free-text regex pass targets exactly
-    # those value-shaped substrings and leaves the surrounding prose (the
-    # part that actually identifies the document type) untouched.
     has_text = bool(raw_text and raw_text.strip() and len(raw_text.strip()) > 20)
-    text_sample = mask_pii(raw_text[:1200]) if has_text else "[No readable text extracted]"
+    text_sample = raw_text[:1200] if has_text else "[No readable text extracted]"
     
     # Get language instruction
     language_instruction = MessageGenerator._build_language_instruction(language)
     
     # Build prompt
-    prompt = f"""{language_instruction}
+    prompt = f"""{PROFESSIONAL_BANKING_CONTEXT}
+
+{language_instruction}
 
 TASK: Analyze uploaded document and explain why it's not a required document.
 
@@ -679,7 +673,7 @@ Generate a professional message (3-4 sentences) that:
 FORMATTING RULES:
 - NO greetings ("Dear...", "Hi...", "Hello...")
 - NO sign-offs ("Kind regards", "Best regards", "Sincerely")
-- NO bank signature ("{config.BRAND_NAME}", "The Team")
+- NO bank signature ("DigiOB", "The Team")
 - Start directly with the message content
 - End when the message is complete
 
@@ -1205,19 +1199,137 @@ def send_unified_document_error_notification(
 # ========================================================================
 
 @staticmethod
-# NOTE (prompt-remediation Phase 2): this module used to define its own
-# generate_tampering_rejection_message() here -- a near-duplicate of
-# MessageGenerator.generate_tampering_rejection_message() in
-# message_generator.py (same forensic-detail lookup via
-# _get_tampering_details_for_reasoning, same simplified-findings mapping,
-# a differently-worded but equivalent prompt). Every real caller
-# (app/api/routes/onboarding/upload.py,
-# app/domain/onboarding/verification/document_processing.py) already
-# calls the MessageGenerator version; this module's copy had no callers
-# anywhere in the codebase or tests, so it was dead code. Removed rather
-# than merged, since there was nothing live to merge it with. Use
-# MessageGenerator.generate_tampering_rejection_message() (and its
-# sibling generate_tampering_escalation_message()) for this.
+def generate_tampering_rejection_message(
+    tampering_result,
+    language: str = "english"
+) -> str:
+    """
+    Generate REJECT message for tampered documents
+    Uses forensic details for context-aware explanation
+    NO hardcoded fallback - pure AI generation
+    
+    Args:
+        tampering_result: DocumentVerificationResult object with forensic data
+        language: "english" or "spanish"
+        
+    Returns:
+        str: LLM-generated rejection message with reference ID
+    """
+    # Normalize language
+    language = language.lower().strip()
+    if language not in ["english", "spanish"]:
+        language = "english"
+    
+    # Get forensic details
+    test_report_id = tampering_result.test_report_id
+    overall_score = tampering_result.overall_tampering_score
+    
+    # Import helper function
+    from app.services.document_messaging import _get_tampering_details_for_reasoning
+    
+    forensic_details = {}
+    if test_report_id:
+        try:
+            forensic_details = _get_tampering_details_for_reasoning(test_report_id)
+        except Exception as e:
+            logger.warning(f"Could not fetch forensic details: {e}")
+            forensic_details = {
+                "summary": "document did not pass security verification",
+                "failed_tests": [],
+                "technical_details": "Security verification checks failed"
+            }
+    
+    # Extract key information
+    summary = forensic_details.get("summary", "document failed security verification")
+    failed_tests = forensic_details.get("failed_tests", [])
+    confidence = forensic_details.get("confidence", "High")
+    
+    # Simplify test names for user-friendly display
+    simplified_findings = []
+    for test in failed_tests:
+        if "jpeg" in test.lower() or "quantization" in test.lower():
+            simplified_findings.append("compression irregularities")
+        elif "ela" in test.lower() or "error level" in test.lower():
+            simplified_findings.append("modification patterns")
+        elif "metadata" in test.lower():
+            simplified_findings.append("file property inconsistencies")
+        elif "noise" in test.lower():
+            simplified_findings.append("image quality inconsistencies")
+        elif "copy" in test.lower() or "move" in test.lower():
+            simplified_findings.append("duplicate region detection")
+        else:
+            simplified_findings.append("security verification issues")
+    
+    # Remove duplicates and create readable list
+    simplified_findings = list(set(simplified_findings))
+    findings_text = ", ".join(simplified_findings[:3]) if simplified_findings else "security verification issues"
+    
+    # Build language instruction
+    language_instruction = MessageGenerator._build_language_instruction(language)
+    
+    # Build comprehensive prompt
+    prompt = f"""{language_instruction}
+
+TASK: Generate a professional document rejection message due to security verification failure.
+
+SECURITY VERIFICATION RESULTS:
+- Overall Tampering Score: {overall_score:.1f}%
+- Confidence Level: {confidence}
+- Detection Summary: {summary}
+- Key Findings: {findings_text}
+- Number of Failed Tests: {len(failed_tests)}
+- Reference ID: {test_report_id}
+
+MESSAGE REQUIREMENTS:
+
+1. FIRST SENTENCE - Simple Explanation:
+   - State clearly the document failed security verification
+   - Use simple terms like "detected signs of modification" or "unusual patterns detected"
+   - DO NOT use technical terms like "tampering", "JPEG quantization", "ELA"
+   - Example: "Our security verification detected unusual patterns in your uploaded document."
+
+2. SECOND SENTENCE - What Was Found (simplified):
+   - Mention what was detected in simple, non-technical language
+   - Use phrases like: "compression irregularities", "inconsistent image regions", "modification patterns"
+   - Example: "Our analysis identified compression irregularities and inconsistent image regions."
+
+3. THIRD SENTENCE - Why This Matters:
+   - Explain this is for security and regulatory compliance
+   - State we require original, unmodified documents
+   - Example: "For security and regulatory compliance, we require original, unmodified documents."
+
+4. FOURTH SENTENCE - Next Steps:
+   - Clear instruction to upload original document
+   - Be specific: "clear photo or scan of your original document"
+   - Example: "Please upload a clear photo or scan of your original document."
+
+5. FINAL LINE - Reference ID:
+   - Always end with: "Reference ID: {test_report_id}"
+   - On its own line
+   - Example: "Reference ID: 85050f30-122a-4b5d-9c3f-8e1234567890"
+
+TONE & STYLE:
+- Professional but not accusatory
+- Clear and direct
+- Security-focused
+- User-friendly language (avoid technical jargon)
+- Firm but respectful
+
+LENGTH: 4-5 sentences plus reference ID
+
+FORMATTING RULES:
+- NO greetings ("Dear...", "Hi...")
+- NO sign-offs ("Kind regards", "Sincerely")
+- NO emojis
+- NO bullet points
+- Natural paragraphs only
+- Reference ID on separate line at end
+
+CRITICAL: Professional banking tone. Simple explanations. No technical jargon. No celebratory language.
+
+Generate the rejection message:"""
+
+    return MessageGenerator._generate_with_retry(prompt, "TAMPERING_REJECTION")
 
 # ============================================================================
 # 11. DOCUMENT PROCESSING TO CONVERSATION LOG

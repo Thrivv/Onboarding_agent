@@ -1,7 +1,5 @@
 # app/services/ocr_service.py
 
-from app.i18n import localized
-from app.i18n.messages import doc_name
 import os
 import base64
 import requests
@@ -33,27 +31,25 @@ APP_DIR = os.path.dirname(CURRENT_DIR)
 BACKEND_DIR = os.path.dirname(APP_DIR)
 # NOTE: previously this reimplemented its own DOCUMENTS_PATH + "/id" logic with
 # a hardcoded Linux-only fallback ("/app/backend/documents"), which silently
-# disagreed with get_documents_base_path() (used by chatupload_helpers.py,
-# etc.) whenever DOCUMENTS_PATH wasn't set — e.g. local
+# disagreed with get_documents_base_path() (used by growx_integration.py,
+# chatupload_helpers.py, etc.) whenever DOCUMENTS_PATH wasn't set — e.g. local
 # runs outside Docker. Writes and reads must always resolve to the same
 # folder, so this now delegates to the single shared helper instead of
 # maintaining a second copy of the same path math.
 DOCUMENTS_ROOT = str(get_documents_base_path())
 
-# === AWS Bedrock CONFIG ===
-# Model name and endpoint come from llm_client, which gets them from
-# bedrock_client.py. These module-level aliases are kept because they're
-# referenced throughout this file (and as default args) — all five now
-# resolve to the same Bedrock Claude Haiku model since OpenRouter's
-# multi-model routing was retired.
+# === OpenRouter CONFIG ===
+# Model names and the endpoint come from llm_client, which reads them from
+# .env.docker. These module-level aliases are kept because they're referenced
+# throughout this file (and as default args), but they are no longer a second,
+# independently-maintained copy of the model list.
 from app.services.llm_client import (
-    LLM_API_URL as LLAMA_API_URL,
+    OPENROUTER_API_URL as LLAMA_API_URL,
     VISION_PRIMARY  as LLAMA_MODEL_NAME,
     VISION_FALLBACK as QWEN_MODEL_NAME,
     TEXT_PRIMARY    as TEXT_MODEL_NAME,
     TEXT_FALLBACK   as TEXT_MODEL_FALLBACK,
 )
-from app.services import bedrock_client
 import logging
 from app import config
 from app.utils.retry import retry_with_backoff
@@ -64,7 +60,7 @@ from app.domain.onboarding.stage_table import (
 
 logger = logging.getLogger(__name__)
 
-LLAMA_API_KEY = config.AWS_BEARER_TOKEN_BEDROCK
+LLAMA_API_KEY = config.OPENROUTER_API_KEY
 
 # Document types that require the vision model
 IDENTITY_DOC_TYPES = {"eid", "passport"}
@@ -294,7 +290,7 @@ def run_ocr(image_path: str, model_name: str = LLAMA_MODEL_NAME) -> str:
                 "temperature": 0.0,
             }
             
-            response = bedrock_client.post(
+            response = requests.post(
                 LLAMA_API_URL, 
                 headers=headers, 
                 json=payload, 
@@ -345,7 +341,7 @@ def run_ocr(image_path: str, model_name: str = LLAMA_MODEL_NAME) -> str:
         
 def call_api_with_retry(prompt: str, model_name: str, max_retries: int = 6) -> str:
     """
-    Call the Bedrock API with retry logic - same pattern as Ejari.
+    Call OpenRouter API with retry logic - same pattern as Ejari.
 
     max_retries raised from 3 to 6: this used to only retry on an HTTP-level
     error (502/503/504/429). A concurrent 4-file EID batch showed a case
@@ -371,7 +367,7 @@ def call_api_with_retry(prompt: str, model_name: str, max_retries: int = 6) -> s
 
     for attempt in range(max_retries):
         try:
-            response = bedrock_client.post(
+            response = requests.post(
                 LLAMA_API_URL, headers=headers, json=data, timeout=120
             )
 
@@ -1532,10 +1528,10 @@ def process_document(
                         "commercial_license": "Commercial License",
                         "passport": "Passport",
                     }.get(validator_doc_type, "document")
-                    expiry_failed_message = localized(None,
-                        en=f"Your {doc_display_name} has expired. Please upload a valid document with a current expiry date.",
-                        es=f"Su {doc_name(doc_display_name, 'spanish')} ha vencido. Cargue un documento vigente con una fecha de vencimiento actual.",
-                        ar=f"انتهت صلاحية {doc_name(doc_display_name, 'arabic')}. يُرجى تحميل مستند ساري المفعول بتاريخ انتهاء حالي.")
+                    expiry_failed_message = (
+                        f"Your {doc_display_name} has expired. "
+                        f"Please upload a valid document with a current expiry date."
+                    )
                 analysis["is_valid"] = False
                 analysis["status_message"] = expiry_failed_message
             else:

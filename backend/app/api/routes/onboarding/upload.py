@@ -21,10 +21,7 @@ from pydantic import EmailStr
 from fastapi.responses import FileResponse, StreamingResponse
 import io
 import traceback
-from app.i18n import localized
-from app.i18n.messages import doc_name
 from app.services.message_generator import MessageGenerator, ai_message_gen
-from app.utils.language import normalize_language
 from app.services.document_messaging import (
     # generate_dynamic_valid_document_response is not called here — it is
     # re-exported from this module and imported by documentpage.py.
@@ -123,7 +120,10 @@ async def upload_conversational(
     files: List[UploadFile] = File(...),
 ):
     # VALIDATE AND NORMALIZE LANGUAGE
-    language = normalize_language(language)
+    language = language.lower().strip()
+    if language not in ["english", "spanish"]:
+        logger.warning(f"Invalid language '{language}', defaulting to english")
+        language = "english"
 
     logger.debug(f"[upload_conversational] email={email} language={language.upper()} member={member_name!r}")
 
@@ -478,10 +478,9 @@ async def upload_conversational(
             except Exception as ai_error:
                 logger.error(f"AI reasoning failed: {ai_error}")
                 error_message = (
-                    localized(language,
-                        en=("I couldn't identify the document type."),
-                        es=("No pude identificar el tipo de documento."),
-                        ar=("لم أتمكن من تحديد نوع المستند."))
+                    "No pude identificar el tipo de documento."
+                    if language == "spanish"
+                    else "I couldn't identify the document type."
                 )
         else:
             error_message = result.get("message", "Document could not be processed")
@@ -495,10 +494,9 @@ async def upload_conversational(
                 )
             except Exception:
                 error_message = (
-                    localized(language,
-                        en=("I couldn't process your document."),
-                        es=("No pude procesar tu documento."),
-                        ar=("لم أتمكن من معالجة مستندك."))
+                    "No pude procesar tu documento."
+                    if language == "spanish"
+                    else "I couldn't process your document."
                 )
 
         try:
@@ -567,15 +565,15 @@ async def upload_conversational(
             if _ki_given or _ki_surname:
                 _ki_person_name = f"{_ki_given} {_ki_surname}".strip()
         if _ki_person_name:
-            _ki_cap_msg = localized(None,
-                en=f"{_id_label_ki} for **{_ki_person_name}** has been successfully verified.\n\nPlease assign a role for this individual below.",
-                es=f"El {('pasaporte' if doc_type.lower() == 'passport' else 'Emirates ID')} de **{_ki_person_name}** se ha verificado correctamente.\n\nAsigne un rol a esta persona a continuación.",
-                ar=f"تم التحقق بنجاح من {('جواز السفر' if doc_type.lower() == 'passport' else 'الهوية الإماراتية')} الخاص بـ **{_ki_person_name}**.\n\nيُرجى تعيين دور لهذا الفرد أدناه.")
+            _ki_cap_msg = (
+                f"{_id_label_ki} for **{_ki_person_name}** has been successfully verified.\n\n"
+                f"Please assign a role for this individual below."
+            )
         else:
-            _ki_cap_msg = localized(None,
-                en=f"{_id_label_ki} captured successfully.\n\nPlease assign a role for this individual below.",
-                es=f"El {('pasaporte' if doc_type.lower() == 'passport' else 'Emirates ID')} se ha registrado correctamente.\n\nAsigne un rol a esta persona a continuación.",
-                ar=f"تم تسجيل {('جواز السفر' if doc_type.lower() == 'passport' else 'الهوية الإماراتية')} بنجاح.\n\nيُرجى تعيين دور لهذا الفرد أدناه.")
+            _ki_cap_msg = (
+                f"{_id_label_ki} captured successfully.\n\n"
+                f"Please assign a role for this individual below."
+            )
         logger.info(f"[KI-LOOP-EID] Capture complete — doc_type={doc_type}, doc_id={document_id}")
 
         # ── Breadcrumb for ki_role_assignment_pending (get_onboarding_status) ──
@@ -689,13 +687,12 @@ Generate the message:"""
                 requires_member = False
                 member_name_needed = None
                 already_validated_message = (
-                    localized(language,
-                        en=(f"Your {doc_type.upper()} has already been successfully validated. "
-                    f"{'Please upload the next required document: ' + remaining_docs[0] + '.' if remaining_docs else 'All required documents have been submitted.'}"),
-                        es=(f"Su {doc_type.upper()} ya ha sido validado exitosamente. "
-                    f"{'Por favor, suba el siguiente documento requerido: ' + remaining_docs[0] + '.' if remaining_docs else 'Todos los documentos requeridos han sido enviados.'}"),
-                        ar=(f"تم التحقق من {doc_type.upper()} الخاص بك بنجاح مسبقاً. "
-                    f"{'يُرجى تحميل المستند المطلوب التالي: ' + doc_name(remaining_docs[0], 'arabic') + '.' if remaining_docs else 'تم تقديم جميع المستندات المطلوبة.'}"))
+                    f"Su {doc_type.upper()} ya ha sido validado exitosamente. "
+                    f"{'Por favor, suba el siguiente documento requerido: ' + remaining_docs[0] + '.' if remaining_docs else 'Todos los documentos requeridos han sido enviados.'}"
+                    if language == "spanish"
+                    else
+                    f"Your {doc_type.upper()} has already been successfully validated. "
+                    f"{'Please upload the next required document: ' + remaining_docs[0] + '.' if remaining_docs else 'All required documents have been submitted.'}"
                 )
 
             try:
@@ -765,10 +762,9 @@ Generate the message:"""
             except Exception:
                 required_docs = allowed_info.get("required_docs", [])
                 dynamic_error_message = (
-                    localized(language,
-                        en=(f"Wrong document type. I need: {', '.join(required_docs)}."),
-                        es=(f"Tipo de documento incorrecto. Necesito: {', '.join(required_docs)}."),
-                        ar=(f"نوع المستند غير صحيح. المطلوب: {'، '.join(doc_name(d, 'arabic') for d in required_docs)}."))
+                    f"Tipo de documento incorrecto. Necesito: {', '.join(required_docs)}."
+                    if language == "spanish"
+                    else f"Wrong document type. I need: {', '.join(required_docs)}."
                 )
 
             try:
@@ -1148,19 +1144,16 @@ Generate the message:"""
             # Owner mismatch — do NOT auto-verify, inform the user to re-upload
             remaining_docs = []
             dynamic_acknowledgment = (
-                localized(language,
-                    en=(f"⚠️ The owner name on the MOA does not match your Commercial License.\n\n"
-                f"**Commercial License:** {_moa_cv_commercial_owner}\n"
-                f"**MOA:** {_moa_cv_moa_owner}\n\n"
-                "Please re-upload the correct MOA document that matches your Commercial License."),
-                    es=(f"⚠️ El nombre del propietario en el documento MOA no coincide con su Licencia Comercial.\n\n"
+                f"⚠️ El nombre del propietario en el documento MOA no coincide con su Licencia Comercial.\n\n"
                 f"**Licencia Comercial:** {_moa_cv_commercial_owner}\n"
                 f"**MOA:** {_moa_cv_moa_owner}\n\n"
-                "Por favor, vuelva a cargar el documento MOA correcto que corresponda a su Licencia Comercial."),
-                    ar=(f"⚠️ اسم المالك في عقد التأسيس لا يطابق الرخصة التجارية.\n\n"
-                f"**الرخصة التجارية:** {_moa_cv_commercial_owner}\n"
-                f"**عقد التأسيس:** {_moa_cv_moa_owner}\n\n"
-                "يُرجى إعادة تحميل عقد التأسيس الصحيح المطابق لرخصتك التجارية."))
+                "Por favor, vuelva a cargar el documento MOA correcto que corresponda a su Licencia Comercial."
+                if language == "spanish"
+                else
+                f"⚠️ The owner name on the MOA does not match your Commercial License.\n\n"
+                f"**Commercial License:** {_moa_cv_commercial_owner}\n"
+                f"**MOA:** {_moa_cv_moa_owner}\n\n"
+                "Please re-upload the correct MOA document that matches your Commercial License."
             )
             logger.error(f"[SO-MOA-CV] MOA rejected — skipping auto-verify and success flow")
         else:
@@ -1193,20 +1186,19 @@ Generate the message:"""
                 # Out-of-order upload: Ejari was already done, MOA is the last
                 # piece — the Step 2 trigger below will fire the role card.
                 dynamic_acknowledgment = (
-                    localized(language,
-                        en=("Your MOA (Memorandum of Association) document has been successfully validated and accepted."),
-                        es=("Su documento MOA (Memorando de Asociación) ha sido validado y aceptado exitosamente."),
-                        ar=("تم التحقق من عقد التأسيس (MOA) وقبوله بنجاح."))
+                    "Su documento MOA (Memorando de Asociación) ha sido validado y aceptado exitosamente."
+                    if language == "spanish"
+                    else
+                    "Your MOA (Memorandum of Association) document has been successfully validated and accepted."
                 )
             else:
                 dynamic_acknowledgment = (
-                    localized(language,
-                        en=("Your MOA (Memorandum of Association) document has been successfully validated and accepted.\n\n"
-                    "The next step is to upload your **Ejari (Tenancy Contract)**."),
-                        es=("Su documento MOA (Memorando de Asociación) ha sido validado y aceptado exitosamente.\n\n"
-                    "El siguiente paso es subir su **Contrato de Arrendamiento (Ejari)**."),
-                        ar=("تم التحقق من عقد التأسيس (MOA) وقبوله بنجاح.\n\n"
-                    "الخطوة التالية هي تحميل **إيجاري (عقد الإيجار)**."))
+                    "Su documento MOA (Memorando de Asociación) ha sido validado y aceptado exitosamente.\n\n"
+                    "El siguiente paso es subir su **Contrato de Arrendamiento (Ejari)**."
+                    if language == "spanish"
+                    else
+                    "Your MOA (Memorandum of Association) document has been successfully validated and accepted.\n\n"
+                    "The next step is to upload your **Ejari (Tenancy Contract)**."
                 )
             logger.info(f"[v4] SO MOA (id stage) verified — ejari_done={_moa_ejari_done}")
     elif _so_ejari_id_stage:
@@ -1247,19 +1239,16 @@ Generate the message:"""
             # Company name mismatch — do NOT auto-verify, inform the user to re-upload
             remaining_docs = []
             dynamic_acknowledgment = (
-                localized(language,
-                    en=(f"⚠️ The company name on the Ejari does not match your Commercial License.\n\n"
-                f"**Commercial License:** {_ej_cv_commercial_name}\n"
-                f"**Ejari (Tenant Company):** {_ej_cv_ejari_name}\n\n"
-                "Please re-upload the correct Ejari document that matches your Commercial License."),
-                    es=(f"⚠️ El nombre de la empresa en el documento Ejari no coincide con su Licencia Comercial.\n\n"
+                f"⚠️ El nombre de la empresa en el documento Ejari no coincide con su Licencia Comercial.\n\n"
                 f"**Licencia Comercial:** {_ej_cv_commercial_name}\n"
                 f"**Ejari (Empresa Inquilina):** {_ej_cv_ejari_name}\n\n"
-                "Por favor, vuelva a cargar el documento Ejari correcto que corresponda a su Licencia Comercial."),
-                    ar=(f"⚠️ اسم الشركة في إيجاري لا يطابق الرخصة التجارية.\n\n"
-                f"**الرخصة التجارية:** {_ej_cv_commercial_name}\n"
-                f"**إيجاري (الشركة المستأجرة):** {_ej_cv_ejari_name}\n\n"
-                "يُرجى إعادة تحميل مستند إيجاري الصحيح المطابق لرخصتك التجارية."))
+                "Por favor, vuelva a cargar el documento Ejari correcto que corresponda a su Licencia Comercial."
+                if language == "spanish"
+                else
+                f"⚠️ The company name on the Ejari does not match your Commercial License.\n\n"
+                f"**Commercial License:** {_ej_cv_commercial_name}\n"
+                f"**Ejari (Tenant Company):** {_ej_cv_ejari_name}\n\n"
+                "Please re-upload the correct Ejari document that matches your Commercial License."
             )
             logger.error(f"[SO-EJ-CV] Ejari rejected — skipping auto-verify and success flow")
         else:
@@ -1302,45 +1291,39 @@ Generate the message:"""
                 if not _so_ej_fatca_done:
                     fatca_trigger = True
                     dynamic_acknowledgment = (
-                        localized(language,
-                            en=(f"Your EJARI document has been successfully validated and accepted.\n\n"
-                        f"All {_so_ej_member_count} member identity documents have been verified. "
-                        "Please complete your **FATCA Declaration** below before proceeding."),
-                            es=(f"Su documento EJARI ha sido validado y aceptado exitosamente.\n\n"
+                        f"Su documento EJARI ha sido validado y aceptado exitosamente.\n\n"
                         f"Todos los {_so_ej_member_count} documentos de identidad de los miembros han sido verificados exitosamente. "
-                        "Complete su **Declaración FATCA** a continuación."),
-                            ar=(f"تم التحقق من مستند إيجاري وقبوله بنجاح.\n\n"
-                        f"تم التحقق من جميع مستندات هوية الأعضاء ({_so_ej_member_count}). "
-                        "يُرجى استكمال **إقرار فاتكا (FATCA)** أدناه قبل المتابعة."))
+                        "Complete su **Declaración FATCA** a continuación."
+                        if language == "spanish"
+                        else
+                        f"Your EJARI document has been successfully validated and accepted.\n\n"
+                        f"All {_so_ej_member_count} member identity documents have been verified. "
+                        "Please complete your **FATCA Declaration** below before proceeding."
                     )
                 elif not _so_ej_pep_done:
                     pep_trigger = True
                     dynamic_acknowledgment = (
-                        localized(language,
-                            en=("FATCA declaration saved. Please complete your **PEP Declaration** below."),
-                            es=("Declaración FATCA guardada. Complete su **Declaración PEP** a continuación."),
-                            ar=("تم حفظ إقرار فاتكا. يُرجى استكمال **إقرار الأشخاص المعرّضين سياسياً (PEP)** أدناه."))
+                        "Declaración FATCA guardada. Complete su **Declaración PEP** a continuación."
+                        if language == "spanish"
+                        else "FATCA declaration saved. Please complete your **PEP Declaration** below."
                     )
                 elif not is_package_done(email):
                     product_package_trigger = True
                     dynamic_acknowledgment = (
-                        localized(language,
-                            en=(f"Your EJARI document has been successfully validated and accepted.\n\n"
-                        f"All {_so_ej_member_count} member identity documents have been verified. "
-                        "Please complete your **Product Package** below before proceeding."),
-                            es=(f"Su documento EJARI ha sido validado y aceptado exitosamente.\n\n"
+                        f"Su documento EJARI ha sido validado y aceptado exitosamente.\n\n"
                         f"Todos los {_so_ej_member_count} documentos de identidad de los miembros han sido verificados exitosamente. "
-                        "Complete su **Paquete de Producto** a continuación."),
-                            ar=(f"تم التحقق من مستند إيجاري وقبوله بنجاح.\n\n"
-                        f"تم التحقق من جميع مستندات هوية الأعضاء ({_so_ej_member_count}). "
-                        "يُرجى اختيار **باقة المنتجات** أدناه قبل المتابعة."))
+                        "Complete su **Paquete de Producto** a continuación."
+                        if language == "spanish"
+                        else
+                        f"Your EJARI document has been successfully validated and accepted.\n\n"
+                        f"All {_so_ej_member_count} member identity documents have been verified. "
+                        "Please complete your **Product Package** below before proceeding."
                     )
                 else:
                     dynamic_acknowledgment = (
-                        localized(language,
-                            en=("Your EJARI document has been successfully validated and accepted."),
-                            es=("Su documento EJARI ha sido validado y aceptado exitosamente."),
-                            ar=("تم التحقق من مستند إيجاري وقبوله بنجاح."))
+                        "Su documento EJARI ha sido validado y aceptado exitosamente."
+                        if language == "spanish"
+                        else "Your EJARI document has been successfully validated and accepted."
                     )
                 logger.info(f"[v4] SO Ejari (id stage, KI loop done) — fatca_trigger={fatca_trigger} pep_trigger={pep_trigger}")
             else:
@@ -1350,23 +1333,21 @@ Generate the message:"""
                 _ejari_moa_done = check_documents_status(email).get("moa", False)
                 if _ejari_moa_done:
                     dynamic_acknowledgment = (
-                        localized(language,
-                            en=("Your EJARI document has been successfully validated and accepted."),
-                            es=("Su documento EJARI ha sido validado y aceptado exitosamente."),
-                            ar=("تم التحقق من مستند إيجاري وقبوله بنجاح."))
+                        "Su documento EJARI ha sido validado y aceptado exitosamente."
+                        if language == "spanish"
+                        else "Your EJARI document has been successfully validated and accepted."
                     )
                     logger.info(f"[v4] SO Ejari (id stage, pre-role-assignment) — role card will follow")
                 else:
                     # Out-of-order upload: MOA hasn't been submitted yet — ask for it
                     # before the role card can fire (Step 2 below requires both).
                     dynamic_acknowledgment = (
-                        localized(language,
-                            en=("Your EJARI document has been successfully validated and accepted.\n\n"
-                        "Please also upload your **MOA (Memorandum of Association)** to continue."),
-                            es=("Su documento EJARI ha sido validado y aceptado exitosamente.\n\n"
-                        "Por favor, suba también su **Memorando de Asociación (MOA)** para continuar."),
-                            ar=("تم التحقق من مستند إيجاري وقبوله بنجاح.\n\n"
-                        "يُرجى أيضاً تحميل **عقد التأسيس (MOA)** للمتابعة."))
+                        "Su documento EJARI ha sido validado y aceptado exitosamente.\n\n"
+                        "Por favor, suba también su **Memorando de Asociación (MOA)** para continuar."
+                        if language == "spanish"
+                        else
+                        "Your EJARI document has been successfully validated and accepted.\n\n"
+                        "Please also upload your **MOA (Memorandum of Association)** to continue."
                     )
                     logger.info(f"[v4] SO Ejari (id stage, pre-role-assignment) — waiting for MOA before role card")
     elif _so_ejari_final:
@@ -1404,45 +1385,40 @@ Generate the message:"""
         if not _so_ejf_fatca_done:
             fatca_trigger = True
             dynamic_acknowledgment = (
-                localized(language,
-                    en=(f"Your EJARI document has been successfully validated and accepted.\n\n"
-                f"All {_so_ejf_member_count} member identity documents have been successfully verified. "
-                "Please complete your **FATCA Declaration** below before proceeding."),
-                    es=(f"Su documento EJARI ha sido validado y aceptado exitosamente.\n\n"
+                f"Su documento EJARI ha sido validado y aceptado exitosamente.\n\n"
                 f"Todos los {_so_ejf_member_count} documentos de identidad de los miembros han sido verificados exitosamente. "
-                "Complete su **Declaración FATCA** a continuación."),
-                    ar=(f"تم التحقق من مستند إيجاري وقبوله بنجاح.\n\n"
-                f"تم التحقق بنجاح من جميع مستندات هوية الأعضاء ({_so_ejf_member_count}). "
-                "يُرجى استكمال **إقرار فاتكا (FATCA)** أدناه قبل المتابعة."))
+                "Complete su **Declaración FATCA** a continuación."
+                if language == "spanish"
+                else
+                f"Your EJARI document has been successfully validated and accepted.\n\n"
+                f"All {_so_ejf_member_count} member identity documents have been successfully verified. "
+                "Please complete your **FATCA Declaration** below before proceeding."
             )
         elif not _so_ejf_pep_done:
             pep_trigger = True
             dynamic_acknowledgment = (
-                localized(language,
-                    en=("FATCA declaration saved. Please complete your **PEP Declaration** below."),
-                    es=("Declaración FATCA guardada. Complete su **Declaración PEP** a continuación."),
-                    ar=("تم حفظ إقرار فاتكا. يُرجى استكمال **إقرار الأشخاص المعرّضين سياسياً (PEP)** أدناه."))
+                "Declaración FATCA guardada. Complete su **Declaración PEP** a continuación."
+                if language == "spanish"
+                else "FATCA declaration saved. Please complete your **PEP Declaration** below."
             )
         elif not is_package_done(email):
             product_package_trigger = True
             dynamic_acknowledgment = (
-                localized(language,
-                    en=(f"Your EJARI document has been successfully validated and accepted.\n\n"
-                f"All {_so_ejf_member_count} member identity documents have been successfully verified. "
-                "Please complete your **Product Package** below before proceeding."),
-                    es=(f"Su documento EJARI ha sido validado y aceptado exitosamente.\n\n"
+                f"Su documento EJARI ha sido validado y aceptado exitosamente.\n\n"
                 f"Todos los {_so_ejf_member_count} documentos de identidad de los miembros han sido verificados exitosamente. "
-                "Complete su **Paquete de Producto** a continuación."),
-                    ar=(f"تم التحقق من مستند إيجاري وقبوله بنجاح.\n\n"
-                f"تم التحقق بنجاح من جميع مستندات هوية الأعضاء ({_so_ejf_member_count}). "
-                "يُرجى اختيار **باقة المنتجات** أدناه قبل المتابعة."))
+                "Complete su **Paquete de Producto** a continuación."
+                if language == "spanish"
+                else
+                f"Your EJARI document has been successfully validated and accepted.\n\n"
+                f"All {_so_ejf_member_count} member identity documents have been successfully verified. "
+                "Please complete your **Product Package** below before proceeding."
             )
         else:
             dynamic_acknowledgment = (
-                localized(language,
-                    en=("Your EJARI document has been successfully validated and accepted."),
-                    es=("Su documento EJARI ha sido validado y aceptado exitosamente."),
-                    ar=("تم التحقق من مستند إيجاري وقبوله بنجاح."))
+                "Su documento EJARI ha sido validado y aceptado exitosamente."
+                if language == "spanish"
+                else
+                "Your EJARI document has been successfully validated and accepted."
             )
         logger.info(f"[v4] Single Owner Ejari final stage — auto-advancing (fatca_trigger={fatca_trigger} pep_trigger={pep_trigger})")
     elif _so_eid_uploaded:
@@ -1509,16 +1485,14 @@ Generate the message:"""
             _so_id_label_cv = "Passport" if doc_type.lower() == "passport" else "Emirates ID"
             _so_id_label_cv_es = "Pasaporte" if doc_type.lower() == "passport" else "Emirates ID"
             dynamic_acknowledgment = (
-                localized(language,
-                    en=(f"⚠️ The information on the {_so_id_label_cv} does not match the Commercial License.\n\n"
+                f"⚠️ La información en el {_so_id_label_cv_es} no coincide con la Licencia Comercial.\n\n"
                 f"{_eid_mismatch_lines}\n\n"
-                f"Please re-upload the correct {_so_id_label_cv} that matches the Commercial License."),
-                    es=(f"⚠️ La información en el {_so_id_label_cv_es} no coincide con la Licencia Comercial.\n\n"
+                f"Por favor, vuelva a cargar el {_so_id_label_cv_es} correcto que corresponda a la Licencia Comercial."
+                if language == "spanish"
+                else
+                f"⚠️ The information on the {_so_id_label_cv} does not match the Commercial License.\n\n"
                 f"{_eid_mismatch_lines}\n\n"
-                f"Por favor, vuelva a cargar el {_so_id_label_cv_es} correcto que corresponda a la Licencia Comercial."),
-                    ar=(f"⚠️ المعلومات الواردة في {('جواز السفر' if doc_type.lower() == 'passport' else 'الهوية الإماراتية')} لا تطابق الرخصة التجارية.\n\n"
-                f"{_eid_mismatch_lines}\n\n"
-                f"يُرجى إعادة تحميل {('جواز السفر' if doc_type.lower() == 'passport' else 'الهوية الإماراتية')} الصحيح المطابق للرخصة التجارية."))
+                f"Please re-upload the correct {_so_id_label_cv} that matches the Commercial License."
             )
             remaining_docs = []
             logger.error(f"[SO-EID-CV] EID rejected — mismatches: {_eid_cv_mismatches}")
@@ -1538,6 +1512,9 @@ Generate the message:"""
                     with open(_so_eid_output_json, "w", encoding="utf-8") as _soef:
                         json.dump(_so_out, _soef, indent=2, ensure_ascii=False)
                     logger.info(f"[SO-EID] Auto-marked human_verified: {_so_eid_name}")
+                    # NOTE: GrowX API 1+2 no longer fire here — consolidated to
+                    # a single trigger at self-declaration confirmation (see
+                    # self_declaration_confirm()).
                 else:
                     logger.warning(f"[SO-EID] output.json not found at {_so_eid_output_json}")
             except Exception as _soee:
@@ -1588,17 +1565,12 @@ Generate the message:"""
                 # to upload Ejari, so we only advance once the loop is done.
                 _so_ki_loop_done_path = user_docs_path(email) / "ki_loop_done.json"
                 if not _so_ki_loop_done_path.exists():
-                    _so_loop_msg = localized(language,
-                        en=(f"{_so_id_label} for {_so_eid_name} has been successfully validated and accepted.\n\n"
-                            f"All identity documents have been verified.\n\n"
-                            f"Would you like to add any additional Authorised Signatory "
-                            f"or Key Individual to this account?"),
-                        es=(f"El {('Pasaporte' if doc_type.lower() == 'passport' else 'Emirates ID')} de {_so_eid_name} ha sido validado y aceptado correctamente.\n\n"
-                            f"Todos los documentos de identidad han sido verificados.\n\n"
-                            f"¿Desea añadir algún Firmante Autorizado o Persona Clave adicional a esta cuenta?"),
-                        ar=(f"تم التحقق من {('جواز السفر' if doc_type.lower() == 'passport' else 'الهوية الإماراتية')} الخاص بـ {_so_eid_name} وقبوله بنجاح.\n\n"
-                            f"تم التحقق من جميع مستندات الهوية.\n\n"
-                            f"هل ترغب في إضافة مفوّض بالتوقيع أو فرد رئيسي آخر إلى هذا الحساب؟"))
+                    _so_loop_msg = (
+                        f"{_so_id_label} for {_so_eid_name} has been successfully validated and accepted.\n\n"
+                        f"All identity documents have been verified.\n\n"
+                        f"Would you like to add any additional Authorised Signatory "
+                        f"or Key Individual to this account?"
+                    )
                     logger.info(f"[SO-EID] KI loop gate: ki_loop_done.json not found — returning ki_loop_prompt")
                     # ── Log extraction_result BEFORE early return so the Verification Hub
                     # sidebar can mark the identity step as VERIFIED ──────────────────────
@@ -1643,33 +1615,30 @@ Generate the message:"""
                 # include member-directory EIDs. Override with the correct next step.
                 remaining_docs = ["Ejari (Tenancy Contract)"]
                 dynamic_acknowledgment = (
-                    localized(language,
-                        en=(f"{_so_id_label} for {_so_eid_name} has been successfully validated and accepted.\n\n"
-                    f"All identity documents have been verified. Please proceed by uploading the "
-                    f"**Ejari (Tenancy Contract)** to complete your document submission."),
-                        es=(f"El {_so_id_label_es} para {_so_eid_name} ha sido validado y aceptado exitosamente.\n\n"
+                    f"El {_so_id_label_es} para {_so_eid_name} ha sido validado y aceptado exitosamente.\n\n"
                     f"Todos los documentos de identidad han sido verificados. Por favor proceda subiendo el "
-                    f"**Ejari (Contrato de Arrendamiento)** para completar su envío de documentos."),
-                        ar=(f"تم التحقق من {('جواز السفر' if doc_type.lower() == 'passport' else 'الهوية الإماراتية')} الخاص بـ {_so_eid_name} وقبوله بنجاح.\n\n"
-                    f"تم التحقق من جميع مستندات الهوية. يُرجى المتابعة بتحميل "
-                    f"**إيجاري (عقد الإيجار)** لاستكمال تقديم مستنداتك."))
+                    f"**Ejari (Contrato de Arrendamiento)** para completar su envío de documentos."
+                    if language == "spanish"
+                    else
+                    f"{_so_id_label} for {_so_eid_name} has been successfully validated and accepted.\n\n"
+                    f"All identity documents have been verified. Please proceed by uploading the "
+                    f"**Ejari (Tenancy Contract)** to complete your document submission."
                 )
             elif _so_next_member:
                 dynamic_acknowledgment = (
-                    localized(language,
-                        en=(f"{_so_id_label} for {_so_eid_name} has been successfully validated and accepted.\n\n"
-                    f"Please proceed by uploading the **Emirates ID or Passport** for: **{_so_next_member}**."),
-                        es=(f"El {_so_id_label_es} para {_so_eid_name} ha sido validado y aceptado exitosamente.\n\n"
-                    f"Por favor proceda subiendo el **Emirates ID o Pasaporte** para: **{_so_next_member}**."),
-                        ar=(f"تم التحقق من {('جواز السفر' if doc_type.lower() == 'passport' else 'الهوية الإماراتية')} الخاص بـ {_so_eid_name} وقبوله بنجاح.\n\n"
-                    f"يُرجى المتابعة بتحميل **الهوية الإماراتية أو جواز السفر** لـ: **{_so_next_member}**."))
+                    f"El {_so_id_label_es} para {_so_eid_name} ha sido validado y aceptado exitosamente.\n\n"
+                    f"Por favor proceda subiendo el **Emirates ID o Pasaporte** para: **{_so_next_member}**."
+                    if language == "spanish"
+                    else
+                    f"{_so_id_label} for {_so_eid_name} has been successfully validated and accepted.\n\n"
+                    f"Please proceed by uploading the **Emirates ID or Passport** for: **{_so_next_member}**."
                 )
             else:
                 dynamic_acknowledgment = (
-                    localized(language,
-                        en=(f"{_so_id_label} for {_so_eid_name} has been successfully validated and accepted."),
-                        es=(f"El {_so_id_label_es} para {_so_eid_name} ha sido validado y aceptado exitosamente."),
-                        ar=(f"تم التحقق من {('جواز السفر' if doc_type.lower() == 'passport' else 'الهوية الإماراتية')} الخاص بـ {_so_eid_name} وقبوله بنجاح."))
+                    f"El {_so_id_label_es} para {_so_eid_name} ha sido validado y aceptado exitosamente."
+                    if language == "spanish"
+                    else
+                    f"{_so_id_label} for {_so_eid_name} has been successfully validated and accepted."
                 )
             logger.info(f"[SO-EID] Auto-advanced — all_done={_so_all_done}, next_member={_so_next_member}")
     else:
@@ -1724,13 +1693,12 @@ Generate the message:"""
                             logger.warning(f"[FIX-D] Could not self-heal stage: {_fd_heal_err}")
                         _fd_next = _fd_pending[0]
                         dynamic_acknowledgment = (
-                            localized(language,
-                                en=(f"Identity document verified successfully.\n\n"
-                            f"Please proceed by uploading the Emirates ID or Passport for: **{_fd_next}**."),
-                                es=(f"Documento de identidad verificado exitosamente.\n\n"
-                            f"Por favor, suba el Emirates ID o Pasaporte para: **{_fd_next}**."),
-                                ar=(f"تم التحقق من مستند الهوية بنجاح.\n\n"
-                            f"يُرجى المتابعة بتحميل الهوية الإماراتية أو جواز السفر لـ: **{_fd_next}**."))
+                            f"Documento de identidad verificado exitosamente.\n\n"
+                            f"Por favor, suba el Emirates ID o Pasaporte para: **{_fd_next}**."
+                            if language == "spanish"
+                            else
+                            f"Identity document verified successfully.\n\n"
+                            f"Please proceed by uploading the Emirates ID or Passport for: **{_fd_next}**."
                         )
                         _fixd_triggered = True
                         logger.info(f"[FIX-D]  Redirecting to next pending member: {_fd_next}")
@@ -1792,6 +1760,9 @@ Generate the message:"""
                                     with open(_eid_out, "w", encoding="utf-8") as _ef:
                                         json.dump(_eid_data, _ef, indent=2, ensure_ascii=False)
                                     logger.info(f"[MEMBER-EID] Auto-marked human_verified for '{clean_member_name}'")
+                                    # NOTE: GrowX only needs one user-create (API 1) per company
+                                    # account — the primary owner's — not one per Key Individual/
+                                    # member. Deliberately not firing trigger_api1_api2 here.
                                     break
                         except Exception as _hve:
                             logger.warning(f"[MEMBER-EID] human_verified auto-mark failed: {_hve}")
@@ -1831,10 +1802,10 @@ Generate the message:"""
                 )
             except Exception:
                 dynamic_acknowledgment = (
-                    localized(language,
-                        en=(f"Your {doc_type.upper()}{' for ' + clean_member_name if clean_member_name else ''} has been verified."),
-                        es=(f"Tu {doc_type.upper()}{' para ' + clean_member_name if clean_member_name else ''} ha sido verificado."),
-                        ar=(f"تم التحقق من {doc_type.upper()}{' الخاص بـ ' + clean_member_name if clean_member_name else ''}."))
+                    f"Tu {doc_type.upper()}{' para ' + clean_member_name if clean_member_name else ''} ha sido verificado."
+                    if language == "spanish"
+                    else
+                    f"Your {doc_type.upper()}{' for ' + clean_member_name if clean_member_name else ''} has been verified."
                 )
 
         # ── Single Owner: override post-commercial message to explicitly name Ejari ─
@@ -1853,28 +1824,32 @@ Generate the message:"""
             _moa_verified = _so_docs_after_commercial.get("moa", False)
             _ejari_verified = _so_docs_after_commercial.get("ejari", False)
             if not _moa_verified:
-                dynamic_acknowledgment = localized(language,
-                    en=("Your Commercial License has been successfully validated and accepted.\n\n"
-                        "The next step is to upload your **MOA (Memorandum of Association)**. "
-                        "Please upload your MOA document to continue the process."),
-                    es=("Su Licencia Comercial ha sido validada y aceptada exitosamente.\n\n"
+                if language == "spanish":
+                    dynamic_acknowledgment = (
+                        "Su Licencia Comercial ha sido validada y aceptada exitosamente.\n\n"
                         "El siguiente paso es subir su **Memorando de Asociación (MOA)**. "
-                        "Por favor, suba su documento MOA para continuar con el proceso."),
-                    ar=("تم التحقق من رخصتك التجارية وقبولها بنجاح.\n\n"
-                        "الخطوة التالية هي تحميل **عقد التأسيس (MOA)**. "
-                        "يُرجى تحميل عقد التأسيس لمتابعة الإجراءات."))
+                        "Por favor, suba su documento MOA para continuar con el proceso."
+                    )
+                else:
+                    dynamic_acknowledgment = (
+                        "Your Commercial License has been successfully validated and accepted.\n\n"
+                        "The next step is to upload your **MOA (Memorandum of Association)**. "
+                        "Please upload your MOA document to continue the process."
+                    )
                 logger.info(f"[v4] SO Commercial success → overriding acknowledgment to prompt for MOA")
             elif not _ejari_verified:
-                dynamic_acknowledgment = localized(language,
-                    en=("Your Commercial License has been successfully validated and accepted.\n\n"
-                        "The next step is to upload your **Ejari (Tenancy Contract)**. "
-                        "Please upload your Ejari document to continue the process."),
-                    es=("Su Licencia Comercial ha sido validada y aceptada exitosamente.\n\n"
+                if language == "spanish":
+                    dynamic_acknowledgment = (
+                        "Su Licencia Comercial ha sido validada y aceptada exitosamente.\n\n"
                         "El siguiente paso es subir su **Contrato de Arrendamiento (Ejari)**. "
-                        "Por favor, suba su documento Ejari para continuar con el proceso."),
-                    ar=("تم التحقق من رخصتك التجارية وقبولها بنجاح.\n\n"
-                        "الخطوة التالية هي تحميل **إيجاري (عقد الإيجار)**. "
-                        "يُرجى تحميل مستند إيجاري لمتابعة الإجراءات."))
+                        "Por favor, suba su documento Ejari para continuar con el proceso."
+                    )
+                else:
+                    dynamic_acknowledgment = (
+                        "Your Commercial License has been successfully validated and accepted.\n\n"
+                        "The next step is to upload your **Ejari (Tenancy Contract)**. "
+                        "Please upload your Ejari document to continue the process."
+                    )
                 logger.info(f"[v4] SO Commercial success → overriding acknowledgment to prompt for Ejari")
 
         # ── Ownership auto-classification: announce result / ask fallback question ──
@@ -1882,19 +1857,16 @@ Generate the message:"""
         # above, regardless of which branch fired.
         if _ownership_auto_classify_ambiguous:
             dynamic_acknowledgment = (
-                localized(language,
-                    en=("Your Commercial License has been successfully validated and accepted.\n\n"
-                "I couldn't clearly determine the ownership details from it, though — quick question so "
-                "I can set things up right: do you own this business by yourself, as a **Sole "
-                "Proprietorship**, or do you share ownership with others, under **Joint Ownership**?"),
-                    es=("Su Licencia Comercial ha sido validada y aceptada exitosamente.\n\n"
+                "Su Licencia Comercial ha sido validada y aceptada exitosamente.\n\n"
                 "No pude determinar con claridad los detalles de propiedad en el documento. "
                 "Pregunta rápida para continuar correctamente: ¿posee este negocio usted solo, bajo "
                 "**Propiedad Individual**, o comparte la propiedad con otras personas, bajo "
-                "**Propiedad Conjunta**?"),
-                    ar=("تم التحقق من رخصتك التجارية وقبولها بنجاح.\n\n"
-                "لكن لم أتمكن من تحديد تفاصيل الملكية بوضوح منها — سؤال سريع لإعداد الحساب بشكل صحيح: "
-                "هل تملك هذا النشاط بمفردك، بصفة **ملكية فردية**، أم تتشارك الملكية مع آخرين، بصفة **ملكية مشتركة**؟"))
+                "**Propiedad Conjunta**?"
+                if language == "spanish" else
+                "Your Commercial License has been successfully validated and accepted.\n\n"
+                "I couldn't clearly determine the ownership details from it, though — quick question so "
+                "I can set things up right: do you own this business by yourself, as a **Sole "
+                "Proprietorship**, or do you share ownership with others, under **Joint Ownership**?"
             )
             logger.info("[OWNERSHIP-AUTO] Ambiguous — overriding acknowledgment with manual ownership question")
         elif _ownership_freshly_classified == OWNERSHIP_PARTNERSHIP:
@@ -1914,55 +1886,43 @@ Generate the message:"""
             # transitioned document_stage → corporate_shareholder_docs).
             if _up_pending_coi:
                 dynamic_acknowledgment = (
-                    localized(language,
-                        en=(f"Your Commercial License has been successfully validated and accepted.\n\n"
-                    f"Based on the document, you share ownership of this business under **Joint "
-                    f"Ownership** ({_ownership_partner_count} owners listed), and one of them is a "
-                    f"corporate entity ({', '.join(_up_pending_coi)}). "
-                    f"The next step is to upload a **Certificate of Incorporation** for that entity, "
-                    f"along with your **{_po_next_doc_en}**."),
-                        es=(f"Su Licencia Comercial ha sido validada y aceptada exitosamente.\n\n"
+                    f"Su Licencia Comercial ha sido validada y aceptada exitosamente.\n\n"
                     f"Según el documento, usted comparte la propiedad de este negocio bajo "
                     f"**Propiedad Conjunta** ({_ownership_partner_count} propietarios listados), y uno "
                     f"de ellos es una entidad corporativa ({', '.join(_up_pending_coi)}). "
                     f"El siguiente paso es subir el **Certificado de Constitución** de esa entidad, "
-                    f"junto con su **{_po_next_doc_es}**."),
-                        ar=(f"تم التحقق من رخصتك التجارية وقبولها بنجاح.\n\n"
-                    f"وفقاً للمستند، تتشارك ملكية هذا النشاط بصفة **ملكية مشتركة** "
-                    f"({_ownership_partner_count} ملاك مدرجون)، وأحدهم كيان اعتباري ({', '.join(_up_pending_coi)}). "
-                    f"الخطوة التالية هي تحميل **شهادة التأسيس** لذلك الكيان، "
-                    f"إلى جانب **{doc_name(_po_next_doc_en, 'arabic')}**."))
+                    f"junto con su **{_po_next_doc_es}**."
+                    if language == "spanish" else
+                    f"Your Commercial License has been successfully validated and accepted.\n\n"
+                    f"Based on the document, you share ownership of this business under **Joint "
+                    f"Ownership** ({_ownership_partner_count} owners listed), and one of them is a "
+                    f"corporate entity ({', '.join(_up_pending_coi)}). "
+                    f"The next step is to upload a **Certificate of Incorporation** for that entity, "
+                    f"along with your **{_po_next_doc_en}**."
                 )
             else:
                 dynamic_acknowledgment = (
-                    localized(language,
-                        en=(f"Your Commercial License has been successfully validated and accepted.\n\n"
-                    f"Based on the document, you share ownership of this business under **Joint "
-                    f"Ownership** ({_ownership_partner_count} owners listed). "
-                    f"The next step is to upload your **{_po_next_doc_en}**."),
-                        es=(f"Su Licencia Comercial ha sido validada y aceptada exitosamente.\n\n"
+                    f"Su Licencia Comercial ha sido validada y aceptada exitosamente.\n\n"
                     f"Según el documento, usted comparte la propiedad de este negocio bajo "
                     f"**Propiedad Conjunta** ({_ownership_partner_count} propietarios listados). "
-                    f"El siguiente paso es subir su **{_po_next_doc_es}**."),
-                        ar=(f"تم التحقق من رخصتك التجارية وقبولها بنجاح.\n\n"
-                    f"وفقاً للمستند، تتشارك ملكية هذا النشاط بصفة **ملكية مشتركة** "
-                    f"({_ownership_partner_count} ملاك مدرجون). "
-                    f"الخطوة التالية هي تحميل **{doc_name(_po_next_doc_en, 'arabic')}**."))
+                    f"El siguiente paso es subir su **{_po_next_doc_es}**."
+                    if language == "spanish" else
+                    f"Your Commercial License has been successfully validated and accepted.\n\n"
+                    f"Based on the document, you share ownership of this business under **Joint "
+                    f"Ownership** ({_ownership_partner_count} owners listed). "
+                    f"The next step is to upload your **{_po_next_doc_en}**."
                 )
             logger.info(f"[OWNERSHIP-AUTO] Announcing Joint Ownership classification ({_ownership_partner_count} partners, type2={bool(_up_pending_coi)}, next_doc={'moa' if _po_ejari_verified else 'ejari'})")
         elif _ownership_freshly_classified == OWNERSHIP_SINGLE:
             dynamic_acknowledgment = (
-                localized(language,
-                    en=("Your Commercial License has been successfully validated and accepted.\n\n"
+                "Su Licencia Comercial ha sido validada y aceptada exitosamente.\n\n"
+                "Según el documento, usted posee este negocio bajo **Propiedad Individual**. "
+                "El siguiente paso es subir su **Memorando de Asociación (MOA)**."
+                if language == "spanish" else
+                "Your Commercial License has been successfully validated and accepted.\n\n"
                 "Based on the document, you own this business by yourself, under **Sole "
                 "Proprietorship**. The next step is to upload your **MOA (Memorandum of "
-                "Association)**."),
-                    es=("Su Licencia Comercial ha sido validada y aceptada exitosamente.\n\n"
-                "Según el documento, usted posee este negocio bajo **Propiedad Individual**. "
-                "El siguiente paso es subir su **Memorando de Asociación (MOA)**."),
-                    ar=("تم التحقق من رخصتك التجارية وقبولها بنجاح.\n\n"
-                "وفقاً للمستند، تملك هذا النشاط بمفردك بصفة **ملكية فردية**. "
-                "الخطوة التالية هي تحميل **عقد التأسيس (MOA)**."))
+                "Association)**."
             )
             logger.info("[OWNERSHIP-AUTO] Announcing Sole Proprietorship classification")
 
@@ -2188,18 +2148,13 @@ Generate the message:"""
                     _mo_ki_loop_done_path = user_docs_path(email) / "ki_loop_done.json"
                     if not _mo_ki_loop_done_path.exists():
                         _mo_id_label_loop = "Passport" if doc_type.lower() == "passport" else "Emirates ID"
-                        _mo_loop_msg = localized(language,
-                            en=(f"The {_mo_id_label_loop} for member {clean_member_name} has been "
-                                f"successfully validated and accepted.\n\n"
-                                f"All member identity documents have been verified.\n\n"
-                                f"Would you like to add any additional Authorised Signatory "
-                                f"or Key Individual to this account?"),
-                            es=(f"El {('Pasaporte' if doc_type.lower() == 'passport' else 'Emirates ID')} del miembro {clean_member_name} ha sido validado y aceptado correctamente.\n\n"
-                                f"Todos los documentos de identidad de los miembros han sido verificados.\n\n"
-                                f"¿Desea añadir algún Firmante Autorizado o Persona Clave adicional a esta cuenta?"),
-                            ar=(f"تم التحقق من {('جواز السفر' if doc_type.lower() == 'passport' else 'الهوية الإماراتية')} للعضو {clean_member_name} وقبوله بنجاح.\n\n"
-                                f"تم التحقق من جميع مستندات هوية الأعضاء.\n\n"
-                                f"هل ترغب في إضافة مفوّض بالتوقيع أو فرد رئيسي آخر إلى هذا الحساب؟"))
+                        _mo_loop_msg = (
+                            f"The {_mo_id_label_loop} for member {clean_member_name} has been "
+                            f"successfully validated and accepted.\n\n"
+                            f"All member identity documents have been verified.\n\n"
+                            f"Would you like to add any additional Authorised Signatory "
+                            f"or Key Individual to this account?"
+                        )
                         logger.info(f"[SELF-DECL] KI loop gate: ki_loop_done.json not found — "
                               f"returning ki_loop_prompt for {email}")
                         dynamic_acknowledgment = _mo_loop_msg
@@ -2219,53 +2174,47 @@ Generate the message:"""
                             # generate_document_success_message still says "upload next EID".
                             # Replace it with a clear FATCA prompt.
                             dynamic_acknowledgment = (
-                                localized(language,
-                                    en=(f"The {_mo_id_label} for member {clean_member_name} has been "
-                                f"successfully validated and accepted.\n\n"
-                                f"All member identity documents have been verified. "
-                                f"Please proceed with the FATCA Declaration below."),
-                                    es=(f"El {_mo_id_label_es} del miembro {clean_member_name} ha sido "
+                                f"El {_mo_id_label_es} del miembro {clean_member_name} ha sido "
                                 f"validado y aceptado exitosamente.\n\n"
                                 f"Todos los documentos de identidad de los miembros han sido "
-                                f"verificados. Por favor, proceda con la Declaración FATCA a continuación."),
-                                    ar=(f"تم التحقق من {('جواز السفر' if doc_type.lower() == 'passport' else 'الهوية الإماراتية')} للعضو {clean_member_name} وقبوله بنجاح.\n\n"
-                                f"تم التحقق من جميع مستندات هوية الأعضاء. "
-                                f"يُرجى المتابعة بإقرار فاتكا (FATCA) أدناه."))
+                                f"verificados. Por favor, proceda con la Declaración FATCA a continuación."
+                                if language == "spanish"
+                                else
+                                f"The {_mo_id_label} for member {clean_member_name} has been "
+                                f"successfully validated and accepted.\n\n"
+                                f"All member identity documents have been verified. "
+                                f"Please proceed with the FATCA Declaration below."
                             )
                             logger.info(f"[SELF-DECL] All {len(_all_members_up)} member EIDs on disk — "
                                   f"triggering FATCA for {email}")
                         elif not _mo_pep_done:
                             pep_trigger = True
                             dynamic_acknowledgment = (
-                                localized(language,
-                                    en=(f"The {_mo_id_label} for member {clean_member_name} has been "
-                                f"successfully validated and accepted.\n\n"
-                                f"All member identity documents have been verified. "
-                                f"Please proceed with the PEP Declaration below."),
-                                    es=(f"El {_mo_id_label_es} del miembro {clean_member_name} ha sido "
+                                f"El {_mo_id_label_es} del miembro {clean_member_name} ha sido "
                                 f"validado y aceptado exitosamente.\n\n"
                                 f"Todos los documentos de identidad de los miembros han sido "
-                                f"verificados. Por favor, proceda con la Declaración PEP a continuación."),
-                                    ar=(f"تم التحقق من {('جواز السفر' if doc_type.lower() == 'passport' else 'الهوية الإماراتية')} للعضو {clean_member_name} وقبوله بنجاح.\n\n"
-                                f"تم التحقق من جميع مستندات هوية الأعضاء. "
-                                f"يُرجى المتابعة بإقرار الأشخاص المعرّضين سياسياً (PEP) أدناه."))
+                                f"verificados. Por favor, proceda con la Declaración PEP a continuación."
+                                if language == "spanish"
+                                else
+                                f"The {_mo_id_label} for member {clean_member_name} has been "
+                                f"successfully validated and accepted.\n\n"
+                                f"All member identity documents have been verified. "
+                                f"Please proceed with the PEP Declaration below."
                             )
                             logger.info(f"[SELF-DECL] FATCA done — triggering PEP for {email}")
                         else:
                             self_decl_trigger = True
                             dynamic_acknowledgment = (
-                                localized(language,
-                                    en=(f"The {_mo_id_label} for member {clean_member_name} has been "
-                                f"successfully validated and accepted.\n\n"
-                                f"All member identity documents have been verified. "
-                                f"Please proceed with the Self-Declaration below."),
-                                    es=(f"El {_mo_id_label_es} del miembro {clean_member_name} ha sido "
+                                f"El {_mo_id_label_es} del miembro {clean_member_name} ha sido "
                                 f"validado y aceptado exitosamente.\n\n"
                                 f"Todos los documentos de identidad de los miembros han sido "
-                                f"verificados. Por favor, proceda con la Auto-Declaración a continuación."),
-                                    ar=(f"تم التحقق من {('جواز السفر' if doc_type.lower() == 'passport' else 'الهوية الإماراتية')} للعضو {clean_member_name} وقبوله بنجاح.\n\n"
-                                f"تم التحقق من جميع مستندات هوية الأعضاء. "
-                                f"يُرجى المتابعة بالإقرار الذاتي أدناه."))
+                                f"verificados. Por favor, proceda con la Auto-Declaración a continuación."
+                                if language == "spanish"
+                                else
+                                f"The {_mo_id_label} for member {clean_member_name} has been "
+                                f"successfully validated and accepted.\n\n"
+                                f"All member identity documents have been verified. "
+                                f"Please proceed with the Self-Declaration below."
                             )
                             logger.info(f"[SELF-DECL] All {len(_all_members_up)} member EIDs on disk — "
                                   f"triggering Self-Declaration card for {email}")
@@ -2609,10 +2558,10 @@ async def run_cross_validation(req: CrossValidationRequest):
                     language=req.language
                 )
             except Exception:
-                msg = localized(None,
-                    en="Cross-validation completed successfully. All documents are consistent. Your application is now complete and will proceed to review.",
-                    es="La validación cruzada se completó correctamente. Todos los documentos son coherentes. Su solicitud está completa y pasará a revisión.",
-                    ar="اكتمل التحقق المتقاطع بنجاح. جميع المستندات متّسقة. اكتمل طلبك وسينتقل إلى المراجعة.")
+                msg = (
+                    "Cross-validation completed successfully. All documents are consistent. "
+                    "Your application is now complete and will proceed to review."
+                )
 
             # Mark onboarding complete
             #
@@ -2642,10 +2591,10 @@ async def run_cross_validation(req: CrossValidationRequest):
                     language=req.language
                 )
             except Exception:
-                msg = localized(None,
-                    en=f"Cross-validation found inconsistencies in your documents: {mismatch_summary}. Please review and re-upload the affected documents.",
-                    es=f"La validación cruzada encontró incoherencias en sus documentos: {mismatch_summary}. Revise y vuelva a cargar los documentos afectados.",
-                    ar=f"رصد التحقق المتقاطع عدم تطابق في مستنداتك: {mismatch_summary}. يُرجى المراجعة وإعادة تحميل المستندات المعنية.")
+                msg = (
+                    f"Cross-validation found inconsistencies in your documents: {mismatch_summary}. "
+                    "Please review and re-upload the affected documents."
+                )
 
         insert_conversation_log(
             user_email=req.email,
@@ -2788,6 +2737,10 @@ async def download_summary_pdf(user_email: str):
 # same ground truth. Duplicating that cascade here would be a second copy
 # of logic that only has to agree with the first, for a bulk request that
 # already ends with a call to the function that computes it correctly.
+# GrowX triggers don't need porting either — see upload_conversational's
+# own comment on _so_eid_uploaded: they were consolidated to fire once,
+# at self-declaration confirmation, not at document-upload time, for
+# either code path.
 #
 # Still single-file only, for now: the KI-loop-gate message copy variants
 # (the acknowledgement text shown alongside the card) aren't reproduced
@@ -2799,7 +2752,10 @@ async def upload_conversational_bulk(
     language: str = Form("english"),
     files: List[UploadFile] = File(...),
 ):
-    language = normalize_language(language)
+    language = language.lower().strip()
+    if language not in ["english", "spanish"]:
+        logger.warning(f"Invalid language '{language}', defaulting to english")
+        language = "english"
 
     user = get_user_by_email(email)
     if not user:
@@ -3406,10 +3362,7 @@ async def _bulk_member_documents(
             "document_type": None,
             "success": False,
             "is_valid": False,
-            "message": localized(None,
-                en="No pending member left for this file in this batch — upload it separately once a member is available.",
-                es="No queda ningún miembro pendiente para este archivo en este lote. Cárguelo por separado cuando haya un miembro disponible.",
-                ar="لا يوجد عضو معلّق متبقٍ لهذا الملف في هذه الدفعة — حمّله بشكل منفصل عند توفر عضو."),
+            "message": "No pending member left for this file in this batch — upload it separately once a member is available.",
             "name_matches_expected": None,
         })
 

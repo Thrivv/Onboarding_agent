@@ -33,8 +33,6 @@ export const AUTH = {
   LOGIN: '/auth/login',
   LOGOUT: '/auth/logout',
   VERIFY_SESSION: '/auth/verify-session',
-  REQUEST_PASSWORD_RESET: '/auth/request-password-reset',
-  RESET_PASSWORD: '/auth/reset-password',
 };
 
 export const REGISTER = {
@@ -48,7 +46,6 @@ export const REGISTER = {
   REGISTERED_THIS_WEEK: '/register/regisetered-this-week',
   ACCOUNT_TYPE_SUMMARY: '/register/account-type-summary',
   ONBOARDING_SUMMARY: '/register/onboarding-summary',
-  BEDROCK_STATUS: '/register/bedrock-status',
 };
 
 export const OTP = {

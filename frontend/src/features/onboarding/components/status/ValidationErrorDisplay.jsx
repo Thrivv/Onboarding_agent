@@ -1,11 +1,7 @@
 import React from 'react';
-import { useLanguage } from '../../../../context/LanguageContext';
 import { AlertCircle, CheckCircle } from 'lucide-react';
-import { translateDocName } from '../../utils/reportI18n';
 
-const ValidationErrorDisplay = ({ message, expectedDocuments, uploadedType }) => {
-  const { t } = useLanguage();
-  return (
+const ValidationErrorDisplay = ({ message, expectedDocuments, uploadedType }) => (
   <div className="max-w-md w-full mb-1">
     <div className="bg-red-50/50 border-2 border-red-100 rounded-[28px] overflow-hidden shadow-lg shadow-red-100/30">
       <div className="bg-red-600 px-5 py-4 flex items-center gap-3">
@@ -13,8 +9,8 @@ const ValidationErrorDisplay = ({ message, expectedDocuments, uploadedType }) =>
           <AlertCircle className="h-4 w-4 text-white" />
         </div>
         <div>
-          <h2 className="text-[10px] font-black text-white uppercase tracking-[0.2em] opacity-80 mb-0.5">{t('ui.validationAlert')}</h2>
-          <p className="text-white text-[15px] font-bold leading-tight">{t('ui.incorrectDocType')}</p>
+          <h2 className="text-[10px] font-black text-white uppercase tracking-[0.2em] opacity-80 mb-0.5">Validation Alert</h2>
+          <p className="text-white text-[15px] font-bold leading-tight">Incorrect Document Type</p>
         </div>
       </div>
 
@@ -27,9 +23,9 @@ const ValidationErrorDisplay = ({ message, expectedDocuments, uploadedType }) =>
 
         {expectedDocuments && expectedDocuments.length > 0 && (
           <div className="space-y-2.5">
-            <div className="flex items-center gap-2 ps-1">
+            <div className="flex items-center gap-2 pl-1">
               <div className="w-1 h-3 bg-red-500 rounded-full" />
-              <h3 className="text-[11px] font-black text-red-600 uppercase tracking-widest">{t('ui.requiredInstead')}</h3>
+              <h3 className="text-[11px] font-black text-red-600 uppercase tracking-widest">Required Instead:</h3>
             </div>
             <div className="grid grid-cols-1 gap-1.5">
               {expectedDocuments.map((doc, idx) => (
@@ -37,7 +33,7 @@ const ValidationErrorDisplay = ({ message, expectedDocuments, uploadedType }) =>
                   <div className="h-5 w-5 rounded-md bg-red-50 flex items-center justify-center">
                     <CheckCircle className="h-3 w-3 text-red-500" />
                   </div>
-                  <span className="text-[12px] font-black text-gray-900 tracking-tight">{translateDocName(t, doc)}</span>
+                  <span className="text-[12px] font-black text-gray-900 tracking-tight">{doc}</span>
                 </div>
               ))}
             </div>
@@ -46,14 +42,13 @@ const ValidationErrorDisplay = ({ message, expectedDocuments, uploadedType }) =>
 
         <div className="pt-2 border-t border-red-100/50">
           <p className="text-[11px] font-bold text-gray-500 text-center">
-            {t('ui.reuploadCorrect')}
+            Please re-upload one of the correct documents to proceed.
           </p>
         </div>
       </div>
     </div>
   </div>
-  );
-};
+);
 
 // ============================================================================
 // STAGE TRANSITION DISPLAY

@@ -9,7 +9,6 @@ FATCA and PEP apply to every ownership structure today — both the sole-owner
 and joint-ownership branches now run through the same compliance chain before
 reaching the product package step.
 """
-from app.i18n import localized
 
 import logging
 import json
@@ -17,7 +16,6 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, HTTPException
 import traceback
 from app.services.message_generator import MessageGenerator, ai_message_gen
-from app.utils.language import normalize_language
 from app.services.chatupload_helpers import (
     user_docs_path,
     member_progress_path,
@@ -94,36 +92,26 @@ async def fatca_not_applicable(req: FatcaNoRequest):
         result = save_fatca(req.email, str(user["id"]), fatca_applicable=False)
 
         # Log to conversation
-        user_language = normalize_language(req.language)
         try:
             from app.services.message_generator import MessageGenerator
-            msg = MessageGenerator.fatca_not_applicable_confirmed(language=user_language)
+            msg = MessageGenerator.fatca_not_applicable_confirmed(language="english")
         except Exception:
-            msg = localized(None,
-                en="Thanks — I've recorded FATCA as Not Applicable for you. Let's move on to the next step.",
-                es="Gracias: he registrado FATCA como No aplica. Pasemos al siguiente paso.",
-                ar="شكراً — سجّلتُ فاتكا (FATCA) على أنه لا ينطبق. لننتقل إلى الخطوة التالية.")
-
-        pep_already_done = get_pep_status_disk_only(req.email) == "completed"
-        pep_trigger = not pep_already_done
+            msg = "Thanks — I've recorded FATCA as Not Applicable for you. Let's move on to the next step."
 
         insert_conversation_log(
             user_email=req.email, role="agent", message=msg, channel="chat",
-            # pep_trigger must be persisted here, not just returned in the HTTP
-            # response — transformLogToMessage() on the frontend only rebuilds
-            # msg.pepTrigger from metadata.pep_trigger on a page rebuild
-            # (language switch, reload, logout/login). Without this the PEP
-            # card silently vanishes the moment history is re-fetched.
-            metadata={"message_type": "fatca_confirmed", "fatca_applicable": False, "pep_trigger": pep_trigger}
+            metadata={"message_type": "fatca_confirmed", "fatca_applicable": False}
         )
 
         logger.info(f"[FATCA] Not Applicable saved for: {req.email}")
+
+        pep_already_done = get_pep_status_disk_only(req.email) == "completed"
 
         return {
             "success": True,
             "message": msg,
             "fatca_applicable": False,
-            "pep_trigger": pep_trigger,
+            "pep_trigger": not pep_already_done,
         }
 
     except (HTTPException, DomainError):
@@ -158,32 +146,26 @@ async def fatca_submit(req: FatcaYesRequest):
 
         result = save_fatca(req.email, str(user["id"]), fatca_applicable=True, form_data=form_dict)
 
-        user_language = normalize_language(req.language)
         try:
             from app.services.message_generator import MessageGenerator
-            msg = MessageGenerator.fatca_submitted_confirmed(language=user_language)
+            msg = MessageGenerator.fatca_submitted_confirmed(language="english")
         except Exception:
-            msg = localized(None,
-                en="Your FATCA details are saved — thank you. Let's continue with what's left.",
-                es="Sus datos FATCA se han guardado, gracias. Continuemos con lo que falta.",
-                ar="تم حفظ بيانات فاتكا (FATCA) — شكراً لك. لنتابع ما تبقّى.")
-
-        pep_already_done = get_pep_status_disk_only(req.email) == "completed"
-        pep_trigger = not pep_already_done
+            msg = "Your FATCA details are saved — thank you. Let's continue with what's left."
 
         insert_conversation_log(
             user_email=req.email, role="agent", message=msg, channel="chat",
-            # Same reload-survival fix as fatca/not-applicable above.
-            metadata={"message_type": "fatca_confirmed", "fatca_applicable": True, "pep_trigger": pep_trigger}
+            metadata={"message_type": "fatca_confirmed", "fatca_applicable": True}
         )
 
         logger.info(f"[FATCA] Form submitted for: {req.email}")
+
+        pep_already_done = get_pep_status_disk_only(req.email) == "completed"
 
         return {
             "success": True,
             "message": msg,
             "fatca_applicable": True,
-            "pep_trigger": pep_trigger,
+            "pep_trigger": not pep_already_done,
         }
 
     except (HTTPException, DomainError):
@@ -226,34 +208,13 @@ async def pep_submit(req: PepRequest):
         result = save_pep(req.email, str(user["id"]), pep_data)
         logger.info(f"[PEP] Submitted for: {req.email}")
 
-        user_language = normalize_language(req.language)
         try:
-            msg = MessageGenerator.pep_submitted_confirmed(language=user_language)
+            msg = MessageGenerator.pep_submitted_confirmed(language="english")
         except Exception:
             msg = "Thanks — your PEP declaration is saved. Let's continue."
 
         from app.services.product_package_service import is_package_done
-        package_done = is_package_done(req.email)
-
-        # NOTE: unlike fatca/not-applicable and fatca/submit above, this endpoint
-        # previously had NO insert_conversation_log call at all — the PEP
-        # submission was never written to conversation history, so
-        # transformLogToMessage() had nothing to rebuild product_package_trigger
-        # / self_declaration_trigger from on any page rebuild (language switch,
-        # reload, logout/login). This is the root cause of the PEP → next-step
-        # card disappearing after a toggle: not just a missing metadata key like
-        # the FATCA endpoints, but a missing log entry entirely.
-        insert_conversation_log(
-            user_email=req.email, role="agent", message=msg, channel="chat",
-            metadata={
-                "message_type": "pep_confirmed",
-                "pep_applicable": True,
-                "product_package_trigger": not package_done,
-                "self_declaration_trigger": package_done,
-            }
-        )
-
-        if package_done:
+        if is_package_done(req.email):
             return {
                 "success": True,
                 "message": msg,
@@ -291,31 +252,13 @@ async def pep_not_applicable(req: PepRequest):
         result = save_pep(req.email, str(user["id"]), pep_data)
         logger.info(f"[PEP] Not Applicable saved for: {req.email}")
 
-        user_language = normalize_language(req.language)
         try:
-            msg = MessageGenerator.pep_not_applicable_confirmed(language=user_language)
+            msg = MessageGenerator.pep_not_applicable_confirmed(language="english")
         except Exception:
-            msg = localized(None,
-                en="Got it — I've recorded PEP as Not Applicable for you. Let's continue.",
-                es="Entendido: he registrado PEP como No aplica. Continuemos.",
-                ar="تم — سجّلتُ إقرار الأشخاص المعرّضين سياسياً (PEP) على أنه لا ينطبق. لنتابع.")
+            msg = "Got it — I've recorded PEP as Not Applicable for you. Let's continue."
 
         from app.services.product_package_service import is_package_done
-        package_done = is_package_done(req.email)
-
-        # Same fix as pep/submit above — this endpoint had no insert_conversation_log
-        # call at all, so the PEP step was invisible to any history rebuild.
-        insert_conversation_log(
-            user_email=req.email, role="agent", message=msg, channel="chat",
-            metadata={
-                "message_type": "pep_confirmed",
-                "pep_applicable": False,
-                "product_package_trigger": not package_done,
-                "self_declaration_trigger": package_done,
-            }
-        )
-
-        if package_done:
+        if is_package_done(req.email):
             return {
                 "success": True,
                 "message": msg,
@@ -405,19 +348,18 @@ async def self_declaration_summary(user_email: str):
         ki_summary = get_ki_summary(user_email)
 
         # ── Declaration text ─────────────────────────────────────────────────
-        # In the request's language (X-User-Language). The frontend renders its
-        # own translation so the text also follows a toggle after this loads;
-        # `declaration_text_i18n` carries all three for other API consumers.
-        from app.i18n import render_message
-        declaration_text = render_message("declaration.text", normalize_language(None))
+        declaration_text = (
+            "I confirm that all information and documents submitted during this onboarding "
+            "process are accurate, complete, and truthful to the best of my knowledge. "
+            "I understand that providing false information may result in rejection of my application."
+        )
 
         return {
             "email": user_email,
             "uploaded_documents": submitted_docs,
             "fatca": fatca_summary,
             "key_individuals": ki_summary,
-            "declaration_text": str(declaration_text),
-            "declaration_text_i18n": declaration_text.variants,
+            "declaration_text": declaration_text,
         }
 
     except (HTTPException, DomainError):
@@ -444,7 +386,7 @@ async def self_declaration_confirm(req: SelfDeclConfirmRequest):
 
         user_data = dict(user) if not isinstance(user, dict) else user
         user_name = user_data.get("name", "") or user_data.get("first_name", "User")
-        user_language = normalize_language(req.language)
+        user_language = (req.language or "english").lower()
         now = datetime.now(timezone.utc).isoformat()
 
         # ── 1. Persist confirmation timestamp ─────────────────────────────────
@@ -468,10 +410,7 @@ async def self_declaration_confirm(req: SelfDeclConfirmRequest):
             from app.services.message_generator import MessageGenerator
             confirm_msg = MessageGenerator.self_declaration_confirmed(language=user_language)
         except Exception:
-            confirm_msg = localized(None,
-                en="Thanks for confirming your self-declaration. I'm now cross-checking everything you've submitted.",
-                es="Gracias por confirmar su autodeclaración. Ahora estoy verificando todo lo que ha enviado.",
-                ar="شكراً لتأكيد إقرارك الذاتي. أقوم الآن بمطابقة كل ما قدّمته.")
+            confirm_msg = "Thanks for confirming your self-declaration. I'm now cross-checking everything you've submitted."
 
         insert_conversation_log(
             user_email=req.email, role="agent", message=confirm_msg, channel="chat",
@@ -494,10 +433,7 @@ async def self_declaration_confirm(req: SelfDeclConfirmRequest):
                         language=user_language
                     )
                 except Exception:
-                    cv_msg = localized(None,
-                        en="Everything checks out — all your documents are consistent, and your onboarding is complete.",
-                        es="Todo está en orden: sus documentos son coherentes y la incorporación está completa.",
-                        ar="كل شيء سليم — جميع مستنداتك متّسقة واكتملت عملية التسجيل.")
+                    cv_msg = "Everything checks out — all your documents are consistent, and your onboarding is complete."
 
                 # ── 3. SurePass + completion ──────────────────────────────────
                 # Pass the cross-validation result we already computed above
@@ -515,6 +451,56 @@ async def self_declaration_confirm(req: SelfDeclConfirmRequest):
                 if surepass_valid:
                     logger.info(f"[SELF-DECL] SurePass passed — marking onboarding complete")
                     update_user_onboarding_status(req.email, True, "onboarding_complete")
+
+                    # ── GrowX: single consolidated trigger point for ALL 3 APIs.
+                    # By now cross-validation + SurePass have both passed, so
+                    # real EID, Trade License, and package data are guaranteed
+                    # to already exist — fire API 1+2 (user create + set
+                    # password) then API 3 (SME company create), in sequence,
+                    # non-blocking. Each call has its own try/except so a
+                    # failure in one doesn't stop the other from attempting.
+                    # ── DISABLED (temporary) — GrowX API calling turned off for now.
+                    # Uncomment this block to re-enable the GrowX auto-trigger
+                    # (API 1+2 user create/set-password, then API 3 SME create).
+                    # logger.debug(f"[GROWX] conditions met (cross-validation + SurePass passed) — scheduling auto-trigger for {req.email}")
+                    # try:
+                    #     from app.api.routes.growx_integration import trigger_api1_api2, trigger_api3
+                    #
+                    #     async def _fire_growx_all(_gx_email: str):
+                    #         _gx_userid = None
+                    #         _api1_ok = False
+                    #         _api3_ok = False
+                    #         try:
+                    #             try:
+                    #                 _api12_result = await trigger_api1_api2(_gx_email)
+                    #                 if isinstance(_api12_result, dict):
+                    #                     _gx_userid = _api12_result.get("growx_user_id")
+                    #                     _api1_ok = bool(_api12_result.get("success"))
+                    #             except Exception as _e1:
+                    #                 logger.error(f"[GROWX] trigger_api1_api2 failed (self-declaration) for {_gx_email}: {_e1}", exc_info=True)
+                    #             # crtdBy: pass the real userId API 1 just returned, if any.
+                    #             # If API 1 failed/returned nothing, still fire API 3 with
+                    #             # crtdBy=None (falls back to any previously-saved
+                    #             # growx_user_id inside trigger_api3, or None) — let GrowX
+                    #             # decide what to do with it rather than skip the call.
+                    #             try:
+                    #                 _api3_result = await trigger_api3(_gx_email, crtd_by=_gx_userid)
+                    #                 _api3_ok = bool(_api3_result.get("success")) if isinstance(_api3_result, dict) else False
+                    #             except Exception as _e3:
+                    #                 logger.error(f"[GROWX] trigger_api3 failed (self-declaration) for {_gx_email}: {_e3}", exc_info=True)
+                    #         except Exception as _e_all:
+                    #             # Catches anything outside the two guarded calls above
+                    #             # (e.g. an import failure) so it's never silently dropped.
+                    #             logger.error(f"[GROWX] unexpected error in auto-trigger for {_gx_email}: {_e_all}", exc_info=True)
+                    #         finally:
+                    #             logger.info(
+                    #                 f"[GROWX] auto-trigger finished for {_gx_email}: "
+                    #                 f"api1/2={'OK' if _api1_ok else 'FAILED'} api3={'OK' if _api3_ok else 'FAILED'}"
+                    #             )
+                    #
+                    #     _spawn_background_task(_fire_growx_all(req.email))
+                    # except Exception as _gx_e:
+                    #     logger.error(f"[GROWX] could not schedule GrowX sync (self-declaration) for {req.email}: {_gx_e}", exc_info=True)
 
                     try:
                         send_validation_passed_email(req.email, user_name)
@@ -536,16 +522,18 @@ async def self_declaration_confirm(req: SelfDeclConfirmRequest):
                     }
                 else:
                     logger.error(f"[SELF-DECL] SurePass failed: {surepass_message}")
+                    logger.info(f"[GROWX] ⏭ SurePass failed for {req.email} — GrowX auto-trigger NOT scheduled")
                     cv_result = {
                         "passed": False,
                         "mismatches": [surepass_message],
-                        "message": localized(None,
-                            en=f"⚠️ Government verification failed: {surepass_message}\n\nPlease review and re-upload your Emirates ID.",
-                            es=f"⚠️ La verificación gubernamental falló: {surepass_message}\n\nRevise y vuelva a cargar su Emirates ID.",
-                            ar=f"⚠️ فشل التحقق الحكومي: {surepass_message}\n\nيُرجى المراجعة وإعادة تحميل الهوية الإماراتية."),
+                        "message": (
+                            f"⚠️ Government verification failed: {surepass_message}\n\n"
+                            "Please review and re-upload your Emirates ID."
+                        ),
                         "onboarding_complete": False,
                     }
             else:
+                logger.info(f"[GROWX] ⏭ Cross-validation failed for {req.email} — GrowX auto-trigger NOT scheduled")
                 mismatch_summary = "\n".join(f"  • {m}" for m in mismatches[:5])
                 try:
                     cv_msg = MessageGenerator.cross_validation_failure(
@@ -554,10 +542,10 @@ async def self_declaration_confirm(req: SelfDeclConfirmRequest):
                         language=user_language
                     )
                 except Exception:
-                    cv_msg = localized(None,
-                        en=f"⚠️ Cross-validation found inconsistencies:\n\n{mismatch_summary}\n\nPlease review and re-upload the affected documents.",
-                        es=f"⚠️ La validación cruzada encontró incoherencias:\n\n{mismatch_summary}\n\nRevise y vuelva a cargar los documentos afectados.",
-                        ar=f"⚠️ رصد التحقق المتقاطع عدم تطابق:\n\n{mismatch_summary}\n\nيُرجى المراجعة وإعادة تحميل المستندات المعنية.")
+                    cv_msg = (
+                        f"⚠️ Cross-validation found inconsistencies:\n\n{mismatch_summary}\n\n"
+                        "Please review and re-upload the affected documents."
+                    )
                 try:
                     send_validation_failed_email(
                         to_email=req.email,
@@ -578,10 +566,7 @@ async def self_declaration_confirm(req: SelfDeclConfirmRequest):
             cv_result = {
                 "passed": False,
                 "mismatches": [],
-                "message": localized(None,
-                    en=f"Cross-validation could not be completed: {cv_error}",
-                    es=f"No se pudo completar la validación cruzada: {cv_error}",
-                    ar=f"تعذّر إكمال التحقق المتقاطع: {cv_error}"),
+                "message": f"Cross-validation could not be completed: {cv_error}",
                 "onboarding_complete": False,
             }
 

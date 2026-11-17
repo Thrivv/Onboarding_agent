@@ -6,8 +6,8 @@ services:
       dockerfile: Dockerfile
       args:
         - REACT_APP_API_URL=/onboarding/ai/api
-    image: thrivvdevaccount/thrivv_onboarding_langraph:latest
-    container_name: OnboardLG-app
+    image: thrivvdevaccount/thrivv.ai_onboarding_upgrading:latest
+    container_name: Onboard-app
     ports:
       - "9000:9000"
       - "7000:7000"
@@ -44,8 +44,8 @@ services:
       dockerfile: Dockerfile
       args:
         - REACT_APP_API_URL=/onboarding/ai/api
-    image: thrivvdevaccount/thrivv_onboarding_langraph:latest
-    container_name: OnboardLG-reply-loop
+    image: thrivvdevaccount/thrivv.ai_onboarding_upgrading:latest
+    container_name: Onboard-reply-loop
     env_file:
       - .env.docker
     environment:
@@ -57,7 +57,7 @@ services:
       - ./backend/documents:/app/backend/documents
       - ./backend/summary:/app/backend/summary
       - ./logs/reply-loop:/var/log/reply-loop
-    working_dir: /app 
+    working_dir: /app
     depends_on:
       app:
         condition: service_healthy

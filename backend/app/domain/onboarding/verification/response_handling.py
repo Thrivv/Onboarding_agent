@@ -23,8 +23,8 @@ Framework-free: no FastAPI import.
 """
 
 from __future__ import annotations
-from app.i18n import render_message, members_summary, concat
 
+from __future__ import annotations
 import logging
 import os
 import json
@@ -32,10 +32,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import List, Optional
 import traceback
-from app.i18n import localized
-from app.i18n.messages import doc_name as i18n_doc_name
 from app.services.message_generator import MessageGenerator, ai_message_gen
-from app.utils.language import normalize_language
 from app.services.document_messaging import (
     # generate_dynamic_valid_document_response is not called here — it is
     # re-exported from this module and imported by documentpage.py.
@@ -128,7 +125,10 @@ def handle_verification_response(
     # ============================================================================
     # STEP 1: USE PASSED LANGUAGE (DON'T AUTO-DETECT)
     # ============================================================================
-    user_language = normalize_language(language)
+    user_language = language.lower().strip()
+    if user_language not in ["english", "spanish"]:
+        logger.warning(f"[VERIFY] Invalid language '{language}', defaulting to english")
+        user_language = "english"
 
     logger.info(f"[VERIFY] Using selected language: {user_language.upper()}")
     logger.info(f"[VERIFY] User message: '{user_message}'")
@@ -241,14 +241,11 @@ def handle_verification_response(
                 # and return ki_loop_prompt so the frontend shows the card.
                 _ki_loop_done_path = user_docs_path(email) / "ki_loop_done.json"
                 if not _ki_loop_done_path.exists():
-                    _loop_msg = localized(user_language,
-                        en=("All identity documents have been verified.\n\n"
-                            "Would you like to add any additional Authorised Signatory "
-                            "or Key Individual to this account?"),
-                        es=("Todos los documentos de identidad han sido verificados.\n\n"
-                            "¿Desea añadir algún Firmante Autorizado o Persona Clave adicional a esta cuenta?"),
-                        ar=("تم التحقق من جميع مستندات الهوية.\n\n"
-                            "هل ترغب في إضافة مفوّض بالتوقيع أو فرد رئيسي آخر إلى هذا الحساب؟"))
+                    _loop_msg = (
+                        "All identity documents have been verified.\n\n"
+                        "Would you like to add any additional Authorised Signatory "
+                        "or Key Individual to this account?"
+                    )
                     logger.info(f"[VERIFY] KI loop gate: ki_loop_done.json not found — returning ki_loop_prompt")
                     return {
                         "is_verification":           True,
@@ -269,10 +266,10 @@ def handle_verification_response(
                 _g_pep_done   = get_pep_status_disk_only(email) == "completed"
 
                 if not _g_fatca_done:
-                    _guard_msg = localized(None,
-                        en=f"All {_total} member identity documents have been successfully verified. Please complete your **FATCA Declaration** below before proceeding.",
-                        es=f"Los {_total} documentos de identidad de los miembros se han verificado correctamente. Complete su **Declaración FATCA** a continuación antes de continuar.",
-                        ar=f"تم التحقق بنجاح من جميع مستندات هوية الأعضاء ({_total}). يُرجى استكمال **إقرار فاتكا (FATCA)** أدناه قبل المتابعة.")
+                    _guard_msg = (
+                        f"All {_total} member identity documents have been successfully verified. "
+                        f"Please complete your **FATCA Declaration** below before proceeding."
+                    )
                     return {
                         "is_verification": True,
                         "verified": True,
@@ -284,7 +281,10 @@ def handle_verification_response(
                     }
 
                 if not _g_pep_done:
-                    _guard_msg = render_message("ki_loop.pep", None, summary="")
+                    _guard_msg = (
+                        f"FATCA declaration saved.\n\n"
+                        f"Please complete your **PEP (Politically Exposed Person) Declaration** below."
+                    )
                     return {
                         "is_verification": True,
                         "verified": True,
@@ -298,7 +298,11 @@ def handle_verification_response(
                 # ── Product Package gate ──────────────────────────────────────
                 # Reached once FATCA + PEP are both done, for every ownership type.
                 if not is_package_done(email):
-                    _pkg_msg = render_message("ki_loop.package", None, summary="")
+                    _pkg_msg = (
+                        "FATCA and PEP declarations are complete.\n\n"
+                        "Please select your **Product Package** below. "
+                        "Review the available packages and choose the one that best suits your business needs."
+                    )
                     logger.info(f"[VERIFY] Product Package gate: product_package.json not found — returning product_package_trigger")
                     return {
                         "is_verification":           True,
@@ -312,20 +316,22 @@ def handle_verification_response(
                     }
                 # ── End Product Package gate ───────────────────────────────────
 
-                _guard_msg = localized(user_language,
-                    en=(f"All {_total} member identity documents have been "
-                        f"successfully verified.\n\n"
-                        f"The final step before account activation is the "
-                        f"**Self-Declaration**. Please review and confirm the declaration "
-                        f"below to complete your onboarding process."),
-                    es=(f"Los {_total} documentos de identidad de los miembros han sido "
+                if user_language == "spanish":
+                    _guard_msg = (
+                        f"Los {_total} documentos de identidad de los miembros han sido "
                         f"verificados exitosamente.\n\n"
                         f"El paso final antes de la activación de la cuenta es la "
                         f"**Auto-Declaración**. Por favor, revise y confirme la declaración "
-                        f"a continuación para completar su proceso de incorporación."),
-                    ar=(f"تم التحقق بنجاح من جميع مستندات هوية الأعضاء ({_total}).\n\n"
-                        f"الخطوة الأخيرة قبل تفعيل الحساب هي **الإقرار الذاتي**. "
-                        f"يُرجى مراجعة الإقرار أدناه وتأكيده لاستكمال إجراءات التسجيل."))
+                        f"a continuación para completar su proceso de incorporación."
+                    )
+                else:
+                    _guard_msg = (
+                        f"All {_total} member identity documents have been "
+                        f"successfully verified.\n\n"
+                        f"The final step before account activation is the "
+                        f"**Self-Declaration**. Please review and confirm the declaration "
+                        f"below to complete your onboarding process."
+                    )
                 return {
                     "is_verification": True,
                     "verified": True,
@@ -380,13 +386,12 @@ def handle_verification_response(
 
                     if not _r_fatca_done:
                         _msg = (
-                            localized(user_language,
-                                en=(f"All {_total} member identity documents have been successfully verified. "
-                            f"Please complete your **FATCA Declaration** below before proceeding."),
-                                es=(f"Los {_total} documentos de identidad de los miembros han sido verificados exitosamente. "
-                            f"Por favor complete su **Declaración FATCA** a continuación."),
-                                ar=(f"تم التحقق بنجاح من جميع مستندات هوية الأعضاء ({_total}). "
-                            f"يُرجى استكمال **إقرار فاتكا (FATCA)** أدناه قبل المتابعة."))
+                            f"Los {_total} documentos de identidad de los miembros han sido verificados exitosamente. "
+                            f"Por favor complete su **Declaración FATCA** a continuación."
+                            if user_language == "spanish"
+                            else
+                            f"All {_total} member identity documents have been successfully verified. "
+                            f"Please complete your **FATCA Declaration** below before proceeding."
                         )
                         return {
                             "is_verification": True, "verified": True,
@@ -396,10 +401,10 @@ def handle_verification_response(
 
                     if not _r_pep_done:
                         _msg = (
-                            localized(user_language,
-                                en=("FATCA declaration saved.\n\nPlease complete your **PEP Declaration** below."),
-                                es=("Declaración FATCA guardada.\n\nPor favor complete su **Declaración PEP** a continuación."),
-                                ar=("تم حفظ إقرار فاتكا.\n\nيُرجى استكمال **إقرار الأشخاص المعرّضين سياسياً (PEP)** أدناه."))
+                            "Declaración FATCA guardada.\n\nPor favor complete su **Declaración PEP** a continuación."
+                            if user_language == "spanish"
+                            else
+                            "FATCA declaration saved.\n\nPlease complete your **PEP Declaration** below."
                         )
                         return {
                             "is_verification": True, "verified": True,
@@ -409,10 +414,10 @@ def handle_verification_response(
 
                     if not is_package_done(email):
                         _msg = (
-                            localized(user_language,
-                                en=("FATCA and PEP declarations are complete.\n\nPlease select your **Product Package** below."),
-                                es=("Declaraciones FATCA y PEP completadas.\n\nPor favor seleccione su **Paquete de Producto** a continuación."),
-                                ar=("اكتمل إقرارا فاتكا والأشخاص المعرّضين سياسياً.\n\nيُرجى اختيار **باقة المنتجات** أدناه."))
+                            "Declaraciones FATCA y PEP completadas.\n\nPor favor seleccione su **Paquete de Producto** a continuación."
+                            if user_language == "spanish"
+                            else
+                            "FATCA and PEP declarations are complete.\n\nPlease select your **Product Package** below."
                         )
                         return {
                             "is_verification": True, "verified": True,
@@ -422,15 +427,13 @@ def handle_verification_response(
                         }
 
                     _msg = (
-                        localized(user_language,
-                            en=(f"All {_total} member identity documents have been successfully verified.\n\n"
+                        f"Los {_total} documentos de identidad de los miembros han sido "
+                        f"verificados exitosamente.\n\nEl paso final es la **Auto-Declaración**."
+                        if user_language == "spanish"
+                        else
+                        f"All {_total} member identity documents have been successfully verified.\n\n"
                         f"The final step before account activation is the **Self-Declaration**. "
-                        f"Please review and confirm the declaration below."),
-                            es=(f"Los {_total} documentos de identidad de los miembros han sido "
-                        f"verificados exitosamente.\n\nEl paso final es la **Auto-Declaración**."),
-                            ar=(f"تم التحقق بنجاح من جميع مستندات هوية الأعضاء ({_total}).\n\n"
-                        f"الخطوة الأخيرة قبل تفعيل الحساب هي **الإقرار الذاتي**. "
-                        f"يُرجى مراجعة الإقرار أدناه وتأكيده."))
+                        f"Please review and confirm the declaration below."
                     )
                     return {
                         "is_verification": True, "verified": True,
@@ -440,10 +443,10 @@ def handle_verification_response(
         except Exception as _re:
             logger.warning(f"[VERIFY] Recovery check failed: {_re}")
 
-        no_doc_message = localized(user_language,
-            en=("I couldn't find a document to verify. Please upload a document first."),
-            es=("No pude encontrar un documento para verificar. Por favor, sube un documento primero."),
-            ar=("لم أجد مستنداً للتحقق منه. يُرجى تحميل مستند أولاً."))
+        if user_language == "spanish":
+            no_doc_message = "No pude encontrar un documento para verificar. Por favor, sube un documento primero."
+        else:
+            no_doc_message = "I couldn't find a document to verify. Please upload a document first."
 
         return {
             "is_verification": True,
@@ -467,6 +470,13 @@ def handle_verification_response(
 
         doc_type = latest_doc_type or "document"
         user_name = user_data.get("name", "User")
+
+        # NOTE: GrowX API 1+2 no longer fire here. Consolidated to a single
+        # trigger point at self-declaration confirmation (see
+        # self_declaration_confirm()) instead of one hook per account-type
+        # flow — simpler to reason about and test, and by self-declaration
+        # time all data (EID + Trade License + package) is guaranteed to
+        # already exist and be cross-validated.
 
         logger.debug(f"Document marked as verified:")
         logger.info(f"  - Type: {doc_type}")
@@ -561,16 +571,18 @@ def handle_verification_response(
                             )
                         except Exception as e:
                             logger.warning(f"Progress message generation failed: {e}")
-                            next_message = localized(user_language,
-                                en=(f"{latest_member_name}'s identity document ({id_label}) verified!\n\n"
-                                    f"Progress: {verified_count}/{total_members}\n\n"
-                                    f"Next: {next_member}"),
-                                es=(f"¡Documento de identidad de {latest_member_name} verificado!\n\n"
+                            if user_language == "spanish":
+                                next_message = (
+                                    f"¡Documento de identidad de {latest_member_name} verificado!\n\n"
                                     f"Progreso: {verified_count}/{total_members}\n\n"
-                                    f"Siguiente: {next_member}"),
-                                ar=(f"تم التحقق من مستند هوية {latest_member_name}!\n\n"
-                                    f"التقدّم: {verified_count}/{total_members}\n\n"
-                                    f"التالي: {next_member}"))
+                                    f"Siguiente: {next_member}"
+                                )
+                            else:
+                                next_message = (
+                                    f"{latest_member_name}'s identity document ({id_label}) verified!\n\n"
+                                    f"Progress: {verified_count}/{total_members}\n\n"
+                                    f"Next: {next_member}"
+                                )
 
                         return {
                             "is_verification": True,
@@ -599,15 +611,12 @@ def handle_verification_response(
                         # file and instruct the user to upload Ejari.
                         _vfy_ki_loop_done = user_docs_path(email) / "ki_loop_done.json"
                         if not _vfy_ki_loop_done.exists():
-                            _vfy_loop_msg = localized(user_language,
-                                en=(f"All {total_members} identity document(s) have been "
-                                    f"successfully verified.\n\n"
-                                    f"Would you like to add any additional Authorised Signatory "
-                                    f"or Key Individual to this account?"),
-                                es=(f"Los {total_members} documento(s) de identidad han sido verificados correctamente.\n\n"
-                                    f"¿Desea añadir algún Firmante Autorizado o Persona Clave adicional a esta cuenta?"),
-                                ar=(f"تم التحقق بنجاح من جميع مستندات الهوية ({total_members}).\n\n"
-                                    f"هل ترغب في إضافة مفوّض بالتوقيع أو فرد رئيسي آخر إلى هذا الحساب؟"))
+                            _vfy_loop_msg = (
+                                f"All {total_members} identity document(s) have been "
+                                f"successfully verified.\n\n"
+                                f"Would you like to add any additional Authorised Signatory "
+                                f"or Key Individual to this account?"
+                            )
                             logger.info(f"[VERIFY] KI loop gate (SO verify path): ki_loop_done.json not found — returning ki_loop_prompt")
                             try:
                                 insert_conversation_log(
@@ -664,15 +673,18 @@ def handle_verification_response(
                                     _vki.get("verification_status") == "verified" or
                                     _vname.upper() in _vfy_verified_names
                                 )
+                                _vstatus = "Verified" if _vki_is_verified else "⏳ Pending"
                                 if _vname:
-                                    _vfy_summary_lines.append({
-                                        "name": _vname, "is_as": bool(_vis_as), "is_ubo": False,
-                                        "share": _vshare, "verified": bool(_vki_is_verified),
-                                    })
+                                    _vfy_summary_lines.append(
+                                        f"{_vi}. **{_vname}** — {_vrole} | Share: {_vshare} | {_vstatus}"
+                                    )
                         except Exception as _vex:
                             logger.warning(f"[VERIFY] Could not build SO summary: {_vex}")
 
-                        _vfy_summary_block = members_summary(_vfy_summary_lines, "summary.header_final", None)
+                        _vfy_summary_block = (
+                            "\n\n**Final Members List:**\n" + "\n".join(_vfy_summary_lines)
+                            if _vfy_summary_lines else ""
+                        )
 
                         # Re-enabled: Single Owner now runs the same FATCA → PEP →
                         # Product Package chain as Multiple Owner instead of
@@ -681,7 +693,11 @@ def handle_verification_response(
                         _so_verify_pep_done   = get_pep_status_disk_only(email) == "completed"
 
                         if not _so_verify_fatca_done:
-                            next_message = render_message("ki_loop.so_fatca", None, summary=_vfy_summary_block)
+                            next_message = (
+                                f"All identity documents have been verified."
+                                f"{_vfy_summary_block}\n\n"
+                                f"Please complete your **FATCA Declaration** below before proceeding."
+                            )
                             try:
                                 insert_conversation_log(
                                     user_email=email, role="agent", message=next_message, channel="chat",
@@ -700,7 +716,10 @@ def handle_verification_response(
                             }
 
                         if not _so_verify_pep_done:
-                            next_message = render_message("ki_loop.pep", None, summary=_vfy_summary_block)
+                            next_message = (
+                                f"FATCA declaration saved.{_vfy_summary_block}\n\n"
+                                f"Please complete your **PEP (Politically Exposed Person) Declaration** below."
+                            )
                             try:
                                 insert_conversation_log(
                                     user_email=email, role="agent", message=next_message, channel="chat",
@@ -719,7 +738,11 @@ def handle_verification_response(
                             }
 
                         if not is_package_done(email):
-                            next_message = render_message("ki_loop.package", None, summary=_vfy_summary_block)
+                            next_message = (
+                                f"FATCA and PEP declarations are complete."
+                                f"{_vfy_summary_block}\n\n"
+                                f"Please complete your **Product Package** below before proceeding."
+                            )
                             try:
                                 insert_conversation_log(
                                     user_email=email, role="agent", message=next_message, channel="chat",
@@ -738,12 +761,10 @@ def handle_verification_response(
                                 "self_declaration_trigger": False,
                             }
 
-                        next_message = concat(None,
-                            localized(None, en="All documents complete.", es="Todos los documentos están completos.", ar="اكتملت جميع المستندات."),
-                            _vfy_summary_block,
-                            localized(None, en="\n\nPlease complete your **Self-Declaration** below.",
-                                      es="\n\nComplete su **Autodeclaración** a continuación.",
-                                      ar="\n\nيُرجى استكمال **الإقرار الذاتي** أدناه."))
+                        next_message = (
+                            f"All documents complete.{_vfy_summary_block}\n\n"
+                            f"Please complete your **Self-Declaration** below."
+                        )
                         try:
                             insert_conversation_log(
                                 user_email=email, role="agent", message=next_message, channel="chat",
@@ -769,13 +790,12 @@ def handle_verification_response(
 
                     if not _mo_fatca_done:
                         next_message = (
-                            localized(user_language,
-                                en=(f"All {total_members} member identity documents have been successfully verified. "
-                            f"Please complete your **FATCA Declaration** below before proceeding."),
-                                es=(f"Los {total_members} documentos de identidad de los miembros han sido verificados exitosamente. "
-                            f"Por favor complete su **Declaración FATCA** a continuación."),
-                                ar=(f"تم التحقق بنجاح من جميع مستندات هوية الأعضاء ({total_members}). "
-                            f"يُرجى استكمال **إقرار فاتكا (FATCA)** أدناه قبل المتابعة."))
+                            f"Los {total_members} documentos de identidad de los miembros han sido verificados exitosamente. "
+                            f"Por favor complete su **Declaración FATCA** a continuación."
+                            if user_language == "spanish"
+                            else
+                            f"All {total_members} member identity documents have been successfully verified. "
+                            f"Please complete your **FATCA Declaration** below before proceeding."
                         )
                         try:
                             insert_conversation_log(
@@ -792,10 +812,10 @@ def handle_verification_response(
 
                     if not _mo_pep_done:
                         next_message = (
-                            localized(user_language,
-                                en=("FATCA declaration saved.\n\nPlease complete your **PEP (Politically Exposed Person) Declaration** below."),
-                                es=("Declaración FATCA guardada.\n\nPor favor complete su **Declaración PEP** a continuación."),
-                                ar=("تم حفظ إقرار فاتكا.\n\nيُرجى استكمال **إقرار الأشخاص المعرّضين سياسياً (PEP)** أدناه."))
+                            "Declaración FATCA guardada.\n\nPor favor complete su **Declaración PEP** a continuación."
+                            if user_language == "spanish"
+                            else
+                            "FATCA declaration saved.\n\nPlease complete your **PEP (Politically Exposed Person) Declaration** below."
                         )
                         try:
                             insert_conversation_log(
@@ -813,10 +833,10 @@ def handle_verification_response(
                     # FATCA + PEP done → Product Package gate
                     if not is_package_done(email):
                         next_message = (
-                            localized(user_language,
-                                en=("FATCA and PEP declarations are complete.\n\nPlease select your **Product Package** below to proceed."),
-                                es=("Declaraciones FATCA y PEP completadas.\n\nPor favor seleccione su **Paquete de Producto** a continuación."),
-                                ar=("اكتمل إقرارا فاتكا والأشخاص المعرّضين سياسياً.\n\nيُرجى اختيار **باقة المنتجات** أدناه للمتابعة."))
+                            "Declaraciones FATCA y PEP completadas.\n\nPor favor seleccione su **Paquete de Producto** a continuación."
+                            if user_language == "spanish"
+                            else
+                            "FATCA and PEP declarations are complete.\n\nPlease select your **Product Package** below to proceed."
                         )
                         try:
                             insert_conversation_log(
@@ -835,16 +855,14 @@ def handle_verification_response(
                     # FATCA + PEP + Package done → Self-Declaration
                     logger.info(f" FATCA + PEP + Package done — triggering Self-Declaration for {email}")
                     next_message = (
-                        localized(user_language,
-                            en=(f"All {total_members} member identity documents have been successfully verified.\n\n"
-                        f"The final step before account activation is the **Self-Declaration**. "
-                        f"Please review and confirm the declaration below to complete your onboarding process."),
-                            es=(f"Todos los {total_members} documentos de identidad de miembros han sido verificados exitosamente.\n\n"
+                        f"Todos los {total_members} documentos de identidad de miembros han sido verificados exitosamente.\n\n"
                         f"El último paso antes de la activación de la cuenta es la **Auto-Declaración**. "
-                        f"Por favor, revise y confirme la declaración a continuación."),
-                            ar=(f"تم التحقق بنجاح من جميع مستندات هوية الأعضاء ({total_members}).\n\n"
-                        f"الخطوة الأخيرة قبل تفعيل الحساب هي **الإقرار الذاتي**. "
-                        f"يُرجى مراجعة الإقرار أدناه وتأكيده لاستكمال إجراءات التسجيل."))
+                        f"Por favor, revise y confirme la declaración a continuación."
+                        if user_language == "spanish"
+                        else
+                        f"All {total_members} member identity documents have been successfully verified.\n\n"
+                        f"The final step before account activation is the **Self-Declaration**. "
+                        f"Please review and confirm the declaration below to complete your onboarding process."
                     )
                     try:
                         insert_conversation_log(
@@ -892,7 +910,10 @@ def handle_verification_response(
 
                 if not _so_final_fatca_done:
                     logger.info(f"[VERIFY]  Single Owner — FATCA pending, triggering FATCA declaration")
-                    _so_fatca_msg = render_message("ki_loop.so_fatca", None, summary="")
+                    _so_fatca_msg = (
+                        f"All identity documents have been verified.\n\n"
+                        f"Please complete your **FATCA Declaration** below before proceeding."
+                    )
                     return {
                         "is_verification": True,
                         "verified": True,
@@ -906,7 +927,10 @@ def handle_verification_response(
 
                 if not _so_final_pep_done:
                     logger.info(f"[VERIFY]  Single Owner — PEP pending, triggering PEP declaration")
-                    _so_pep_msg = render_message("ki_loop.pep", None, summary="")
+                    _so_pep_msg = (
+                        f"FATCA declaration saved.\n\n"
+                        f"Please complete your **PEP (Politically Exposed Person) Declaration** below."
+                    )
                     return {
                         "is_verification": True,
                         "verified": True,
@@ -920,7 +944,10 @@ def handle_verification_response(
 
                 if not is_package_done(email):
                     logger.info(f"[VERIFY]  Single Owner — Product Package pending, triggering package selection")
-                    _so_pkg_msg = render_message("ki_loop.package", None, summary="")
+                    _so_pkg_msg = (
+                        f"FATCA and PEP declarations are complete.\n\n"
+                        f"Please complete your **Product Package** below before proceeding."
+                    )
                     return {
                         "is_verification": True,
                         "verified": True,
@@ -934,18 +961,20 @@ def handle_verification_response(
 
                 if not _so_decl_path.exists():
                     logger.info(f"[VERIFY]  Single Owner self-declaration pending — returning trigger")
-                    _so_decl_msg = localized(user_language,
-                        en=(f"All your documents have been successfully verified.\n\n"
-                            f"The final step before account activation is the "
-                            f"**Self-Declaration**. Please review and confirm the declaration "
-                            f"below to complete your onboarding process."),
-                        es=(f"Todos sus documentos han sido verificados exitosamente.\n\n"
+                    if user_language == "spanish":
+                        _so_decl_msg = (
+                            f"Todos sus documentos han sido verificados exitosamente.\n\n"
                             f"El paso final antes de la activación de la cuenta es la "
                             f"**Auto-Declaración**. Por favor, revise y confirme la declaración "
-                            f"a continuación para completar su proceso de incorporación."),
-                        ar=("تم التحقق من جميع مستنداتك بنجاح.\n\n"
-                            "الخطوة الأخيرة قبل تفعيل الحساب هي **الإقرار الذاتي**. "
-                            "يُرجى مراجعة الإقرار أدناه وتأكيده لاستكمال إجراءات التسجيل."))
+                            f"a continuación para completar su proceso de incorporación."
+                        )
+                    else:
+                        _so_decl_msg = (
+                            f"All your documents have been successfully verified.\n\n"
+                            f"The final step before account activation is the "
+                            f"**Self-Declaration**. Please review and confirm the declaration "
+                            f"below to complete your onboarding process."
+                        )
                     return {
                         "is_verification": True,
                         "verified": True,
@@ -982,10 +1011,10 @@ def handle_verification_response(
                                 )
                             except Exception as e:
                                 logger.warning(f"SurePass message generation failed: {e}")
-                                next_message = localized(user_language,
-                                    en=(f"⚠️ Verification Issue\n\n{surepass_message}\n\nPlease review and re-upload your Emirates ID."),
-                                    es=(f"⚠️ Problema de Verificación\n\n{surepass_message}\n\nPor favor, revisa y vuelve a subir tu Emirates ID."),
-                                    ar=(f"⚠️ مشكلة في التحقق\n\n{surepass_message}\n\nيُرجى المراجعة وإعادة تحميل الهوية الإماراتية."))
+                                if user_language == "spanish":
+                                    next_message = f"⚠️ Problema de Verificación\n\n{surepass_message}\n\nPor favor, revisa y vuelve a subir tu Emirates ID."
+                                else:
+                                    next_message = f"⚠️ Verification Issue\n\n{surepass_message}\n\nPlease review and re-upload your Emirates ID."
 
                             return {
                                 "is_verification": True,
@@ -1009,18 +1038,20 @@ def handle_verification_response(
 
                             try:
                                 if is_truly_complete:
-                                    next_message = localized(user_language,
-                                        en=(f"Your {doc_type.upper()} has been successfully verified.\n\n"
-                                            f"All your documents have been verified and your onboarding document "
-                                            f"verification step is complete.\n\n"
-                                            f"Your account will be activated within 3-4 business days."),
-                                        es=(f"Su {doc_type.upper()} ha sido verificado exitosamente.\n\n"
+                                    if user_language == "spanish":
+                                        next_message = (
+                                            f"Su {doc_type.upper()} ha sido verificado exitosamente.\n\n"
                                             f"Todos sus documentos han sido verificados y su paso de verificación "
                                             f"de incorporación está completo.\n\n"
-                                            f"Su cuenta será activada dentro de 3-4 días hábiles."),
-                                        ar=(f"تم التحقق من {doc_type.upper()} بنجاح.\n\n"
-                                            f"تم التحقق من جميع مستنداتك واكتملت خطوة التحقق من مستندات التسجيل.\n\n"
-                                            f"سيتم تفعيل حسابك خلال 3-4 أيام عمل."))
+                                            f"Su cuenta será activada dentro de 3-4 días hábiles."
+                                        )
+                                    else:
+                                        next_message = (
+                                            f"Your {doc_type.upper()} has been successfully verified.\n\n"
+                                            f"All your documents have been verified and your onboarding document "
+                                            f"verification step is complete.\n\n"
+                                            f"Your account will be activated within 3-4 business days."
+                                        )
                                 else:
                                     next_message = MessageGenerator.verification_success(
                                         doc_type=doc_type,
@@ -1031,18 +1062,20 @@ def handle_verification_response(
                                     )
                             except Exception as e:
                                 logger.warning(f"Completion message generation failed: {e}")
-                                next_message = localized(user_language,
-                                    en=(f"{doc_type.upper()} verified!\n\n"
-                                        f"All your documents have been verified and your onboarding document "
-                                        f"verification step is complete.\n\n"
-                                        f"Your account will be activated within 3-4 business days."),
-                                    es=(f"¡{doc_type.upper()} verificado!\n\n"
+                                if user_language == "spanish":
+                                    next_message = (
+                                        f"¡{doc_type.upper()} verificado!\n\n"
                                         f"Todos sus documentos han sido verificados y su paso de verificación "
                                         f"de incorporación está completo.\n\n"
-                                        f"Su cuenta será activada en 3-4 días hábiles."),
-                                    ar=(f"تم التحقق من {doc_type.upper()}!\n\n"
-                                        f"تم التحقق من جميع مستنداتك واكتملت خطوة التحقق من مستندات التسجيل.\n\n"
-                                        f"سيتم تفعيل حسابك خلال 3-4 أيام عمل."))
+                                        f"Su cuenta será activada en 3-4 días hábiles."
+                                    )
+                                else:
+                                    next_message = (
+                                        f"{doc_type.upper()} verified!\n\n"
+                                        f"All your documents have been verified and your onboarding document "
+                                        f"verification step is complete.\n\n"
+                                        f"Your account will be activated within 3-4 business days."
+                                    )
 
                             audit_mutation("document_stage", email=email,
                                            before=user_data.get("document_stage"),
@@ -1075,16 +1108,18 @@ def handle_verification_response(
                         except Exception as e:
                             logger.warning(f"Cross-validation message failed: {e}")
                             mismatch_details = "\n".join([f"  • {m}" for m in validation_result["mismatches"]])
-                            next_message = localized(user_language,
-                                en=(f"⚠️ Cross-Validation Failed\n\n"
-                                    f"Inconsistencies detected:\n\n{mismatch_details}\n\n"
-                                    f"Please review and re-upload."),
-                                es=(f"⚠️ Validación Cruzada Falló\n\n"
+                            if user_language == "spanish":
+                                next_message = (
+                                    f"⚠️ Validación Cruzada Falló\n\n"
                                     f"Inconsistencias detectadas:\n\n{mismatch_details}\n\n"
-                                    f"Por favor, revisa y vuelve a subir."),
-                                ar=(f"⚠️ فشل التحقق المتقاطع\n\n"
-                                    f"تم رصد عدم تطابق:\n\n{mismatch_details}\n\n"
-                                    f"يُرجى المراجعة وإعادة التحميل."))
+                                    f"Por favor, revisa y vuelve a subir."
+                                )
+                            else:
+                                next_message = (
+                                    f"⚠️ Cross-Validation Failed\n\n"
+                                    f"Inconsistencies detected:\n\n{mismatch_details}\n\n"
+                                    f"Please review and re-upload."
+                                )
 
                         send_validation_failed_email(
                             to_email=email,
@@ -1112,10 +1147,10 @@ def handle_verification_response(
                         )
                     except Exception as e:
                         logger.warning(f"Error message generation failed: {e}")
-                        next_message = localized(user_language,
-                            en=(f"❌ An error occurred during verification: {str(validation_error)}\n\nPlease contact support."),
-                            es=(f"❌ Ocurrió un error durante la verificación: {str(validation_error)}\n\nPor favor, contacta a soporte."),
-                            ar=(f"❌ حدث خطأ أثناء التحقق: {str(validation_error)}\n\nيُرجى التواصل مع الدعم."))
+                        if user_language == "spanish":
+                            next_message = f"❌ Ocurrió un error durante la verificación: {str(validation_error)}\n\nPor favor, contacta a soporte."
+                        else:
+                            next_message = f"❌ An error occurred during verification: {str(validation_error)}\n\nPlease contact support."
 
                     return {
                         "is_verification": True,
@@ -1129,23 +1164,22 @@ def handle_verification_response(
                 # All required documents are submitted → mark onboarding complete
                 logger.info("Multiple Owner account: all documents submitted, completing onboarding")
                 try:
-                    next_message = localized(user_language,
-                        en=(f"Your {doc_type.upper() if doc_type else 'document'} has been successfully verified.\n\n"
-                            f"All your documents have been verified and your onboarding document "
-                            f"verification step is complete.\n\n"
-                            f"Your account will be activated within 3-4 business days."),
-                        es=(f"Su {doc_type.upper() if doc_type else 'documento'} ha sido verificado exitosamente.\n\n"
+                    if user_language == "spanish":
+                        next_message = (
+                            f"Su {doc_type.upper() if doc_type else 'documento'} ha sido verificado exitosamente.\n\n"
                             f"Todos sus documentos han sido verificados y su proceso de verificación "
                             f"de incorporación está completo.\n\n"
-                            f"Su cuenta será activada dentro de 3-4 días hábiles."),
-                        ar=(f"تم التحقق من {doc_type.upper() if doc_type else 'المستند'} بنجاح.\n\n"
-                            f"تم التحقق من جميع مستنداتك واكتملت خطوة التحقق من مستندات التسجيل.\n\n"
-                            f"سيتم تفعيل حسابك خلال 3-4 أيام عمل."))
+                            f"Su cuenta será activada dentro de 3-4 días hábiles."
+                        )
+                    else:
+                        next_message = (
+                            f"Your {doc_type.upper() if doc_type else 'document'} has been successfully verified.\n\n"
+                            f"All your documents have been verified and your onboarding document "
+                            f"verification step is complete.\n\n"
+                            f"Your account will be activated within 3-4 business days."
+                        )
                 except Exception:
-                    next_message = localized(None,
-                        en="All documents verified. Your account will be activated within 3-4 business days.",
-                        es="Todos los documentos verificados. Su cuenta se activará en un plazo de 3 a 4 días hábiles.",
-                        ar="تم التحقق من جميع المستندات. سيتم تفعيل حسابك خلال 3-4 أيام عمل.")
+                    next_message = "All documents verified. Your account will be activated within 3-4 business days."
 
                 audit_mutation("document_stage", email=email,
                                before=user_data.get("document_stage"),
@@ -1221,16 +1255,18 @@ def handle_verification_response(
                                 logger.warning(f"[FIX-C] Could not self-heal stage: {_chfix}")
 
                             _c_next_member = _c_pending[0]
-                            next_message = localized(user_language,
-                                en=(f"Identity document verified successfully.\n\n"
-                                    f"Please proceed by uploading the Emirates ID or Passport for: "
-                                    f"**{_c_next_member}**."),
-                                es=(f"Documento de identidad verificado exitosamente.\n\n"
+                            if user_language == "spanish":
+                                next_message = (
+                                    f"Documento de identidad verificado exitosamente.\n\n"
                                     f"Por favor, proceda a subir el Emirates ID o Pasaporte para: "
-                                    f"**{_c_next_member}**."),
-                                ar=(f"تم التحقق من مستند الهوية بنجاح.\n\n"
-                                    f"يُرجى المتابعة بتحميل الهوية الإماراتية أو جواز السفر لـ: "
-                                    f"**{_c_next_member}**."))
+                                    f"**{_c_next_member}**."
+                                )
+                            else:
+                                next_message = (
+                                    f"Identity document verified successfully.\n\n"
+                                    f"Please proceed by uploading the Emirates ID or Passport for: "
+                                    f"**{_c_next_member}**."
+                                )
 
                             try:
                                 insert_conversation_log(
@@ -1268,15 +1304,15 @@ def handle_verification_response(
                 doc_name = next_doc.get("type", "document").upper()
                 if next_doc.get("requires_member_name"):
                     member = next_doc.get("member_name")
-                    next_message = localized(user_language,
-                        en=(f"{doc_type.upper()} verified!\n\nNext, I need the Emirates ID or Passport for {member}."),
-                        es=(f"¡{doc_type.upper()} verificado!\n\nSiguiente, necesito el Emirates ID o Pasaporte para {member}."),
-                        ar=(f"تم التحقق من {doc_type.upper()}!\n\nالخطوة التالية: أحتاج إلى الهوية الإماراتية أو جواز السفر لـ {member}."))
+                    if user_language == "spanish":
+                        next_message = f"¡{doc_type.upper()} verificado!\n\nSiguiente, necesito el Emirates ID o Pasaporte para {member}."
+                    else:
+                        next_message = f"{doc_type.upper()} verified!\n\nNext, I need the Emirates ID or Passport for {member}."
                 else:
-                    next_message = localized(user_language,
-                        en=(f"{doc_type.upper()} verified!\n\nNext, please upload your {doc_name}."),
-                        es=(f"¡{doc_type.upper()} verificado!\n\nSiguiente, por favor sube tu {doc_name}."),
-                        ar=(f"تم التحقق من {doc_type.upper()}!\n\nالخطوة التالية: يُرجى تحميل {i18n_doc_name(doc_name, 'arabic')}."))
+                    if user_language == "spanish":
+                        next_message = f"¡{doc_type.upper()} verificado!\n\nSiguiente, por favor sube tu {doc_name}."
+                    else:
+                        next_message = f"{doc_type.upper()} verified!\n\nNext, please upload your {doc_name}."
 
             is_actually_complete = status.get("is_complete", False)
             audit_mutation("document_stage", email=email,
@@ -1295,10 +1331,10 @@ def handle_verification_response(
                 )
             except Exception as e:
                 logger.warning(f"Verification message generation failed: {e}")
-                next_message = localized(user_language,
-                    en=(f"{doc_type.upper()} verified! Processing..."),
-                    es=(f"¡{doc_type.upper()} verificado! Procesando..."),
-                    ar=(f"تم التحقق من {doc_type.upper()}! جارٍ المعالجة..."))
+                if user_language == "spanish":
+                    next_message = f"¡{doc_type.upper()} verificado! Procesando..."
+                else:
+                    next_message = f"{doc_type.upper()} verified! Processing..."
 
         return {
             "is_verification": True,
@@ -1322,10 +1358,10 @@ def handle_verification_response(
             )
         except Exception as err:
             logger.warning(f"Error message generation failed: {err}")
-            error_message = localized(user_language,
-                en=(f"Sorry, I encountered an error during verification: {str(e)}\n\nPlease try again."),
-                es=(f"Lo siento, encontré un error durante la verificación: {str(e)}\n\nPor favor, intenta nuevamente."),
-                ar=(f"عذراً، حدث خطأ أثناء التحقق: {str(e)}\n\nيُرجى المحاولة مرة أخرى."))
+            if user_language == "spanish":
+                error_message = f"Lo siento, encontré un error durante la verificación: {str(e)}\n\nPor favor, intenta nuevamente."
+            else:
+                error_message = f"Sorry, I encountered an error during verification: {str(e)}\n\nPlease try again."
 
         return {
             "is_verification": True,

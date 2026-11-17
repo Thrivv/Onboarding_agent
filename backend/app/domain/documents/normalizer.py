@@ -20,22 +20,7 @@ from __future__ import annotations
 
 import logging
 
-from app import config
-from app.utils.pii_masker import mask_pii
-
 logger = logging.getLogger(__name__)
-
-
-def _for_log(data):
-    """Mask extracted-field data before it goes into a log line (see
-    backend/docs — PII masking plan). Controlled by
-    config.PII_LOG_MASKING_ENABLED."""
-    if not config.PII_LOG_MASKING_ENABLED:
-        return data
-    try:
-        return mask_pii(data)
-    except Exception:
-        return "<pii-masking-error: value withheld>"
 
 def get_display_document_name(doc_type: str) -> str:
     """Get user-friendly document name"""
@@ -62,7 +47,7 @@ def map_fields_to_display_names(extracted_data: dict, doc_type: str) -> dict:
     # other logging changes) — this ran on every document on every request. ──
     logger.debug(f"map_fields_to_display_names called for doc_type={doc_type}")
     logger.debug(f"Input data keys: {list(extracted_data.keys())[:10]}")
-    logger.debug(f"Sample input: {_for_log(dict(list(extracted_data.items())[:3]))}")
+    logger.debug(f"Sample input: {dict(list(extracted_data.items())[:3])}")
     
     # Define mappings for each document type
     mappings = {

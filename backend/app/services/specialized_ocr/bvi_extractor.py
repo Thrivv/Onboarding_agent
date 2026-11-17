@@ -29,22 +29,21 @@ from app import config
 # API CONFIGURATION
 # ============================================================================
 
-API_KEY = config.AWS_BEARER_TOKEN_BEDROCK or ""
+API_KEY = config.OPENROUTER_API_KEY or ""
 # Model names + endpoint come from llm_client (env-driven via .env.docker).
 # Do not redeclare them here — see the LLM MODEL ROUTING block in .env.docker.
 from app.services.llm_client import (
-    LLM_API_URL,
+    OPENROUTER_API_URL,
     TEXT_PRIMARY,
     TEXT_FALLBACK,
     VISION_PRIMARY,
 )
-from app.services import bedrock_client
 import logging
 from app.utils.retry import retry_with_backoff as _retry_with_backoff
 
 logger = logging.getLogger(__name__)
 
-API_URL = LLM_API_URL
+API_URL = OPENROUTER_API_URL
 # Configurable via BVI_API_TIMEOUT_SECONDS in .env.docker — change + restart
 # the container to raise/lower this without editing code.
 API_TIMEOUT_SECONDS = config.BVI_API_TIMEOUT_SECONDS
@@ -94,7 +93,7 @@ class BVIExtractor:
 
     Usage
     -----
-    extractor = BVIExtractor(api_key=config.AWS_BEARER_TOKEN_BEDROCK)
+    extractor = BVIExtractor(api_key=OPENROUTER_API_KEY)
 
     with open("certificate.pdf", "rb") as f:
         file_bytes = f.read()
@@ -132,9 +131,9 @@ class BVIExtractor:
 
     @_retry_with_backoff(max_retries=3, base_delay=5, label="CoI API")
     def _call_api(self, prompt: str, model_name: str = None) -> str:
-        """Call the Bedrock API with retry logic."""
+        """Call OpenRouter API with retry logic."""
         if not self.api_key:
-            raise RuntimeError("Bedrock API key not configured")
+            raise RuntimeError("OpenRouter API key not configured")
 
         model = model_name or LLAMA_MODEL_NAME
         headers = {
@@ -143,15 +142,12 @@ class BVIExtractor:
         }
         payload = {
             "model": model,
-            "messages": [
-                {"role": "system", "content": self._SYSTEM_PROMPT},
-                {"role": "user", "content": prompt},
-            ],
+            "messages": [{"role": "user", "content": prompt}],
             "temperature": 0.0,
             "max_tokens": 3000,
         }
 
-        response = bedrock_client.post(self.api_url, headers=headers, json=payload, timeout=API_TIMEOUT_SECONDS)
+        response = requests.post(self.api_url, headers=headers, json=payload, timeout=API_TIMEOUT_SECONDS)
 
         if response.status_code in [502, 503, 504]:
             raise RuntimeError(f"CoI API server error: {response.status_code}")
@@ -165,25 +161,18 @@ class BVIExtractor:
     #  AI EXTRACTION                                                       #
     # ------------------------------------------------------------------ #
 
-    # PROMPT CACHING (prompt-remediation Phase 3): everything that does not
-    # change between calls -- role, JSON schema, extraction rules -- lives
-    # here as a system prompt instead of being re-sent as part of the user
-    # turn on every single call. bedrock_client.py already applies
-    # ephemeral prompt caching to any system-role text automatically (see
-    # _to_bedrock_payload); moving this here is what makes that caching
-    # apply to CoI extraction, where before it was baked directly into the
-    # user prompt and reprocessed as fresh input tokens every time. The
-    # instruction text itself is UNCHANGED, character-for-character, from
-    # the previous _build_extraction_prompt -- only its position moved, so
-    # extraction behaviour is not expected to change.
-    _SYSTEM_PROMPT = """You are a specialist in extracting structured data from Certificate of Incorporation documents from any jurisdiction (BVI, Cayman, DIFC, ADGM, UAE mainland, etc.).
+    def _build_extraction_prompt(self, raw_text: str) -> str:
+        return f"""You are a specialist in extracting structured data from Certificate of Incorporation documents from any jurisdiction (BVI, Cayman, DIFC, ADGM, UAE mainland, etc.).
 
-Extract ALL available information from the document text you are given.
+Extract ALL available information from the document text below.
 Pay special attention to the list of directors and shareholders with their ownership percentages.
+
+Document Text:
+{raw_text[:6000]}
 
 Return ONLY a valid JSON object with this exact structure (use empty string "" for missing fields, empty list [] for missing lists):
 
-{
+{{
   "company_name": "<full registered company name>",
   "registration_number": "<company registration / incorporation number>",
   "jurisdiction": "<country or territory of incorporation e.g. British Virgin Islands>",
@@ -194,25 +183,23 @@ Return ONLY a valid JSON object with this exact structure (use empty string "" f
   "share_capital": "<authorised / issued share capital amount>",
   "currency": "<currency of share capital e.g. USD>",
   "directors_and_shareholders": [
-    {
+    {{
       "name": "<full name of individual or entity>",
       "role": "<Director | Shareholder | Director & Shareholder>",
       "nationality": "<nationality if stated>",
       "share_percentage": <numeric percentage as number e.g. 70 — use 0 if not stated or is a director only>,
       "number_of_shares": "<number of shares if stated>"
-    }
+    }}
   ]
-}
+}}
 
 IMPORTANT RULES:
 1. Return ONLY the JSON object — no preamble, no explanation, no markdown fences.
 2. share_percentage must be a NUMBER (not a string with % symbol).
 3. If percentage is not explicitly stated but shares are, compute percentage from total shares.
 4. Include ALL directors and ALL shareholders even if they are the same person.
-5. Do NOT invent data — use empty string or 0 for unknown fields."""
-
-    def _build_extraction_prompt(self, raw_text: str) -> str:
-        return f"Document Text:\n{raw_text[:6000]}"
+5. Do NOT invent data — use empty string or 0 for unknown fields.
+"""
 
     def _extract_with_ai(self, raw_text: str, model_name: str = None) -> Dict:
         """Call AI to extract CoI fields. Returns parsed dict."""

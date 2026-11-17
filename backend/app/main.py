@@ -47,7 +47,8 @@ setup_logging(disable_uvicorn_access=True)
 logger = logging.getLogger(__name__)
 
 from app.api.routes import chat, onboarding, register, documents, auth, otp  # noqa: E402
-from app.api.routes import frontend_logs, system  # noqa: E402
+from app.api.routes import growx_integration  # noqa: E402
+from app.api.routes import frontend_logs  # noqa: E402
 from app.services.session_service import SessionService  # noqa: E402
 from app.api.error_handlers import register_error_handlers  # noqa: E402
 from app import config
@@ -254,7 +255,7 @@ app.add_middleware(
     allow_origins=get_allowed_origins(),
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
-    allow_headers=["Content-Type", "Authorization", "X-Session-ID", "X-User-Language", "X-I18n-Pseudo"],
+    allow_headers=["Content-Type", "Authorization", "X-Session-ID"],
 )
 
 # ============================================================================
@@ -281,14 +282,6 @@ async def log_requests_and_errors(request: Request, call_next):
     # this request (see RequestIdFilter in app/logging_config.py) without
     # passing it around.
     ctx_token = request_id_ctx.set(request_id)
-    # Per-request UI language (X-User-Language, set by the frontend's axios
-    # interceptor on every call) -> contextvar read by normalize_language().
-    from app.utils.language import current_request_language, language_from_header
-    lang_token = current_request_language.set(
-        language_from_header(request.headers.get("x-user-language"))
-    )
-    from app.i18n import pseudo_locale
-    pseudo_token = pseudo_locale.set(request.headers.get("x-i18n-pseudo") == "1")
     started_at = time.monotonic()
 
     try:
@@ -352,8 +345,6 @@ async def log_requests_and_errors(request: Request, call_next):
         )
     finally:
         request_id_ctx.reset(ctx_token)
-        current_request_language.reset(lang_token)
-        pseudo_locale.reset(pseudo_token)
 
 # ============================================================================
 # CORS PREFLIGHT HANDLER
@@ -395,14 +386,13 @@ logger.info(f"Registered: {BASE_PATH}/documentupload/* routes")
 app.include_router(otp.router, prefix=BASE_PATH, tags=["OTP"])
 logger.info(f"Registered: {BASE_PATH}/otp/* routes")
 
-# 7. Frontend error logging at {BASE_PATH}/logs/frontend
+# 7. GrowX integration routes at {BASE_PATH}/growx/*
+app.include_router(growx_integration.router, prefix=BASE_PATH, tags=["GrowX Integration"])
+logger.info(f"Registered: {BASE_PATH}/growx/* routes")
+
+# 8. Frontend error logging at {BASE_PATH}/logs/frontend
 app.include_router(frontend_logs.router, prefix=BASE_PATH, tags=["Frontend Logs"])
 logger.info(f"Registered: {BASE_PATH}/logs/* routes")
-
-# 8. Runtime/system config at {BASE_PATH}/system/config (public — language
-#    toggle enable/disable flag, see app/api/routes/system.py)
-app.include_router(system.router, prefix=BASE_PATH, tags=["System"])
-logger.info(f"Registered: {BASE_PATH}/system/* routes")
 
 # ❌ REMOVED DUPLICATE REGISTRATION
 

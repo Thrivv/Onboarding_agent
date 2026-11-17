@@ -21,15 +21,12 @@ RUN npm run build
 FROM python:3.11-slim
 
 # Install system deps + nginx + supervisor
-# logrotate: nginx writes its access/error logs directly to files under
-# /var/log/nginx (bind-mounted to the host), which nothing was ever rotating
-# — see logrotate-thrivv.conf and supervisord.conf's [program:logrotate].
 RUN apt-get update && apt-get install -y \
     gcc g++ curl wget build-essential \
     libpq-dev libgl1 libglib2.0-0 libsm6 \
     libxext6 libxrender1 libgomp1 libfontconfig1 \
     libice6 libxau6 libxdmcp6 \
-    nginx supervisor logrotate \
+    nginx supervisor \
     && rm -rf /var/lib/apt/lists/*
 
 # ── Python dependencies ──────────────────────────────────────
@@ -49,11 +46,6 @@ COPY nginx-combined.conf /etc/nginx/nginx.conf
 # ── Supervisord config ────────────────────────────────────────
 COPY supervisord.conf /etc/supervisor/conf.d/supervisord.conf
 
-# ── Log rotation ────────────────────────────────────────────────
-COPY logrotate-thrivv.conf /etc/logrotate.d/thrivv-app.conf
-COPY logrotate-loop.sh /usr/local/bin/logrotate-loop.sh
-RUN chmod +x /usr/local/bin/logrotate-loop.sh
-
 # ── Directories ──────────────────────────────────────────────
 RUN mkdir -p /app/backend/documents/sme \
              /app/backend/summary \
@@ -61,9 +53,7 @@ RUN mkdir -p /app/backend/documents/sme \
              /var/log/backend \
              /var/log/nginx \
              /var/log/supervisor \
-             /var/log/frontend \
-             /var/log/reply-loop \
-             /var/lib/logrotate && \
+             /var/log/frontend && \
     chmod -R 777 /app/backend/documents /app/backend/summary /app/external_documents /var/log/frontend
 
 # ── Environment ───────────────────────────────────────────────

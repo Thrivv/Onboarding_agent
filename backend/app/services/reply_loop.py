@@ -1,6 +1,6 @@
 # backend/app/services/reply_loop.py
 #
-# Entrypoint for the OnboardLG-reply-loop container. Run it as a module so the
+# Entrypoint for the Onboard-reply-loop container. Run it as a module so the
 # package root resolves without path juggling:
 #     python -u -m app.services.reply_loop
 # (PYTHONPATH=/app is set in the Dockerfile; the previous sys.path.append of

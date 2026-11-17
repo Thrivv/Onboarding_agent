@@ -3,11 +3,8 @@ import { confirmSelfDeclaration, getSelfDeclarationStatus, getSelfDeclarationSum
 import Sidebar from '../../../../components/layout/Sidebar';
 import { AlertCircle, CheckCircle, Clock, Copy, Loader, Lock, ShieldCheck } from 'lucide-react';
 import toast from 'react-hot-toast';
-import logger from '../../../../utils/logger';
-import { useReportI18n } from '../../utils/reportI18n';
 
 const SelfDeclarationCard = ({ userEmail, onConfirmed, isEnabled = false }) => {
-  const { R } = useReportI18n();
   const [summary, setSummary] = useState(null);
   const [loading, setLoading] = useState(true);
   const [isConfirming, setIsConfirming] = useState(false);
@@ -37,7 +34,7 @@ const SelfDeclarationCard = ({ userEmail, onConfirmed, isEnabled = false }) => {
           setCvMessage(statusResp.data.cross_validation_message || '');
         }
       } catch (e) {
-        logger.error('[SELF-DECL] Initialization failed', e);
+        console.error('[SELF-DECL] Initialization failed', e);
       } finally {
         setLoading(false);
       }
@@ -50,7 +47,7 @@ const SelfDeclarationCard = ({ userEmail, onConfirmed, isEnabled = false }) => {
     setCrossValidating(true);
     try {
       const res = await confirmSelfDeclaration({ email: userEmail });
-      toast.success(R('declaration.selfDeclConfirmedToast'));
+      toast.success('Self-Declaration confirmed');
 
       const cvData = res.data.crossValidation || res.data;
       const refNo = res.data.reference_number || cvData.reference_number;
@@ -68,7 +65,7 @@ const SelfDeclarationCard = ({ userEmail, onConfirmed, isEnabled = false }) => {
         // window.location.href = REDIRECT_URL;
       }, 3000);
     } catch (e) {
-      toast.error(R('declaration.selfDeclFailedToast'));
+      toast.error('Failed to confirm self-declaration');
     } finally {
       setIsConfirming(false);
       setCrossValidating(false);
@@ -78,7 +75,7 @@ const SelfDeclarationCard = ({ userEmail, onConfirmed, isEnabled = false }) => {
   const copyToClipboard = () => {
     if (referenceId) {
       navigator.clipboard.writeText(referenceId);
-      toast.success(R('declaration.refCopied2'));
+      toast.success('Reference number copied!');
     }
   };
 
@@ -86,7 +83,7 @@ const SelfDeclarationCard = ({ userEmail, onConfirmed, isEnabled = false }) => {
     return (
       <div className="mt-3 p-4 bg-brand-primary rounded-xl border-2 border-green-200 flex items-center gap-3">
         <Loader className="h-5 w-5 animate-spin text-green-600" />
-        <span className="text-sm text-green-700">{R('declaration.loadingSummary')}</span>
+        <span className="text-sm text-green-700">Loading declaration summary...</span>
       </div>
     );
   }
@@ -96,17 +93,17 @@ const SelfDeclarationCard = ({ userEmail, onConfirmed, isEnabled = false }) => {
       <div className="mt-3 p-4 bg-brand-primary rounded-xl border-2 border-green-200">
         <div className="flex items-center gap-2 mb-3">
           <CheckCircle className="h-5 w-5 text-green-600" />
-          <p className="text-sm font-bold text-green-900">{R('declaration.selfDeclaration')}</p>
+          <p className="text-sm font-bold text-green-900">Self-Declaration</p>
         </div>
         <p className="text-xs text-gray-600 mb-3">
-          {R('declaration.pleaseConfirm')}
+          Please confirm that all submitted information and documents are accurate and truthful.
         </p>
         <button
           onClick={handleConfirm}
           disabled={isConfirming || confirmed || !isEnabled}
           className="w-full py-2 px-4 bg-green-600 hover:bg-green-700 text-white text-sm font-semibold rounded-lg transition-colors disabled:opacity-50"
         >
-          {confirmed ? R('declaration.confirmedShort') : isConfirming ? R('declaration.confirming') : R('declaration.iConfirmDeclare')}
+          {confirmed ? 'Confirmed' : isConfirming ? 'Confirming...' : 'I Confirm & Declare'}
         </button>
       </div>
     );
@@ -116,13 +113,13 @@ const SelfDeclarationCard = ({ userEmail, onConfirmed, isEnabled = false }) => {
     <div className="mt-3 p-6 bg-white border-2 border-green-100 rounded-[32px] shadow-xl shadow-green-500/5 animate-in fade-in slide-in-from-bottom-4 duration-700">
       <div className="flex items-center gap-2 mb-4">
         <CheckCircle className="h-5 w-5 text-green-600" />
-        <p className="text-sm font-black text-green-900 uppercase tracking-tight">{R('declaration.summaryTitle')}</p>
+        <p className="text-sm font-black text-green-900 uppercase tracking-tight">Self-Declaration Summary</p>
       </div>
 
       {/* Declaration Text */}
       <div className="mb-6 p-4 bg-amber-50/50 border border-amber-100 rounded-2xl">
         <p className="text-xs text-slate-600 italic leading-relaxed font-medium">
-          {R('declaration.text')}
+          {summary?.declaration_text || "I confirm that all information and documents submitted during this onboarding process are accurate, complete, and truthful to the best of my knowledge. I understand that providing false information may result in rejection of my application."}
         </p>
       </div>
 
@@ -136,25 +133,25 @@ const SelfDeclarationCard = ({ userEmail, onConfirmed, isEnabled = false }) => {
             }`}
         >
           {isConfirming ? (
-            <><Loader className="h-5 w-5 animate-spin" /> {R('declaration.finalizing')}</>
+            <><Loader className="h-5 w-5 animate-spin" /> Finalizing...</>
           ) : !isEnabled ? (
-            <><Lock className="h-5 w-5 opacity-40" /> {R('declaration.completeReportFirst')}</>
+            <><Lock className="h-5 w-5 opacity-40" /> Complete Report Above First</>
           ) : (
-            <><CheckCircle className="h-5 w-5" /> {R('declaration.submitConfirm')}</>
+            <><CheckCircle className="h-5 w-5" /> Submit & Confirm Declaration</>
           )}
         </button>
       ) : (
         <div className="space-y-4">
           <div className="flex items-center gap-2 justify-center py-4 px-6 bg-green-50 border border-green-100 rounded-2xl animate-in zoom-in-95 duration-500">
             <CheckCircle className="h-5 w-5 text-green-600" />
-            <span className="text-xs font-black text-green-700 uppercase tracking-widest">{R('declaration.selfDeclConfirmedTitle')}</span>
+            <span className="text-xs font-black text-green-700 uppercase tracking-widest">Self-Declaration Confirmed</span>
           </div>
 
           {!confirmed && crossValidResult === 'passed' && (
             <div className="flex items-center gap-3 p-4 bg-emerald-50 border-2 border-emerald-100 rounded-2xl animate-in slide-in-from-left-4 duration-700">
               <ShieldCheck className="h-6 w-6 text-emerald-600 flex-shrink-0" />
               <span className="text-[11px] text-emerald-800 font-bold leading-relaxed lowercase first-letter:uppercase">
-                {cvMessage || R('declaration.allChecksOut')}
+                {cvMessage || 'Everything checks out — all your documents are consistent, and your onboarding is complete.'}
               </span>
             </div>
           )}
@@ -176,11 +173,11 @@ const SelfDeclarationCard = ({ userEmail, onConfirmed, isEnabled = false }) => {
                   <div className="p-2 bg-indigo-600 rounded-xl">
                     <ShieldCheck className="h-4 w-4 text-white" />
                   </div>
-                  <h4 className="text-[10px] font-black text-indigo-900 uppercase tracking-[0.2em]">{R('declaration.sessionRef')}</h4>
+                  <h4 className="text-[10px] font-black text-indigo-900 uppercase tracking-[0.2em]">Your Session Reference Number</h4>
                 </div>
 
                 <p className="text-[10px] font-medium text-slate-500 mb-6 leading-relaxed">
-                  {R('declaration.saveRef')}
+                  Save this reference number. Next time you log in, the assistant will ask for it to reload your full conversation history.
                 </p>
 
                 <div className="relative group">
@@ -191,14 +188,14 @@ const SelfDeclarationCard = ({ userEmail, onConfirmed, isEnabled = false }) => {
                       className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-indigo-700 transition-all active:scale-95 shadow-lg shadow-indigo-100"
                     >
                       <Copy className="h-3 w-3" />
-                      {R('declaration.copy')}
+                      Copy
                     </button>
                   </div>
                 </div>
 
                 <div className="mt-6 flex items-start gap-2 text-slate-400 border-t border-indigo-100/50 pt-4">
                   <Clock className="h-3 w-3 mt-0.5" />
-                  <p className="text-[9px] font-bold uppercase tracking-widest opacity-60">{R('declaration.enterInChat')}</p>
+                  <p className="text-[9px] font-bold uppercase tracking-widest opacity-60">Enter this inside the chat next time you log in to resume your session</p>
                 </div>
               </div>
             </div>

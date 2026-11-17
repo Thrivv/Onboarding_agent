@@ -15,8 +15,6 @@ import shutil
 from fastapi import APIRouter, HTTPException
 import traceback
 from app.services.message_generator import MessageGenerator, ai_message_gen
-from app.utils.language import normalize_language
-from app.i18n import render_message, members_summary, concat
 from app.services.chatupload_helpers import (
     user_docs_path,
     member_progress_path,
@@ -146,26 +144,29 @@ async def ki_moa_as_selection(req: MoaAsRequest):
         except Exception as _va_err:
             logger.warning(f"[KI] Could not read back verified_members: {_va_err}")
 
-        # No longer asks "is there anyone else, outside this list, who should
-        # be added as a Key Individual?" — that exact question is asked (with
-        # Yes/No buttons) by the KiLoopCard once identities are verified, so
-        # asking it here too was a redundant free-text dead end that users
-        # skipped (and that the general chat LLM then had to interpret).
-        # The message now states the real next step, in the user's language.
-        _lang = normalize_language(req.language)
-        _names_block = "\n".join(f"  {i+1}. {name}" for i, name in enumerate(still_pending))
         if all_verified:
-            msg = render_message("as_saved.all_verified", _lang)
+            msg = (
+                "Thanks — I've saved your Authorised Signatory selections. Every "
+                "member already has a verified identity document on file, so "
+                "there's nothing further needed there. Let me know if there's "
+                "anyone else, outside this list, who should be added as a Key "
+                "Individual."
+            )
         elif still_pending and len(still_pending) < len(all_members):
-            msg = render_message("as_saved.partially_verified", _lang,
-                                 already=len(all_members) - len(still_pending), names=_names_block)
-        elif still_pending:
-            msg = render_message("as_saved.upload_ids", _lang,
-                                 count=len(still_pending), names=_names_block)
+            _pending_list_str = "\n".join(f"  {i+1}. {name}" for i, name in enumerate(still_pending))
+            _already_count = len(all_members) - len(still_pending)
+            msg = (
+                f"Thanks — I've saved your Authorised Signatory selections. "
+                f"{_already_count} member(s) already have a verified identity "
+                f"document on file and won't be asked again. Next, please "
+                f"upload the Emirates ID or Passport for:\n\n{_pending_list_str}"
+            )
         else:
-            # member_progress unreadable — still give a clear next step.
-            msg = render_message("as_saved.upload_ids", _lang, count=len(all_members),
-                                 names="\n".join(f"  {i+1}. {n}" for i, n in enumerate(all_members)))
+            try:
+                from app.services.message_generator import MessageGenerator
+                msg = MessageGenerator.ki_moa_as_saved(language="english")
+            except Exception:
+                msg = "Thanks — I've saved your Authorised Signatory selections. Let me know if there's anyone else, outside this list, who should be added as a Key Individual."
 
         insert_conversation_log(
             user_email=req.email, role="agent", message=msg, channel="chat",
@@ -174,10 +175,6 @@ async def ki_moa_as_selection(req: MoaAsRequest):
                 "member_role_map": _role_map,
                 "all_members_verified": all_verified,
                 "still_pending_members": still_pending,
-                # Persisted card state (rule 4): survives reload / language
-                # switch / re-login instead of living only in browser memory.
-                "as_selection_completed": True,
-                "ki_loop_prompt": all_verified,
             }
         )
 
@@ -384,18 +381,30 @@ async def ki_so_as_selection(req: SoAsSelectionRequest):
 
         if first_person in _verified_after_save:
             if still_pending:
-                msg = render_message(
-                    "so_as.owner_verified_pending", normalize_language(None), owner=first_person,
-                    names="\n".join(f"  {i+1}. {name}" for i, name in enumerate(still_pending)))
+                msg = (
+                    f"Got it — I've recorded **{first_person}** as the owner and Authorised "
+                    f"Signatory. Their identity document is already on file, so next I'll need "
+                    f"the Emirates ID or Passport for:\n"
+                    + "\n".join(f"  {i+1}. {name}" for i, name in enumerate(still_pending))
+                )
             else:
-                msg = render_message("so_as.owner_verified_done", normalize_language(None), owner=first_person)
+                msg = (
+                    f"Got it — I've recorded **{first_person}** as the owner and Authorised "
+                    f"Signatory. Their identity document is already on file, so there's nothing "
+                    f"further needed here — moving on to the next step."
+                )
         else:
-            msg = render_message("so_as.owner_upload", normalize_language(None), owner=first_person)
+            msg = (
+                f"Got it — I've recorded **{first_person}** as the owner and Authorised "
+                f"Signatory. Next, please upload their Emirates ID or Passport so I can verify "
+                f"their identity."
+            )
             if len(all_members) > 1:
                 remaining = all_members[1:]
-                msg = concat(normalize_language(None), msg, render_message(
-                    "so_as.then_also", normalize_language(None),
-                    names="\n".join(f"  {i+1}. {name}" for i, name in enumerate(remaining))))
+                msg += (
+                    f"\n\nAfter that, the following will also be required:\n"
+                    + "\n".join(f"  {i+1}. {name}" for i, name in enumerate(remaining))
+                )
 
         insert_conversation_log(
             user_email=req.email, role="agent", message=msg, channel="chat",
@@ -448,11 +457,13 @@ async def ki_add(req: KiFormRequest):
             msg = MessageGenerator.ki_added_prompt_id_upload(
                 name=saved.get("display_name", ""),
                 id_type=req.id_type,
-                language=normalize_language(None),  # X-User-Language header
+                language="english"
             )
         except Exception:
-            msg = render_message("ki.added_fallback", normalize_language(None),
-                                 name=saved.get("display_name", ""), id_type=req.id_type)
+            msg = (
+                f"Key Individual {saved.get('display_name','')} has been saved. "
+                f"Please upload their {req.id_type} for identity verification."
+            )
 
         insert_conversation_log(
             user_email=req.email, role="agent", message=msg, channel="chat",
@@ -581,8 +592,11 @@ async def ki_add_ai(req: KiAiAddRequest):
         except Exception as _mpe:
             logger.warning(f"[KI-AI] Could not update member_progress: {_mpe}")
 
-        _role_label = render_message("role.as" if req.role.upper() == "AS" else "role.member", normalize_language(None))
-        msg = render_message("ki.ai_added", normalize_language(None), name=display_name, role=_role_label)
+        _role_label = "Authorised Signatory" if req.role.upper() == "AS" else "Member"
+        msg = (
+            f"{display_name} has been added and verified as {_role_label}.\n\n"
+            f"Would you like to add another individual?"
+        )
 
         insert_conversation_log(
             user_email=req.email, role="agent", message=msg, channel="chat",
@@ -668,9 +682,11 @@ async def ki_contact_info(req: KiContactInfoRequest):
         }
 
         # ── Build confirmation message then hand back to the KI loop gate ──
-        share_line = (render_message("ki.share_line", normalize_language(None), share=ownership_map[ki_name_upper])
-                      if ownership_map and ki_name_upper in ownership_map else "")
-        msg = render_message("ki.contact_saved", normalize_language(None), name=req.ki_name, share_line=share_line)
+        share_line = f" | Share: {ownership_map[ki_name_upper]}" if ownership_map else ""
+        msg = (
+            f"Details for **{req.ki_name}** have been saved.{share_line}\n\n"
+            f"Would you like to add another Authorised Signatory or Key Individual to this account?"
+        )
 
         insert_conversation_log(
             user_email=req.email, role="agent", message=msg, channel="chat",
@@ -769,15 +785,18 @@ async def ki_loop_finalize(req: KiLoopFinalizeRequest):
                         _ki.get("verification_status") == "verified" or
                         _ki_name.upper() in _so_verified_names
                     )
+                    _ki_status = "Verified" if _ki_is_verified else "⏳ Pending"
                     if _ki_name:
-                        _so_summary_lines.append({
-                            "name": _ki_name, "is_as": bool(_ki_is_as), "is_ubo": bool(_ki_is_ubo),
-                            "share": _ki_share, "verified": bool(_ki_is_verified),
-                        })
+                        _so_summary_lines.append(
+                            f"{_idx}. **{_ki_name}** — {_ki_role_label} | Share: {_ki_share} | {_ki_status}"
+                        )
             except Exception as _kse:
                 logger.warning(f"[KI-LOOP] Could not build SO KI summary: {_kse}")
 
-            _so_summary_block = members_summary(_so_summary_lines, "summary.header_final", normalize_language(None))
+            _so_summary_block = (
+                "\n\n**Final Members List:**\n" + "\n".join(_so_summary_lines)
+                if _so_summary_lines else ""
+            )
 
             # ── FATCA → PEP → Product Package → Self-Declaration chain (Single Owner) ──
             # Re-enabled: Single Owner now goes through the same compliance chain
@@ -787,18 +806,14 @@ async def ki_loop_finalize(req: KiLoopFinalizeRequest):
             _so_pep_done   = get_pep_status_disk_only(req.email) == "completed"
 
             if not _so_fatca_done:
-                msg = render_message("ki_loop.so_fatca", normalize_language(None), summary=_so_summary_block)
+                msg = (
+                    f"All identity documents are verified.{_so_summary_block}\n\n"
+                    f"One more thing before we move on — please complete your **FATCA "
+                    f"Declaration** below."
+                )
                 insert_conversation_log(
                     user_email=req.email, role="agent", message=msg, channel="chat",
-                    # fatca_trigger must be persisted here (not just returned in the
-                    # HTTP response) — transformLogToMessage() on the frontend only
-                    # reconstructs msg.fatcaTrigger from metadata.fatca_trigger on any
-                    # rebuild (language switch, reload, logout/login). Without this,
-                    # the FATCA card silently disappears the moment the page rebuilds
-                    # from history instead of from the just-received response. Same
-                    # fix already applied to product_package_trigger/self_declaration_trigger
-                    # below — this closes the gap for fatca_trigger/pep_trigger too.
-                    metadata={"message_type": "ki_loop_finalized", "next_step": "fatca", "fatca_trigger": True}
+                    metadata={"message_type": "ki_loop_finalized", "next_step": "fatca"}
                 )
                 return {
                     "success":                  True,
@@ -811,11 +826,13 @@ async def ki_loop_finalize(req: KiLoopFinalizeRequest):
                 }
 
             if not _so_pep_done:
-                msg = render_message("ki_loop.pep", normalize_language(None), summary=_so_summary_block)
+                msg = (
+                    f"FATCA declaration saved.{_so_summary_block}\n\n"
+                    f"Please complete your **PEP (Politically Exposed Person) Declaration** below."
+                )
                 insert_conversation_log(
                     user_email=req.email, role="agent", message=msg, channel="chat",
-                    # Same reload-survival fix as fatca_trigger above, for pep_trigger.
-                    metadata={"message_type": "ki_loop_finalized", "next_step": "pep", "pep_trigger": True}
+                    metadata={"message_type": "ki_loop_finalized", "next_step": "pep"}
                 )
                 return {
                     "success":                  True,
@@ -828,10 +845,14 @@ async def ki_loop_finalize(req: KiLoopFinalizeRequest):
                 }
 
             if not is_package_done(req.email):
-                msg = render_message("ki_loop.package", normalize_language(None), summary=_so_summary_block)
+                msg = (
+                    f"FATCA and PEP declarations are complete.{_so_summary_block}\n\n"
+                    f"Please select your **Product Package** below. "
+                    f"Review the available packages and choose the one that best suits your business needs."
+                )
                 insert_conversation_log(
                     user_email=req.email, role="agent", message=msg, channel="chat",
-                    metadata={"message_type": "ki_loop_finalized", "next_step": "product_package", "product_package_trigger": True}
+                    metadata={"message_type": "ki_loop_finalized", "next_step": "product_package"}
                 )
                 return {
                     "success":                  True,
@@ -843,10 +864,13 @@ async def ki_loop_finalize(req: KiLoopFinalizeRequest):
                     "next_step":                "product_package",
                 }
 
-            msg = render_message("ki_loop.so_selfdecl", normalize_language(None), summary=_so_summary_block)
+            msg = (
+                f"Product Package selected.{_so_summary_block}\n\n"
+                f"Please complete your **Self-Declaration** below."
+            )
             insert_conversation_log(
                 user_email=req.email, role="agent", message=msg, channel="chat",
-                metadata={"message_type": "ki_loop_finalized", "next_step": "self_declaration", "self_declaration_trigger": True}
+                metadata={"message_type": "ki_loop_finalized", "next_step": "self_declaration"}
             )
             return {
                 "success":                  True,
@@ -898,25 +922,29 @@ async def ki_loop_finalize(req: KiLoopFinalizeRequest):
                     _ki.get("verification_status") == "verified" or
                     _ki_name.upper() in _mo_verified_names
                 )
+                _ki_status_mo = "Verified" if _ki_mo_is_verified else "⏳ Pending"
                 if _ki_name:
-                    _ki_summary_lines.append({
-                        "name": _ki_name, "is_as": bool(_ki_is_as_mo), "is_ubo": bool(_ki_is_ubo_mo),
-                        "share": _ki_share_mo, "verified": bool(_ki_mo_is_verified),
-                    })
+                    _ki_summary_lines.append(
+                        f"{_idx}. **{_ki_name}** — {_ki_role} | Share: {_ki_share_mo} | {_ki_status_mo}"
+                    )
         except Exception as _kse:
             logger.warning(f"[KI-LOOP] Could not build KI summary: {_kse}")
 
-        _ki_summary_block = members_summary(_ki_summary_lines, "summary.header_registered", normalize_language(None))
+        _ki_summary_block = (
+            "\n\n**Registered Individuals:**\n" + "\n".join(_ki_summary_lines)
+            if _ki_summary_lines else ""
+        )
 
         # ── FATCA → PEP → Product Package → Self-Declaration chain (Multiple Owner) ──
         if not _fatca_done:
-            msg = render_message("ki_loop.mo_fatca", normalize_language(None), total=_total, summary=_ki_summary_block)
+            msg = (
+                f"All {_total} individuals are confirmed.{_ki_summary_block}\n\n"
+                f"One more thing before we move on — please complete your **FATCA "
+                f"Declaration** below."
+            )
             insert_conversation_log(
                 user_email=req.email, role="agent", message=msg, channel="chat",
-                # Same reload-survival fix as the Single Owner branch above —
-                # transformLogToMessage() needs metadata.fatca_trigger to
-                # reconstruct the card after a rebuild.
-                metadata={"message_type": "ki_loop_finalized", "next_step": "fatca", "fatca_trigger": True}
+                metadata={"message_type": "ki_loop_finalized", "next_step": "fatca"}
             )
             return {
                 "success":                   True,
@@ -928,11 +956,13 @@ async def ki_loop_finalize(req: KiLoopFinalizeRequest):
             }
 
         if not _pep_done:
-            msg = render_message("ki_loop.pep", normalize_language(None), summary=_ki_summary_block)
+            msg = (
+                f"FATCA declaration saved.{_ki_summary_block}\n\n"
+                f"Please complete your **PEP (Politically Exposed Person) Declaration** below."
+            )
             insert_conversation_log(
                 user_email=req.email, role="agent", message=msg, channel="chat",
-                # Same reload-survival fix as above, for pep_trigger.
-                metadata={"message_type": "ki_loop_finalized", "next_step": "pep", "pep_trigger": True}
+                metadata={"message_type": "ki_loop_finalized", "next_step": "pep"}
             )
             return {
                 "success":                   True,
@@ -945,7 +975,11 @@ async def ki_loop_finalize(req: KiLoopFinalizeRequest):
 
         # ── Product Package gate (Multiple Owner) — after FATCA & PEP ────────
         if not is_package_done(req.email):
-            msg = render_message("ki_loop.package", normalize_language(None), summary=_ki_summary_block)
+            msg = (
+                f"FATCA and PEP declarations are complete.{_ki_summary_block}\n\n"
+                f"Please select your **Product Package** below. "
+                f"Review the available packages and choose the one that best suits your business needs."
+            )
             insert_conversation_log(
                 user_email=req.email, role="agent", message=msg, channel="chat",
                 metadata={"message_type": "ki_loop_finalized", "next_step": "product_package", "product_package_trigger": True}
@@ -960,7 +994,10 @@ async def ki_loop_finalize(req: KiLoopFinalizeRequest):
                 "next_step":                 "product_package",
             }
 
-        msg = render_message("ki_loop.mo_selfdecl", normalize_language(None), total=_total, summary=_ki_summary_block)
+        msg = (
+            f"All {_total} identity documents verified.{_ki_summary_block}\n\n"
+            f"The final step is the **Self-Declaration**."
+        )
         insert_conversation_log(
             user_email=req.email, role="agent", message=msg, channel="chat",
             metadata={
@@ -1002,9 +1039,9 @@ async def ki_verify(req: KiVerifyRequest):
 
         try:
             from app.services.message_generator import MessageGenerator
-            msg = MessageGenerator.ki_verified(language=normalize_language(None))
+            msg = MessageGenerator.ki_verified(language="english")
         except Exception:
-            msg = render_message("ki.verified_fallback", normalize_language(None))
+            msg = "Identity verification complete. Would you like to add another Key Individual, or shall we proceed?"
 
         insert_conversation_log(
             user_email=req.email, role="agent", message=msg, channel="chat",

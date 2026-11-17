@@ -28,7 +28,7 @@ The `client` parameter
 ----------------------
 Three groups of callers do not use the default anon client:
 
-  * `chatupload` (3 sites) uses `supabase_service`,
+  * `chatupload` (3 sites) and `growx_integration` use `supabase_service`,
     the service-role client that bypasses row-level security
   * `tampering_service.update_user_tampering_status` receives its client as a
     function argument from the caller
@@ -191,6 +191,18 @@ class UserRepository:
             limit=1,
             client=client,
         )
+
+    @staticmethod
+    def get_growx_profile(email: str, columns: str, *, client: Any = None) -> Any:
+        """
+        `select(<growx column list>).single()`.
+
+        GrowX reads one of two column lists — a full one including the GrowX
+        identifiers, and a "safe" one without them, used on the retry path. The
+        caller owns that choice (`_GROWX_USER_COLS_FULL` / `_SAFE`), so the list
+        is a parameter rather than two near-identical methods here.
+        """
+        return UserRepository.select_by_email(email, columns, single=True, client=client)
 
     # ------------------------------------------------------------------
     # Reads — counts and listings (admin dashboard)

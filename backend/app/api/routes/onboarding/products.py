@@ -4,7 +4,6 @@ Product package selection and recommendation.
 Three endpoints over `product_package_service`. The recommendation scores on
 nature of business, annual turnover and ownership type.
 """
-from app.i18n import localized
 
 import logging
 from fastapi import APIRouter, HTTPException
@@ -61,10 +60,11 @@ async def save_product_package(req: ProductPackageSaveRequest):
         # ── Updated flow: FATCA → PEP → Product Package → Self-Declaration ──
         # Product Package is now the LAST step before Self-Declaration,
         # so after saving the package we trigger Self-Declaration (not FATCA).
-        msg = localized(None,
-            en=f"**{req.selected_package} Package** selected successfully.\n\nYour chosen services: {', '.join(req.availed_products)}.\n\nPlease complete your **Self-Declaration** below to finalise your onboarding.",
-            es=f"**Paquete {req.selected_package}** seleccionado correctamente.\n\nServicios elegidos: {', '.join(req.availed_products)}.\n\nComplete su **Autodeclaración** a continuación para finalizar la incorporación.",
-            ar=f"تم اختيار **باقة {req.selected_package}** بنجاح.\n\nالخدمات المختارة: {'، '.join(req.availed_products)}.\n\nيُرجى استكمال **الإقرار الذاتي** أدناه لإنهاء التسجيل.")
+        msg = (
+            f"**{req.selected_package} Package** selected successfully.\n\n"
+            f"Your chosen services: {', '.join(req.availed_products)}.\n\n"
+            f"Please complete your **Self-Declaration** below to finalise your onboarding."
+        )
 
         insert_conversation_log(
             user_email=req.email,

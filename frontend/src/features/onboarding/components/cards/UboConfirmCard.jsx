@@ -1,11 +1,9 @@
 import React, { useState } from 'react';
-import { useLanguage } from '../../../../context/LanguageContext';
 import { confirmUbo } from '../../../../api/onboarding';
 import { CheckCircle, Loader, User } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 const UboConfirmCard = ({ memberName, sharePercentage, suggestedUbo, userEmail, onConfirmed }) => {
-  const { t } = useLanguage();
   const [isUbo, setIsUbo] = useState(suggestedUbo);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [confirmed, setConfirmed] = useState(false);
@@ -18,11 +16,11 @@ const UboConfirmCard = ({ memberName, sharePercentage, suggestedUbo, userEmail, 
         member_name: memberName,
         is_ubo: isUbo,
       });
-      toast.success(t('ui.uboSavedToast', { name: memberName }));
+      toast.success(`UBO status saved for ${memberName}`);
       setConfirmed(true);
       if (onConfirmed) onConfirmed({ memberName, isUbo, message: res.data.message });
     } catch (e) {
-      toast.error(t('ui.uboSaveFailed'));
+      toast.error('Failed to save UBO status');
     } finally {
       setIsSubmitting(false);
     }
@@ -32,20 +30,20 @@ const UboConfirmCard = ({ memberName, sharePercentage, suggestedUbo, userEmail, 
     <div className="mt-3 p-4 bg-brand-primary rounded-xl border-2 border-amber-200">
       <div className="flex items-center gap-2 mb-2">
         <User className="h-5 w-5 text-amber-600" />
-        <p className="text-sm font-bold text-amber-900">{t('ui.uboConfirmation')} {memberName}</p>
+        <p className="text-sm font-bold text-amber-900">UBO Confirmation — {memberName}</p>
       </div>
 
       {sharePercentage > 0 && (
         <p className="text-xs text-gray-600 mb-3">
-          {t('ui.shareOwnership')} <strong>{sharePercentage}{!String(sharePercentage).endsWith('%') ? '%' : ''}</strong>
-          {suggestedUbo && <span className="ms-2 text-amber-700 font-semibold">{t('ui.suggestedUbo')}</span>}
+          Share ownership: <strong>{sharePercentage}{!String(sharePercentage).endsWith('%') ? '%' : ''}</strong>
+          {suggestedUbo && <span className="ml-2 text-amber-700 font-semibold">(≥25% — suggested UBO)</span>}
         </p>
       )}
 
       {!confirmed ? (
         <>
           <p className="text-xs text-gray-700 mb-3 font-medium">
-            {t('ui.isUboQuestion', { name: memberName })}
+            Is <strong>{memberName}</strong> a Ultimate Beneficial Owner (UBO)?
           </p>
           <div className="flex gap-3 mb-4">
             <button
@@ -55,7 +53,7 @@ const UboConfirmCard = ({ memberName, sharePercentage, suggestedUbo, userEmail, 
                 : 'bg-white border-gray-300 text-gray-700 hover:border-amber-400'
                 }`}
             >
-              {t('ui.yesUbo')}
+              Yes — UBO
             </button>
             <button
               onClick={() => setIsUbo(false)}
@@ -64,7 +62,7 @@ const UboConfirmCard = ({ memberName, sharePercentage, suggestedUbo, userEmail, 
                 : 'bg-white border-gray-300 text-gray-700 hover:border-gray-400'
                 }`}
             >
-              {t('ui.noUbo')}
+              No — Not UBO
             </button>
           </div>
           <button
@@ -73,9 +71,9 @@ const UboConfirmCard = ({ memberName, sharePercentage, suggestedUbo, userEmail, 
             className="w-full py-2.5 bg-brand-primary text-white rounded-xl font-semibold hover:opacity-90 transition-all disabled:opacity-50 flex items-center justify-center gap-2 text-sm"
           >
             {isSubmitting ? (
-              <><Loader className="h-4 w-4 animate-spin" /> {t('ui.saving')}</>
+              <><Loader className="h-4 w-4 animate-spin" /> Saving...</>
             ) : (
-              <><CheckCircle className="h-4 w-4" /> {t('ui.confirmUbo')}</>
+              <><CheckCircle className="h-4 w-4" /> Confirm UBO Status</>
             )}
           </button>
         </>
@@ -83,7 +81,7 @@ const UboConfirmCard = ({ memberName, sharePercentage, suggestedUbo, userEmail, 
         <div className="flex items-center gap-2">
           <CheckCircle className="h-5 w-5 text-green-600" />
           <span className="text-sm font-semibold text-green-700">
-            {t('ui.recordedAs', { name: memberName, status: isUbo ? t('ui.ubo') : t('ui.notUbo') })}
+            {memberName} recorded as {isUbo ? 'UBO' : 'Not UBO'}
           </span>
         </div>
       )}

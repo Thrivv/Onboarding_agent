@@ -11,7 +11,6 @@ Moved verbatim from `app/api/routes/chatupload.py` in Stage B4.
 """
 
 from __future__ import annotations
-from app.i18n import localized
 
 import logging
 import json
@@ -450,10 +449,12 @@ def get_onboarding_status(email: str, user_data: dict, skip_welcome: bool = Fals
     # POST /ownership-type/save once the user answers.
     ownership_selection_pending = (user_docs_path(email) / "ownership_ambiguous.json").exists()
     if ownership_selection_pending and not skip_welcome:
-        ai_message = localized(None,
-            en="I couldn't clearly read the ownership details on your Commercial License. Quick question so I can set things up right: do you own this business by yourself, as a Sole Proprietorship, or do you share ownership with others, under Joint Ownership?",
-            es="No pude leer con claridad los datos de propiedad de su Licencia Comercial. Una pregunta rápida para configurarlo bien: ¿es el único propietario de la empresa (propiedad única) o comparte la propiedad con otras personas (propiedad conjunta)?",
-            ar="لم أتمكن من قراءة تفاصيل الملكية في رخصتك التجارية بوضوح. سؤال سريع لإعداد الحساب بشكل صحيح: هل تملك هذا النشاط بمفردك بصفة ملكية فردية، أم تتشارك الملكية مع آخرين بصفة ملكية مشتركة؟")
+        ai_message = (
+            "I couldn't clearly read the ownership details on your Commercial License. "
+            "Quick question so I can set things up right: do you own this business by "
+            "yourself, as a Sole Proprietorship, or do you share ownership with others, "
+            "under Joint Ownership?"
+        )
 
     # ============================================================================
     # GROUND-TRUTH PENDING-ACTION FLAGS
@@ -494,65 +495,6 @@ def get_onboarding_status(email: str, user_data: dict, skip_welcome: bool = Fals
         f"self_declaration={self_declaration_pending} ki_role_assignment={ki_role_assignment_pending} "
         f"ki_details={ki_details_pending}"
     )
-
-    # ============================================================================
-    # Stage 10 — LangGraph shadow-mode comparison (additive, read-only)
-    # ============================================================================
-    # Off unless LANGGRAPH_ENABLED=true (see config.py). When on, this recomputes
-    # the same two decisions this function just made — `stage` (via
-    # stage_table.resolve_stage(), called above) and the pending-action flags
-    # (via _resolve_pending_actions(), also called above) — through the graph
-    # package's `routing.route_by_ownership()` / `pending.all_pending()` instead,
-    # and logs any disagreement. It NEVER changes `ai_message`, the returned
-    # dict, or anything else a caller can observe — this block exists purely to
-    # keep proving, on real production traffic instead of only the synthetic
-    # 14,688-case corpus `tests/langgraph_parity_check.py` already covers, that
-    # the graph package's routing/pending logic has not drifted from this
-    # function's own — before Stage 11 lets anything actually act on the graph's
-    # answer instead of this function's.
-    #
-    # Every exception here is caught and logged, never raised — a bug in the
-    # shadow path (or a graph-package import failure) must never be able to
-    # break the real onboarding-status response this function returns.
-    try:
-        from app.config import LANGGRAPH_ENABLED
-
-        if LANGGRAPH_ENABLED:
-            from app.domain.onboarding.graph.adapters import state_from_user
-            from app.domain.onboarding.graph.routing import route_by_ownership
-            from app.domain.onboarding.graph.pending import all_pending
-
-            _shadow_state = state_from_user(email, user_data, channel="chat")
-            _shadow_routed_node = route_by_ownership(_shadow_state)
-            _shadow_pending_types = {p["type"] for p in all_pending(email, _shadow_state)}
-
-            _legacy_pending_flags = {
-                "ownership_choice": ownership_selection_pending,
-                "as_ki_selection": as_ki_selection_pending,
-                "ki_loop_prompt": ki_loop_prompt_pending,
-                "ki_role_assignment": ki_role_assignment_pending,
-                "ki_details": ki_details_pending,
-                "mismatch_role": mismatch_role_pending,
-                "product_package": product_package_pending,
-                "self_declaration": self_declaration_pending,
-            }
-            _mismatches = [
-                f"pending[{_type}]: legacy={_legacy_val}, graph={_type in _shadow_pending_types}"
-                for _type, _legacy_val in _legacy_pending_flags.items()
-                if bool(_legacy_val) != (_type in _shadow_pending_types)
-            ]
-            if _shadow_state.get("stage") != stage:
-                _mismatches.append(f"stage: legacy={stage!r}, graph={_shadow_state.get('stage')!r}")
-
-            if _mismatches:
-                logger.warning(
-                    f"[graph.shadow] {email} DRIFT vs legacy get_onboarding_status(): "
-                    f"{'; '.join(_mismatches)} (routed_node={_shadow_routed_node!r})"
-                )
-            else:
-                logger.debug(f"[graph.shadow] {email} matches legacy — routed_node={_shadow_routed_node!r}")
-    except Exception as _shadow_exc:
-        logger.warning(f"[graph.shadow] {email} shadow comparison failed (non-fatal): {_shadow_exc}")
 
     return {
         "stage": stage,

@@ -1,10 +1,7 @@
 import React from 'react';
 import { calculateAge } from '../../features/onboarding/utils/formatters';
-import { useLanguage } from '../../context/LanguageContext';
-import { translateValue } from '../../features/onboarding/utils/reportI18n';
 
 const InfoRow = ({ label, value, icon: Icon, fullWidth = false, showAge = false }) => {
-  const { t } = useLanguage();
   if (!value || value === 'N/A' || value === 'null' || value === 'undefined') {
     return null;
   }
@@ -33,11 +30,7 @@ const InfoRow = ({ label, value, icon: Icon, fullWidth = false, showAge = false 
               isNegative ? 'text-emerald-700' :
                 'text-slate-800'
             }`}>
-            {/* Fixed answers (Yes/No/True/False/Identified/Clear) are shown in the
-                UI language; everything else is document data, shown exactly as
-                extracted. <bdi> keeps IDs, dates and Latin names in order inside
-                right-to-left text. Status colouring above still uses the raw value. */}
-            <bdi>{String(translateValue(t, value))}</bdi>
+            {String(value)}
           </p>
           {(showAge || isStatus) && (
             <div className="flex-shrink-0">

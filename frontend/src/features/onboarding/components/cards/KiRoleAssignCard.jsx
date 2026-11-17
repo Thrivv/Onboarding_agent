@@ -2,10 +2,8 @@ import React, { useState } from 'react';
 import { addKeyIndividualViaAi } from '../../../../api/keyIndividuals';
 import { CheckCircle, Loader, Phone, User } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { useLanguage } from '../../../../context/LanguageContext';
 
 const KiRoleAssignCard = ({ userEmail, extractedData, documentId, onSaved }) => {
-  const { t } = useLanguage();
   const [role, setRole] = useState('AS');
   const [isSaving, setIsSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -17,7 +15,7 @@ const KiRoleAssignCard = ({ userEmail, extractedData, documentId, onSaved }) => 
     const given = (extractedData?.given_names || '').trim();
     const surname = (extractedData?.surname || '').trim();
     if (given || surname) return `${given} ${surname}`.trim();
-    return t('cards.kiRoleAssign.defaultIndividual');
+    return 'Individual';
   })();
 
   const handleSave = async () => {
@@ -31,13 +29,13 @@ const KiRoleAssignCard = ({ userEmail, extractedData, documentId, onSaved }) => 
       });
       if (res.data.success) {
         setSaved(true);
-        toast.success(t('cards.kiRoleAssign.toastAdded', { name: res.data.display_name || extractedName }));
+        toast.success(`${res.data.display_name || extractedName} added successfully`);
         if (onSaved) onSaved(res.data);
       } else {
-        toast.error(t('cards.kiRoleAssign.toastFailed'));
+        toast.error('Failed to save individual');
       }
     } catch (e) {
-      toast.error(t('cards.kiRoleAssign.toastFailed'));
+      toast.error('Failed to save individual');
     } finally {
       setIsSaving(false);
     }
@@ -49,12 +47,12 @@ const KiRoleAssignCard = ({ userEmail, extractedData, documentId, onSaved }) => 
         <div className="p-1.5 bg-brand-primary rounded-lg">
           <User className="h-4 w-4 text-white" />
         </div>
-        <p className="text-sm font-bold text-brand-primary">{t('cards.kiRoleAssign.title')}</p>
+        <p className="text-sm font-bold text-brand-primary">Assign Role</p>
       </div>
       <p className="text-xs text-gray-700 mb-1">
-        {t('cards.kiRoleAssign.verifiedFor')} <span className="font-semibold text-brand-primary">{extractedName}</span>
+        Document verified for: <span className="font-semibold text-brand-primary">{extractedName}</span>
       </p>
-      <p className="text-xs text-gray-700 mb-4">{t('cards.kiRoleAssign.selectRole')}</p>
+      <p className="text-xs text-gray-700 mb-4">Please select a role for this individual:</p>
 
       {!saved ? (
         <>
@@ -66,7 +64,7 @@ const KiRoleAssignCard = ({ userEmail, extractedData, documentId, onSaved }) => 
                 : 'bg-white border-gray-300 text-brand-primary hover:border-brand-primary'
                 }`}
             >
-              {t('cards.common.authorisedSignatory')}
+              Authorised Signatory
             </button>
             <button
               onClick={() => setRole('MEMBER')}
@@ -75,7 +73,7 @@ const KiRoleAssignCard = ({ userEmail, extractedData, documentId, onSaved }) => 
                 : 'bg-white border-gray-300 text-brand-primary hover:border-brand-primary'
                 }`}
             >
-              {t('cards.common.member')}
+              Member
             </button>
           </div>
           <button
@@ -84,18 +82,15 @@ const KiRoleAssignCard = ({ userEmail, extractedData, documentId, onSaved }) => 
             className="w-full py-2.5 bg-brand-primary text-white rounded-xl font-semibold text-sm hover:opacity-90 transition-all disabled:opacity-50 flex items-center justify-center gap-2"
           >
             {isSaving
-              ? <><Loader className="h-4 w-4 animate-spin text-white" /> {t('cards.common.saving')}</>
-              : <><CheckCircle className="h-4 w-4 text-white" /> {t('cards.kiRoleAssign.confirmSave')}</>
+              ? <><Loader className="h-4 w-4 animate-spin text-white" /> Saving...</>
+              : <><CheckCircle className="h-4 w-4 text-white" /> Confirm &amp; Save</>
             }
           </button>
         </>
       ) : (
         <div className="flex items-center gap-2 text-green-700 text-sm font-semibold p-2 bg-green-50 rounded-lg border border-green-200">
           <CheckCircle className="h-4 w-4" />
-          {t('cards.kiRoleAssign.addedAs', {
-            name: extractedName,
-            role: role === 'AS' ? t('cards.common.authorisedSignatory') : t('cards.common.member'),
-          })}
+          {extractedName} added as {role === 'AS' ? 'Authorised Signatory' : 'Member'}.
         </div>
       )}
     </div>

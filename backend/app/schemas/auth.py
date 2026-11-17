@@ -50,17 +50,4 @@ class LoginRequest(BaseModel):
 
 
 class LogoutRequest(BaseModel):
-    # Optional now that the session id travels as an httpOnly cookie rather
-    # than something the frontend can read out of localStorage and send back
-    # in the body. Kept as a fallback for any caller that still supplies it.
-    session_id: Optional[str] = None
-
-
-class RequestPasswordResetRequest(BaseModel):
-    email: EmailStr
-
-
-class ResetPasswordRequest(BaseModel):
-    email: EmailStr
-    otp: str
-    new_password: str
+    session_id: str

@@ -6,15 +6,12 @@
 #   generate_otp()   — produce a 6-digit OTP
 #   store_otp()      — cache OTP in-memory with expiry (10 min)
 #   verify_otp()     — validate OTP and clear it on success
-#   send_otp_email() — render OTP email (hardcoded template by default;
-#                       optional opt-in LLM-authored copy) and dispatch
+#   send_otp_email() — generate email content via call_local_llm() and dispatch
 # ============================================================================
 
 import random
-import re
 import time
 import smtplib
-import hmac
 import logging
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
@@ -107,32 +104,13 @@ def verify_otp(email: str, otp_input: str) -> Tuple[bool, str]:
         logger.warning(f"[OTP] Max attempts exceeded for {email}")
         return False, "max_attempts"
 
+    # ── DEMO BYPASS: any 6-digit number is accepted ──────────────────────────
     _cleaned = otp_input.strip()
-
-    # TEST-ENVIRONMENT BYPASS (config.OTP_BYPASS_ENABLED, default False).
-    # When explicitly turned on for an isolated test/QA deployment, accept
-    # any well-formed 6-digit code without checking it against the one that
-    # was actually generated and emailed. A record must still exist and not
-    # be expired/exhausted (checks above), so this only skips the *value*
-    # comparison — it does not disable the OTP flow entirely. See
-    # config.OTP_BYPASS_ENABLED for why this must never be on anywhere real
-    # users can reach.
-    if config.OTP_BYPASS_ENABLED and re.fullmatch(r"\d{6}", _cleaned):
-        del _otp_store[key]
-        logger.warning(f"[OTP] BYPASS: accepted OTP {_cleaned} for {email} (OTP_BYPASS_ENABLED=true)")
-        return True, "verified"
-
-    # Compare against the actual stored OTP. This used to accept ANY
-    # 6-digit input ("DEMO BYPASS") unconditionally — meaning
-    # email-verification and password-reset codes could be satisfied
-    # without ever receiving the email, by anyone who knew the target's
-    # address, in every environment including production. Fixed to a real,
-    # constant-time comparison against the code that was generated and
-    # emailed, with the bypass now opt-in and test-only (see above).
-    if hmac.compare_digest(_cleaned, record["otp"]):
+    if _cleaned.isdigit() and len(_cleaned) == 6:
         del _otp_store[key]          # consume OTP — one-time use
-        logger.info(f"[OTP] OTP verified for {email}")
+        logger.info(f"[OTP] OTP verified for {email} (demo bypass)")
         return True, "verified"
+    # ── end DEMO BYPASS ───────────────────────────────────────────────────────
 
     # Increment attempt counter on failure
     _otp_store[key]["attempts"] += 1
@@ -142,40 +120,13 @@ def verify_otp(email: str, otp_input: str) -> Tuple[bool, str]:
 
 
 # ============================================================================
-# EMAIL CONTENT
+# LLM-GENERATED EMAIL CONTENT
 # ============================================================================
-# SECURITY FIX (prompt-remediation Phase 1, item #2): this module used to
-# build the verification email by interpolating the LIVE OTP and the
-# recipient's real email address directly into an LLM prompt
-# (_generate_email_content_via_llm(email, otp), removed here), then parsing
-# the subject/body back out of free-form text via a brittle
-# "SUBJECT:"/"BODY:" convention that silently degraded to
-# "<pre>{raw}</pre>" whenever the model didn't follow it. A one-time bearer
-# credential has no legitimate reason to leave the process boundary into a
-# model provider (and its request/response path) just to have a paragraph
-# phrased around it. The hardcoded template below is now the default and
-# only path: it renders the OTP correctly with zero model calls, zero
-# secret exposure, and zero parsing risk.
-#
-# config.OTP_EMAIL_LLM_PERSONALIZATION_ENABLED (default False) opts back
-# into LLM-authored copy for teams that want varied phrasing. When it is
-# on, _generate_email_copy_via_llm() asks the model to write the email
-# around a placeholder token — the real OTP and the recipient's address
-# are never included in the prompt — and the placeholder is substituted
-# with the real code only after the model call returns.
 
-_OTP_PLACEHOLDER = "{{OTP_CODE}}"
-
-
-def _generate_email_copy_via_llm(otp: str) -> Tuple[str, str]:
+def _generate_email_content_via_llm(email: str, otp: str) -> Tuple[str, str]:
     """
-    Optional, opt-in (config.OTP_EMAIL_LLM_PERSONALIZATION_ENABLED) path:
-    ask the LLM to phrase the OTP email around a placeholder token, never
-    the real code or the recipient's address, then substitute the real OTP
-    into the model's output afterwards.
-
-    Falls back to the hardcoded template if the LLM fails or omits the
-    placeholder.
+    Use call_local_llm() to generate the OTP email subject and HTML body.
+    Falls back to a hardcoded template if LLM fails.
 
     Returns:
         (subject: str, html_body: str)
@@ -184,49 +135,43 @@ def _generate_email_copy_via_llm(otp: str) -> Tuple[str, str]:
         from app.services.run_model import call_local_llm
 
         prompt = (
-            f"Generate a professional email for the {config.BRAND_NAME} Digital OnBoarding platform.\n"
-            "The email should contain a one-time verification code for account email "
-            "verification. Do not invent a code -- use exactly this placeholder token "
-            "everywhere the code should appear: " + _OTP_PLACEHOLDER + "\n"
-            "The email should:\n"
-            "  1. Have a clear, professional subject line that also uses the "
-            "placeholder token in place of the code.\n"
-            "  2. Greet the user warmly (no name is known -- use a generic greeting).\n"
-            "  3. Display the placeholder token prominently as the code.\n"
-            "  4. State that the code is valid for 10 minutes.\n"
-            "  5. Warn the user not to share the code.\n"
-            f"  6. Close professionally with '{config.BRAND_NAME} Support Team'.\n"
-            "Return the response in this exact format (two lines only):\n"
-            "SUBJECT: <subject line here>\n"
-            "BODY: <full HTML email body here>\n"
+            f"Generate a professional email for the DigiOB Digital OnBoarding platform. "
+            f"The email should contain a 6-digit OTP for account email verification. "
+            f"The OTP is: {otp}. "
+            f"The recipient's email is: {email}. "
+            f"The email should:\n"
+            f"  1. Have a clear, professional subject line.\n"
+            f"  2. Greet the user warmly.\n"
+            f"  3. Clearly display the OTP in a prominent way.\n"
+            f"  4. State that the OTP is valid for 10 minutes.\n"
+            f"  5. Warn the user not to share the OTP.\n"
+            f"  6. Close professionally with 'DigiOB Support Team'.\n"
+            f"Return the response in this exact format (two lines only):\n"
+            f"SUBJECT: <subject line here>\n"
+            f"BODY: <full HTML email body here>\n"
         )
 
         raw = call_local_llm(prompt)
 
-        subject = None
+        # Parse subject and body from LLM response
+        subject = f"DigiOB — Your Verification OTP: {otp}"
         body_html = None
 
-        lines = raw.strip().split("\n", 1)
-        if lines and lines[0].upper().startswith("SUBJECT:"):
-            subject = lines[0][len("SUBJECT:"):].strip()
-        if len(lines) > 1 and lines[1].upper().startswith("BODY:"):
-            body_html = lines[1][len("BODY:"):].strip()
+        lines = raw.strip().split('\n', 1)
+        if lines and lines[0].upper().startswith('SUBJECT:'):
+            subject = lines[0][len('SUBJECT:'):].strip()
+        if len(lines) > 1 and lines[1].upper().startswith('BODY:'):
+            body_html = lines[1][len('BODY:'):].strip()
 
-        # The model must have used the placeholder -- otherwise we have no
-        # reliable way to know where the real OTP belongs, and we do not
-        # guess. Any deviation falls back to the hardcoded template.
-        if not subject or not body_html or _OTP_PLACEHOLDER not in subject + body_html:
-            logger.warning("[OTP] LLM email copy missing placeholder token, using fallback")
-            return _fallback_email_content(otp)
+        if not body_html:
+            # LLM returned free-form text — wrap it in minimal HTML
+            body_html = f"<pre style='font-family:sans-serif'>{raw}</pre>"
 
-        subject = subject.replace(_OTP_PLACEHOLDER, otp)
-        body_html = body_html.replace(_OTP_PLACEHOLDER, otp)
-
-        logger.info(f"[OTP] LLM generated email copy (subject: {len(subject)} chars)")
+        logger.info(f"[OTP] LLM generated email content (subject: {len(subject)} chars)")
         return subject, body_html
 
     except Exception as e:
-        logger.warning(f"[OTP] LLM email copy generation failed, using fallback: {e}")
+        logger.warning(f"[OTP] LLM email generation failed, using fallback: {e}")
         return _fallback_email_content(otp)
 
 
@@ -302,10 +247,7 @@ def send_otp_email(to_email: str, otp: str) -> bool:
     Returns True on success, False on failure.
     """
     try:
-        if config.OTP_EMAIL_LLM_PERSONALIZATION_ENABLED:
-            subject, html_body = _generate_email_copy_via_llm(otp)
-        else:
-            subject, html_body = _fallback_email_content(otp)
+        subject, html_body = _generate_email_content_via_llm(to_email, otp)
 
         msg = MIMEMultipart("alternative")
         msg["Subject"]  = str(Header(subject, "utf-8"))

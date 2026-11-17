@@ -14,7 +14,6 @@ from pydantic import BaseModel
 
 class MoaAsRequest(BaseModel):
     email: str
-    language: Optional[str] = "english"
     member_role_map: Optional[dict] = None   # NEW: { "MEMBER NAME": "AS" | "MEMBER" }
     member_as_map:   Optional[dict] = None   # LEGACY: { "MEMBER NAME": true/false }
 

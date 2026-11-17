@@ -1,9 +1,7 @@
 import React from 'react';
-import { useLanguage } from '../../../../context/LanguageContext';
 import { FileText, X } from 'lucide-react';
 
 const DocumentPreviewModal = ({ isOpen, onClose, document }) => {
-  const { t } = useLanguage();
   if (!isOpen || !document) return null;
 
   const isPDF = document.type === 'application/pdf';
@@ -34,7 +32,7 @@ const DocumentPreviewModal = ({ isOpen, onClose, document }) => {
             <iframe
               src={document.previewUrl}
               className="w-full h-[70vh] border rounded"
-              title={t('ui.pdfPreview')}
+              title="PDF Preview"
             />
           ) : isImage && document.previewUrl ? (
             <img
@@ -53,12 +51,12 @@ const DocumentPreviewModal = ({ isOpen, onClose, document }) => {
               <iframe
                 src={`data:application/pdf;base64,${document.base64}`}
                 className="w-full h-[70vh] border rounded"
-                title={t('ui.pdfPreview')}
+                title="PDF Preview"
               />
             )
           ) : (
             <div className="flex items-center justify-center h-64 text-gray-500">
-              <p>{t('ui.previewNotAvailable')}</p>
+              <p>Preview not available</p>
             </div>
           )}
         </div>

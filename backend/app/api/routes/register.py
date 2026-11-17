@@ -7,7 +7,6 @@ from typing import Optional, List
 from app.services.supabase_client import supabase, get_user_by_email, insert_user
 from app.services.email_sender import send_welcome_email
 from app.services.message_generator import MessageGenerator
-from app.services import bedrock_client
 from app.services.auth_service import hash_password
 from app.repositories.conversation_repository import ConversationRepository
 from app.repositories.user_repository import UserRepository
@@ -27,6 +26,12 @@ from app.domain.exceptions import (
 )
 
 logger = logging.getLogger(__name__)
+
+# NOTE: GrowX is not called from this file at all anymore — see the comment
+# in the registration handler below. All GrowX calls (API 1, 2, 3) now live
+# in growx_integration.py, fired automatically via trigger_api1_api2() /
+# trigger_api3() at the right lifecycle points (EID verified, self-declaration
+# confirmed) instead of at signup.
 
 router = APIRouter(prefix="/register", tags=["register"])
 
@@ -210,6 +215,17 @@ async def signup(request: SignupRequest):
         if request.incorporation_city:
             user_data["incorporation_city"] = request.incorporation_city
 
+        # ── GrowX integration is NOT called at signup ─────────────────────────
+        # API 1+2 used to fire here with a blank EID ("" — not available yet at
+        # signup), but GrowX's server always rejects that with a real, confirmed
+        # 706 DOCUMENT_VALUE_NOT_PRESENT response (verified live via
+        # test_growx_apis.py) — it can never succeed at this point in the flow,
+        # so calling it here was guaranteed noise, not a useful attempt.
+        # API 1+2 now fire once, with the real EID, via trigger_api1_api2() —
+        # see chatupload.py's EID-verification hooks (Corporate Single
+        # Owner). API 3 similarly fires later via trigger_api3() once Trade
+        # License + package data exist (see growx_integration.py).
+
         # Insert user into database
         result = UserRepository.insert(user_data)
         if not result.data:
@@ -352,23 +368,6 @@ def account_type_summary():
     except Exception as e:
         logger.error(f"Account type summary error: {e}")
         raise DomainError(context=str(e))
-
-
-@router.get("/bedrock-status")
-def bedrock_status():
-    """
-    Real, on-demand AWS Bedrock connectivity check for the Dashboard's
-    System Infrastructure panel. Deliberately NOT part of Docker's /health
-    (see bedrock_client.check_connection docstring) — this runs a small
-    live request against Bedrock only when the dashboard asks for it.
-    """
-    result = bedrock_client.check_connection()
-    return {
-        "bedrock_connected": result["connected"],
-        "detail": result["detail"],
-        "latency_ms": result["latency_ms"],
-        "checked_at": datetime.utcnow().isoformat(),
-    }
 
 
 @router.get("/onboarding-summary")

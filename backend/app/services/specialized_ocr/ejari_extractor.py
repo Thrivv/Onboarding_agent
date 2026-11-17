@@ -15,23 +15,25 @@ from xml.etree import ElementTree as ET
 from app import config
 
 # API Configuration
-API_KEY = config.AWS_BEARER_TOKEN_BEDROCK or ""
+# NOTE: "sk-or-v1-..." is a 12-char REDACTION placeholder, not a credential.
+# Preserved so behaviour is unchanged when the env var is unset, but it means
+# a missing key fails as a 401 from OpenRouter rather than a clear config
+# error. Worth dropping once startup validation is trusted.
+API_KEY = config.OPENROUTER_API_KEY or "sk-or-v1-..."
 # Model names + endpoint come from llm_client (env-driven via .env.docker).
 # Do not redeclare them here — see the LLM MODEL ROUTING block in .env.docker.
 from app.services.llm_client import (
-    LLM_API_URL,
+    OPENROUTER_API_URL,
     TEXT_PRIMARY,
     TEXT_FALLBACK,
     VISION_PRIMARY,
 )
-from app.services import bedrock_client
-from app.services.specialized_ocr.extraction_schema import validate_and_coerce
 import logging
 from app.utils.retry import retry_with_backoff
 
 logger = logging.getLogger(__name__)
 
-API_URL = LLM_API_URL
+API_URL = OPENROUTER_API_URL
 # Configurable via EJARI_API_TIMEOUT_SECONDS in .env.docker — change + restart
 # the container to raise/lower this without editing code.
 API_TIMEOUT_SECONDS = config.EJARI_API_TIMEOUT_SECONDS
@@ -58,6 +60,8 @@ ARABIC_FIELDS = [
 ]
 
 EXPECTED_FIELD_COUNT = 25
+
+
 
 
 class EjariExtractor:
@@ -120,17 +124,53 @@ class EjariExtractor:
                 except Exception:
                     pass
 
-    # PROMPT CACHING (prompt-remediation Phase 3): static instructions/schema/
-    # validation-rules moved here as a system prompt so bedrock_client.py's
-    # existing ephemeral prompt caching (see _to_bedrock_payload) applies to
-    # them instead of these ~450 lines being re-sent and re-processed as fresh
-    # input tokens on every single Ejari extraction call. Content is UNCHANGED,
-    # character-for-character, from the previous extract_with_ai() prompt --
-    # only its position moved (and it is now an f-string so EXPECTED_FIELD_COUNT
-    # still interpolates), so extraction behaviour is not expected to change.
-    _SYSTEM_PROMPT = f"""You are an expert AI model specialized in extracting information from UAE Ejari (Tenancy Contract Registration) certificates.
+    @retry_with_backoff(max_retries=3, base_delay=10, label="Ejari API")
+    def call_ai_api(self, prompt: str, model_name: str = None) -> str:
+        """Call OpenRouter API with retry logic"""
+        if not self.api_key:
+            return "API key not configured"
 
+        model = model_name or LLAMA_MODEL_NAME
+        
+        headers = {
+            "Authorization": f"Bearer {self.api_key}",
+            "Content-Type": "application/json",
+        }
+
+        data = {
+            "model": model,
+            "messages": [{"role": "user", "content": prompt}],
+            "temperature": 0.0,  # Changed to 0.0 for maximum consistency
+            "max_tokens": 3500,
+        }
+
+        try:
+            response = requests.post(self.api_url, headers=headers, json=data, timeout=API_TIMEOUT_SECONDS)
+
+            if response.status_code in [502, 503, 504]:
+                raise RuntimeError(f"Ejari API failed: {response.status_code} Server temporarily unavailable")
+
+            if response.status_code == 429:
+                raise RuntimeError(f"Ejari API failed: {response.status_code} Rate limit exceeded")
+
+            response.raise_for_status()
+            result = response.json()
+            return result["choices"][0]["message"]["content"]
+
+        except requests.exceptions.Timeout:
+            raise RuntimeError(f"Ejari API failed: Request timeout after {API_TIMEOUT_SECONDS} seconds")
+        except requests.exceptions.RequestException as e:
+            raise RuntimeError(f"Ejari API failed: {response.status_code if 'response' in locals() else 'Network error'} {str(e)}")
+
+    def extract_with_ai(self, raw_text: str, model_choice: str = "llama") -> Tuple[Dict, Dict]:
+        """Extract bilingual Ejari fields using AI - DOUBLE-PASS EXTRACTION WITH VALIDATION"""
+        model_name = QWEN_MODEL_NAME if model_choice == "qwen" else LLAMA_MODEL_NAME
+        
+        prompt = f"""You are an expert AI model specialized in extracting information from UAE Ejari (Tenancy Contract Registration) certificates.
+
+    =============================================================================
     🔴 CRITICAL INSTRUCTION: DOUBLE-PASS EXTRACTION PROTOCOL
+    =============================================================================
 
     You MUST perform extraction in TWO INDEPENDENT PASSES to ensure accuracy:
 
@@ -158,7 +198,9 @@ class EjariExtractor:
     4. Validate against format requirements
     5. If still uncertain after 3 attempts → Return the most complete/valid value
 
+    =============================================================================
     📋 MANDATORY FIELD-BY-FIELD FORMAT VALIDATION
+    =============================================================================
 
     Before accepting ANY field value, it MUST pass these validation rules:
 
@@ -182,7 +224,7 @@ class EjariExtractor:
     ▪ MUST be complete full name (no truncation, no "...")
     ▪ MUST be at least 3 characters
     ▪ MUST NOT contain only numbers
-    ▪ Example: "SAMPLE OWNER FULL NAME"
+    ▪ Example: "DHAHER MOHAMMED DHAHER BIN DHAHER ALMHEIRI"
     ▪ Location: "Owner Name" or "اسم المالك" section
     ▪ If invalid: Re-extract complete name from owner section
 
@@ -203,7 +245,7 @@ class EjariExtractor:
     ✅ **lessor_company** (اسم_المؤجر):
     ▪ MUST be complete company/person name
     ▪ MUST be at least 3 characters
-    ▪ Example: "SAMPLE LESSOR COMPANY LLC"
+    ▪ Example: "startup router business center llc"
     ▪ Location: "Lessor Name" or "اسم المؤجر"
     ▪ If invalid: Re-extract from lessor section
 
@@ -232,7 +274,7 @@ class EjariExtractor:
     ✅ **lessor_email** (بريد_المؤجر):
     ▪ MUST be valid email format
     ▪ MUST contain "@" and domain extension
-    ▪ Example: "lessor@samplecompany.ae"
+    ▪ Example: "startuprouter.bc@gmail.com"
     ▪ Location: "E-mail" or "البريد الإلكتروني" in lessor section
     ▪ Validation: contains "@" AND contains "." after "@"
     ▪ If invalid: Re-extract email address
@@ -240,7 +282,7 @@ class EjariExtractor:
     ✅ **tenant_company** (اسم_المستأجر):
     ▪ MUST be complete company/person name
     ▪ MUST be at least 3 characters
-    ▪ Example: "SAMPLE TENANT COMPANY L.L.C"
+    ▪ Example: "THRIVV GROWTH TECHNOLOGY SERVICES L.L.C"
     ▪ Location: "Tenant Name" or "اسم المستأجر"
     ▪ If invalid: Re-extract from tenant section
 
@@ -345,7 +387,9 @@ class EjariExtractor:
     ▪ Validation: \\d+\\.\\d{{2}}\\s(?:Sq\\.m|متر مربع)
     ▪ If invalid: Re-extract and ensure ".00" suffix and unit
 
+    =============================================================================
     🎯 ARABIC TRANSLATION RULES
+    =============================================================================
 
     **"Al" Prefix Handling:**
     ▪ If English has "Al": "Al Garhoud" → Arabic: "الغارحود" (keep ال prefix)
@@ -361,7 +405,9 @@ class EjariExtractor:
     ▪ "Villa" → "فيلا"
     ▪ "Shop" → "محل"
 
+    =============================================================================
     📍 DOCUMENT STRUCTURE REFERENCE
+    =============================================================================
 
     **OWNER SECTION (المالك):**
     - Owner Name / اسم المالك
@@ -396,7 +442,15 @@ class EjariExtractor:
     - Usage / الإستخدام (Commercial/Residential)
     - Size / المساحة (X.XX Sq.m)
 
+    =============================================================================
+    📄 DOCUMENT TEXT TO EXTRACT FROM:
+    =============================================================================
+
+    {raw_text[:20000]}
+
+    =============================================================================
     ✅ VALIDATION REQUIREMENTS BEFORE OUTPUT
+    =============================================================================
 
     Your extraction is ONLY valid if ALL of these conditions are met:
 
@@ -429,21 +483,23 @@ class EjariExtractor:
     ✗ Truncation markers: "...", single letters only
     ✗ Partial values: "97" (for phone), "01" (for contract), "Sq.m" (without number)
 
+    =============================================================================
     📤 OUTPUT FORMAT (STRICT JSON)
+    =============================================================================
 
     {{
     "english": {{
         "contract_number": "0120241230004974",
         "registration_date": "30-12-2024",
-        "owner_name": "SAMPLE OWNER FULL NAME",
+        "owner_name": "DHAHER MOHAMMED DHAHER BIN DHAHER ALMHEIRI",
         "owner_number": "171445",
         "owner_nationality": "United Arab Emirates",
-        "lessor_company": "SAMPLE LESSOR COMPANY LLC",
+        "lessor_company": "startup router business center llc",
         "lessor_license_number": "1326400",
         "lessor_license_issuer": "DED-Dubai",
         "lessor_phone": "9710523276602",
-        "lessor_email": "lessor@samplecompany.ae",
-        "tenant_company": "SAMPLE TENANT COMPANY L.L.C",
+        "lessor_email": "startuprouter.bc@gmail.com",
+        "tenant_company": "THRIVV GROWTH TECHNOLOGY SERVICES L.L.C",
         "tenant_number": "0420241230004964",
         "tenant_license": "1495267 / 19-06-2025",
         "tenant_license_issuer": "DED-Dubai",
@@ -462,15 +518,15 @@ class EjariExtractor:
     "arabic": {{
         "رقم_العقد": "0120241230004974",
         "تاريخ_التسجيل": "30-12-2024",
-        "اسم_المالك": "اسم المالك النموذجي",
+        "اسم_المالك": "ذاهر محمد ذاهر بن ذاهر المحييري",
         "رقم_المالك": "171445",
         "جنسية_المالك": "الإمارات العربية المتحدة",
-        "اسم_المؤجر": "اسم الشركة المؤجرة النموذجية",
+        "اسم_المؤجر": "مركز ستارتاب روتر للأعمال ش ذ م م",
         "رقم_رخصة_المؤجر": "1326400",
         "جهة_إصدار_رخصة_المؤجر": "دائرة التنمية الاقتصادية",
         "هاتف_المؤجر": "9710523276602",
-        "بريد_المؤجر": "lessor@samplecompany.ae",
-        "اسم_المستأجر": "اسم الشركة المستأجرة النموذجية",
+        "بريد_المؤجر": "startuprouter.bc@gmail.com",
+        "اسم_المستأجر": "ثريف جروث للتقنية للخدمات ش.ذ.م.م",
         "رقم_المستأجر": "0420241230004964",
         "رخصة_المستأجر": "1495267 / 19-06-2025",
         "جهة_إصدار_رخصة_المستأجر": "دائرة التنمية الاقتصادية",
@@ -498,7 +554,9 @@ class EjariExtractor:
     }}
     }}
 
+    =============================================================================
     ❌ FAILURE RESPONSE (If Extraction Fails After All Attempts)
+    =============================================================================
 
     If you CANNOT extract all 5 CRITICAL fields after re-extraction attempts, return:
 
@@ -510,7 +568,9 @@ class EjariExtractor:
     "recommendation": "Document may be unclear/damaged in these sections"
     }}
 
+    =============================================================================
     🚀 FINAL INSTRUCTIONS
+    =============================================================================
 
     1. Perform PASS 1 extraction → Store all 25 fields
     2. Perform PASS 2 extraction → Store all 25 fields independently
@@ -524,53 +584,6 @@ class EjariExtractor:
     ⚠️ IMPORTANT: Return ONLY the JSON object. NO markdown formatting, NO ```json blocks, NO explanatory text before or after the JSON.
 
     BEGIN EXTRACTION NOW."""
-
-    @retry_with_backoff(max_retries=3, base_delay=10, label="Ejari API")
-    def call_ai_api(self, prompt: str, model_name: str = None) -> str:
-        """Call the Bedrock API with retry logic"""
-        if not self.api_key:
-            return "API key not configured"
-
-        model = model_name or LLAMA_MODEL_NAME
-        
-        headers = {
-            "Authorization": f"Bearer {self.api_key}",
-            "Content-Type": "application/json",
-        }
-
-        data = {
-            "model": model,
-            "messages": [
-                {"role": "system", "content": self._SYSTEM_PROMPT},
-                {"role": "user", "content": prompt},
-            ],
-            "temperature": 0.0,  # Changed to 0.0 for maximum consistency
-            "max_tokens": 3500,
-        }
-
-        try:
-            response = bedrock_client.post(self.api_url, headers=headers, json=data, timeout=API_TIMEOUT_SECONDS)
-
-            if response.status_code in [502, 503, 504]:
-                raise RuntimeError(f"Ejari API failed: {response.status_code} Server temporarily unavailable")
-
-            if response.status_code == 429:
-                raise RuntimeError(f"Ejari API failed: {response.status_code} Rate limit exceeded")
-
-            response.raise_for_status()
-            result = response.json()
-            return result["choices"][0]["message"]["content"]
-
-        except requests.exceptions.Timeout:
-            raise RuntimeError(f"Ejari API failed: Request timeout after {API_TIMEOUT_SECONDS} seconds")
-        except requests.exceptions.RequestException as e:
-            raise RuntimeError(f"Ejari API failed: {response.status_code if 'response' in locals() else 'Network error'} {str(e)}")
-
-    def extract_with_ai(self, raw_text: str, model_choice: str = "llama") -> Tuple[Dict, Dict]:
-        """Extract bilingual Ejari fields using AI - DOUBLE-PASS EXTRACTION WITH VALIDATION"""
-        model_name = QWEN_MODEL_NAME if model_choice == "qwen" else LLAMA_MODEL_NAME
-        
-        prompt = f"Document Text:\n{raw_text[:20000]}"
 
         response = self.call_ai_api(prompt, model_name)
 
@@ -631,15 +644,11 @@ class EjariExtractor:
         )
 
     def ensure_all_fields(self, data: Dict, required_fields: list) -> Dict:
-        """Ensure all required fields exist and are string-valued.
-
-        prompt-remediation Phase 4: delegates to extraction_schema.validate_and_coerce
-        (pydantic-backed) instead of a bare dict comprehension -- same shape in/out
-        (every field present, string-valued, missing -> ""), but a field the model
-        returned as a non-string now gets coerced and logged instead of silently
-        flowing downstream untyped into regex-based post-processing.
-        """
-        return validate_and_coerce(data, required_fields, "EjariFields")
+        """Ensure all required fields exist"""
+        complete_data = {}
+        for field in required_fields:
+            complete_data[field] = data.get(field, "")
+        return complete_data
 
     def validate_field_lengths(self, data: Dict) -> Dict:
         """Validate and fix field lengths based on expected patterns"""

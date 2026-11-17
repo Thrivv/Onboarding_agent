@@ -86,7 +86,7 @@ else
     echo "⚠️  Backend (direct):    STARTING (check in 1 minute)"
 fi
 
-if docker ps | grep OnboardLG-reply-loop | grep -q "Up"; then
+if docker ps | grep Onboard-reply-loop | grep -q "Up"; then
     echo "✅ Reply-Loop:          RUNNING"
     REPLY_OK=true
 else

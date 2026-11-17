@@ -3,13 +3,11 @@ Ownership structure: declaring Single Owner vs Partnership, confirming UBOs,
 and resolving a mismatch between the role a document states and the one the
 user selected.
 """
-from app.i18n import localized
 
 import logging
 import json
 from fastapi import APIRouter, HTTPException
 import traceback
-from app.utils.language import normalize_language
 from app.services.message_generator import MessageGenerator, ai_message_gen
 from app.services.chatupload_helpers import (
     user_docs_path,
@@ -84,15 +82,17 @@ async def save_ownership_type(req: OwnershipTypeSaveRequest):
             logger.warning(f"[OWNERSHIP-TYPE] Could not clear ownership_ambiguous.json: {_amb_del_err}")
 
         if req.ownership_type == OWNERSHIP_SINGLE:
-            ai_message = localized(None,
-                en="Thanks — since you own this business under Sole Proprietorship, the next document I'll need is your MOA (Memorandum of Association).",
-                es="Gracias. Como es el único propietario de la empresa, el siguiente documento que necesito es su Memorando de Asociación (MOA).",
-                ar="شكراً — بما أنك تملك هذا النشاط بصفة ملكية فردية، فالمستند التالي الذي أحتاجه هو عقد التأسيس (MOA).")
+            ai_message = (
+                "Thanks — since you own this business under Sole Proprietorship, the "
+                "next document I'll need is your MOA (Memorandum of Association)."
+            )
         else:
-            ai_message = localized(None,
-                en="Thanks — since you share ownership under Joint Ownership, the next document I'll need is your Memorandum of Association (MOA), to identify all owners. After that I'll request an Emirates ID or Passport for each owner.",
-                es="Gracias. Como comparte la propiedad, el siguiente documento que necesito es su Memorando de Asociación (MOA), para identificar a todos los propietarios. Después le pediré el Emirates ID o pasaporte de cada uno.",
-                ar="شكراً — بما أنك تتشارك الملكية، فالمستند التالي الذي أحتاجه هو عقد التأسيس (MOA) لتحديد جميع الملاك. بعد ذلك سأطلب الهوية الإماراتية أو جواز السفر لكل مالك.")
+            ai_message = (
+                "Thanks — since you share ownership under Joint Ownership, the next "
+                "document I'll need is your Memorandum of Association (MOA), to "
+                "identify all owners. After that I'll request an Emirates ID or "
+                "Passport for each owner."
+            )
 
         # Persist to chat history so this message survives fetchGroundTruth()'s
         # resync — without this it only lived in the one-shot API response and
@@ -154,24 +154,24 @@ async def member_ubo_confirm(req: UboConfirmRequest):
 
         if _already_verified:
             ubo_str = "a UBO" if req.is_ubo else "not a UBO"
-            msg = localized(None,
-                en=f"{req.member_name} has been recorded as {ubo_str}. Their identity document is already on file, so there's nothing further needed for them.",
-                es=f"{req.member_name} se ha registrado como {('UBO' if req.is_ubo else 'no UBO')}. Su documento de identidad ya consta, así que no se necesita nada más.",
-                ar=f"تم تسجيل {req.member_name} بصفة {('مستفيداً نهائياً' if req.is_ubo else 'غير مستفيد نهائي')}. مستند هويته موجود مسبقاً، فلا حاجة لأي إجراء إضافي.")
+            msg = (
+                f"{req.member_name} has been recorded as {ubo_str}. Their identity "
+                f"document is already on file, so there's nothing further needed for them."
+            )
         else:
             try:
                 from app.services.message_generator import MessageGenerator
                 msg = MessageGenerator.ubo_confirmed_prompt_id(
                     member_name=req.member_name,
                     is_ubo=req.is_ubo,
-                    language=normalize_language(None),  # X-User-Language header
+                    language="english"
                 )
             except Exception:
                 ubo_str = "a UBO" if req.is_ubo else "not a UBO"
-                msg = localized(None,
-                    en=f"{req.member_name} has been recorded as {ubo_str}. Please upload their Emirates ID or Passport to complete identity verification.",
-                    es=f"{req.member_name} se ha registrado como {('UBO' if req.is_ubo else 'no UBO')}. Cargue su Emirates ID o pasaporte para completar la verificación de identidad.",
-                    ar=f"تم تسجيل {req.member_name} بصفة {('مستفيداً نهائياً' if req.is_ubo else 'غير مستفيد نهائي')}. يُرجى تحميل الهوية الإماراتية أو جواز السفر الخاص به لإكمال التحقق من الهوية.")
+                msg = (
+                    f"{req.member_name} has been recorded as {ubo_str}. "
+                    f"Please upload their Emirates ID or Passport to complete identity verification."
+                )
 
         insert_conversation_log(
             user_email=req.email, role="agent", message=msg, channel="chat",
@@ -306,10 +306,7 @@ async def mismatch_assign_role(req: MismatchRoleRequest):
         except Exception as _mb_del_err:
             logger.warning(f"[MISMATCH] Could not clear mismatch_pending.json: {_mb_del_err}")
 
-        _mismatch_msg = localized(None,
-            en=f"'{req.extracted_name}' has been added as {req.assigned_role.replace('_', ' ').title()} and included in the identity verification queue.",
-            es=f"'{req.extracted_name}' se ha añadido como {('Firmante Autorizado' if 'sign' in req.assigned_role.lower() else 'Persona Clave')} y se ha incluido en la cola de verificación de identidad.",
-            ar=f"تمت إضافة '{req.extracted_name}' بصفة {('مفوّض بالتوقيع' if 'sign' in req.assigned_role.lower() else 'فرد رئيسي')} وإدراجه في قائمة التحقق من الهوية.")
+        _mismatch_msg = f"'{req.extracted_name}' has been added as {req.assigned_role.replace('_', ' ').title()} and included in the identity verification queue."
 
         # Persist to chat history so this confirmation survives a refresh —
         # same pattern/bug as save_ownership_type(): the KI record itself was

@@ -40,14 +40,8 @@ export const uploadDocumentsBulk = (formData, config = {}) =>
 
 export const getOnboardingStatus = (email) => api.get(ONBOARDING.STATUS(email));
 
-// `config` lets a caller pass extra axios request config alongside the
-// query params — currently only used for `{ skipAuthRedirect: true }` by
-// the language-toggle's history re-fetch (see OnboardingPage.jsx), which
-// already fails open on any error and should never trigger client.js's
-// interceptor into force-logging the user out over a transient 401 on this
-// one background read. Ordinary callers omit it and get the old behaviour.
-export const getConversationLogs = (email, params, config = {}) =>
-  api.get(ONBOARDING.CONVERSATION_LOGS(email), { ...config, ...(params ? { params } : {}) });
+export const getConversationLogs = (email, params) =>
+  api.get(ONBOARDING.CONVERSATION_LOGS(email), params ? { params } : undefined);
 
 export const saveOwnershipType = (payload) =>
   api.post(ONBOARDING.OWNERSHIP_TYPE_SAVE, payload);

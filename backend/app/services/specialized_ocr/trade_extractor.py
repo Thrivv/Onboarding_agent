@@ -39,29 +39,19 @@ logger = logging.getLogger(__name__)
 # ─────────────────────────────────────────────────────────────────────────────
 # API Configuration — from .env only, no hard-coded secrets
 # ─────────────────────────────────────────────────────────────────────────────
-API_KEY       = config.AWS_BEARER_TOKEN_BEDROCK or ""
+API_KEY       = config.OPENROUTER_API_KEY or ""
 # Model names + endpoint come from llm_client (env-driven via .env.docker).
 # Do not redeclare them here — see the LLM MODEL ROUTING block in .env.docker.
 from app.services.llm_client import (
-    LLM_API_URL,
+    OPENROUTER_API_URL,
     TEXT_PRIMARY,
     TEXT_FALLBACK,
     VISION_PRIMARY,
 )
-from app.services import bedrock_client
-from app.services.specialized_ocr.extraction_schema import validate_and_coerce
 from app.utils.retry import retry_with_backoff
 
-API_URL       = LLM_API_URL
-# Model tiering (prompt-remediation Phase 2, opt-in via
-# config.MODEL_TIERING_ENABLED): Trade License extraction is one of the
-# two tasks dumps/docs/bedrock-final-recommendation.md singles out for a
-# stronger model, given its multi-step UBO/ownership-structure reasoning
-# (single-owner, multi-owner, corporate-shareholder chains). Falls back
-# to the default model automatically at the bedrock_client.post() level
-# if the reasoning-tier model call itself fails -- see that module's
-# _resolve_invoke_url().
-LLAMA_MODEL   = config.BEDROCK_REASONING_MODEL_ID if config.MODEL_TIERING_ENABLED else TEXT_PRIMARY
+API_URL       = OPENROUTER_API_URL
+LLAMA_MODEL   = TEXT_PRIMARY
 QWEN_MODEL    = TEXT_FALLBACK
 
 # Configurable via TRADE_LICENSE_API_TIMEOUT_SECONDS / DOC_EXTRACTION_MAX_RETRIES
@@ -335,7 +325,9 @@ _MO_AGENT_EXAMPLE = {
 # MANAGERS & PARTNERS BLOCK (revised — agents INCLUDED)
 # ─────────────────────────────────────────────────────────────────────────────
 MANAGERS_PARTNERS_BLOCK = f"""
+=============================================================================
 📋 TWO-TABLE EXTRACTION PROTOCOL (CRITICAL - READ CAREFULLY)
+=============================================================================
 
 UAE Trade Licenses may contain ONE or TWO separate member/partner tables.
 Determine which tables are present BEFORE extracting any data.
@@ -373,7 +365,9 @@ Determine which tables are present BEFORE extracting any data.
 │ ⚠ Extract EVERY ROW — tables can have 2 to 10+ partners               │
 └─────────────────────────────────────────────────────────────────────────┘
 
+=============================================================================
 🔄 SHARE SOURCE DECISION TREE (FOLLOW EXACTLY)
+=============================================================================
 
 STEP 1 — Detect Table 2:
     Search for heading "ملحق الشركاء" or "Partners Annex".
@@ -417,7 +411,9 @@ NEVER drop any person found in either table.
 NEVER deduplicate across arrays (managers vs partners).
 NEVER use "" (empty string) — use null when share is unavailable.
 
+=============================================================================
 🔢 SHARE PERCENTAGE — NON-NEGOTIABLE RULES
+=============================================================================
 
 RULE 1 — EXACT COPY: Copy character-by-character from source table.
     "80.0000000%" → output "80.0000000%"   ✓
@@ -439,7 +435,9 @@ RULE 4 — AGENTS HAVE NULL SHARE: Service Agents always get share_percentage: n
 
 RULE 5 — FULL NAMES: Copy the complete name. Arabic names can be 4–6 words long.
 
+=============================================================================
 🟢 MANAGERS ARRAY — REQUIRED FIELDS
+=============================================================================
 
 Source: Table 1 rows where role = مدير / Manager
 
@@ -454,7 +452,9 @@ Validation per manager:
     ✓ nationality_arabic  : country in Arabic
     ✓ role                : "Manager" or exact printed role
 
+=============================================================================
 🔵 PARTNERS ARRAY — REQUIRED FIELDS (ALL MEMBERS INCL. AGENTS)
+=============================================================================
 
 Source: ALL non-Manager rows from Table 1, plus Table 2 shares if present.
 This includes: Partners, Est. Owners, AND Service Agents.
@@ -484,14 +484,18 @@ Validation per partner / agent entry:
     ✓ is_agent            : true ONLY for وكيل خدمات / Service Agent rows,
                             false for all others
 
+=============================================================================
 🔁 CROSS-REFERENCE RULE
+=============================================================================
 
 If person X appears in Table 1 as Manager AND Table 2 as Partner:
     → Add to managers[]  using role from Table 1
     → Add to partners[]  using share_percentage from Table 2
     → Same person in both arrays is CORRECT — do NOT deduplicate across arrays.
 
+=============================================================================
 📤 EXTRACTION METADATA — PARTNER/MANAGER FIELDS
+=============================================================================
 
 "partners_annex_present":    true | false,
 "share_source":              "Merged Table 1 + Table 2"
@@ -982,7 +986,7 @@ class TradeLicenseExtractor:
     # API call
     # ─────────────────────────────────────────────────────────────────────────
     @retry_with_backoff(max_retries=MAX_RETRIES, base_delay=BASE_RETRY_DELAY)
-    def call_ai_api(self, prompt: str, model_name: Optional[str] = None, max_tokens: int = 4000, system_prompt: Optional[str] = None) -> str:
+    def call_ai_api(self, prompt: str, model_name: Optional[str] = None, max_tokens: int = 4000) -> str:
         if not self.api_key:
             logger.error("API key not configured")
             return "API key not configured"
@@ -994,23 +998,14 @@ class TradeLicenseExtractor:
         }
         payload = {
             "model":       model,
-            "messages":    ([{"role": "system", "content": system_prompt}] if system_prompt else [])
-                           + [{"role": "user", "content": prompt}],
-            # Standardized to 0.0 (prompt-remediation Phase 2) -- this was the
-            # only one of the five specialized extractors running at 0.1;
-            # every other extractor (bvi, moa, ejari, passport) already uses
-            # 0.0 for the same reason extraction wants it: deterministic,
-            # repeatable field values, not creative variation. tests/
-            # ocr_corpus.py's Layer 2 baseline (requests.json) was
-            # re-recorded to match after this change -- see the Phase 2 note
-            # in prompt-remediation-plan.html for what changed and why.
-            "temperature": 0.0,
+            "messages":    [{"role": "user", "content": prompt}],
+            "temperature": 0.1,
             "max_tokens":  max_tokens,
         }
 
         try:
             self.extraction_metrics.api_calls += 1
-            resp = bedrock_client.post(self.api_url, headers=headers, json=payload, timeout=REQUEST_TIMEOUT)
+            resp = requests.post(self.api_url, headers=headers, json=payload, timeout=REQUEST_TIMEOUT)
 
             if resp.status_code in [502, 503, 504]:
                 self.extraction_metrics.api_errors += 1
@@ -1187,51 +1182,44 @@ class TradeLicenseExtractor:
         return data
 
     def ensure_all_fields(self, data: Dict, required: List[str]) -> Dict:
-        # prompt-remediation Phase 4: delegates to extraction_schema.validate_and_coerce
-        # (pydantic-backed) instead of a bare dict comprehension -- same shape in/out,
-        # but a non-string field value now gets coerced and logged instead of
-        # silently flowing downstream untyped.
-        return validate_and_coerce(data, required, "TradeLicenseFields")
+        return {f: data.get(f, "") for f in required}
 
     # ─────────────────────────────────────────────────────────────────────────
     # Single Owner extraction
     # ─────────────────────────────────────────────────────────────────────────
-    # PROMPT CACHING (prompt-remediation Phase 3): static instructions/field
-    # lists/output-schema for the single- and multi-owner extraction prompts
-    # moved here as system prompts so bedrock_client.py's existing ephemeral
-    # prompt caching (see _to_bedrock_payload) applies to them instead of being
-    # re-sent and re-processed as fresh input tokens on every Trade License
-    # extraction call. Content is UNCHANGED, character-for-character, from the
-    # previous extract_single_owner_with_ai()/extract_multi_owner_with_ai()
-    # prompts -- only their position moved (still f-strings, so the
-    # json.dumps(...) example blocks and MANAGERS_PARTNERS_BLOCK still
-    # interpolate correctly against module-level constants; the local `N`
-    # count is now spelled out as len(...) since a class attribute can't see a
-    # method's local variable), so extraction behaviour is not expected to
-    # change.
-    _SYSTEM_PROMPT_SINGLE = f"""You are an expert AI extracting UAE Dubai Trade License data for a SINGLE OWNER company.
+    @retry_with_backoff(max_retries=MAX_RETRIES, base_delay=BASE_RETRY_DELAY)
+    def extract_single_owner_with_ai(self, raw_text: str) -> Tuple[Dict, Dict, Dict]:
+        N = len(SINGLE_OWNER_ENGLISH_FIELDS)
+        prompt = f"""You are an expert AI extracting UAE Dubai Trade License data for a SINGLE OWNER company.
 
+=============================================================================
 🔴 DOUBLE-PASS EXTRACTION PROTOCOL
+=============================================================================
 Perform TWO independent passes. Compare results. Re-extract mismatches.
 
+=============================================================================
 📋 FIELDS TO EXTRACT
-ENGLISH fields ({len(SINGLE_OWNER_ENGLISH_FIELDS)} total):
+=============================================================================
+ENGLISH fields ({N} total):
 {json.dumps(SINGLE_OWNER_ENGLISH_FIELDS, indent=2)}
 
-ARABIC fields ({len(SINGLE_OWNER_ENGLISH_FIELDS)} total):
+ARABIC fields ({N} total):
 {json.dumps(SINGLE_OWNER_ARABIC_FIELDS, ensure_ascii=False, indent=2)}
 
+=============================================================================
 🟢 CRITICAL FIELDS (all 6 must be populated):
   license_number, company_name_english, trade_name_english,
   issue_date (DD/MM/YYYY), expiry_date (DD/MM/YYYY), legal_type
 
-🟡 MINIMUM THRESHOLD: At least 15/{len(SINGLE_OWNER_ENGLISH_FIELDS)} base fields complete.
+🟡 MINIMUM THRESHOLD: At least 15/{N} base fields complete.
 
 🟢 OWNER OBJECT (required):
   name_english, name_arabic, nationality_english, nationality_arabic,
   share_percentage ("100%" or "100.00%"), role
 
+=============================================================================
 📤 OUTPUT FORMAT (JSON only — no markdown):
+=============================================================================
 {{
   "english": {json.dumps({f: _SO_EXAMPLE.get(f, "") for f in SINGLE_OWNER_ENGLISH_FIELDS}, indent=4)},
   "arabic":  {json.dumps({f: "" for f in SINGLE_OWNER_ARABIC_FIELDS}, indent=4, ensure_ascii=False)},
@@ -1244,30 +1232,73 @@ ARABIC fields ({len(SINGLE_OWNER_ENGLISH_FIELDS)} total):
   }}
 }}
 
+=============================================================================
+📄 DOCUMENT TEXT:
+=============================================================================
+{raw_text[:20000]}
+
 Return ONLY the JSON object. No markdown. No explanation.
 BEGIN EXTRACTION NOW."""
 
-    _SYSTEM_PROMPT_MULTI = f"""You are an expert AI extracting UAE Dubai Trade License data for a MULTIPLE OWNER company.
+        return self._run_single_owner_extraction(prompt, raw_text, N)
 
+    def _run_single_owner_extraction(self, prompt, raw_text, N):
+        try:
+            resp = self.call_ai_api(
+                prompt,
+                max_tokens=self.get_dynamic_max_tokens(raw_text)
+            )
+            if resp and not resp.startswith("API"):
+                data = self._parse_json_response(resp)
+                if data:
+                    en  = self.ensure_all_fields(data.get("english", {}), SINGLE_OWNER_ENGLISH_FIELDS)
+                    ar  = self.ensure_all_fields(data.get("arabic",  {}), SINGLE_OWNER_ARABIC_FIELDS)
+                    own = data.get("owner", {})
+                    en  = self.post_process_data(en, raw_text)
+                    ar  = self.post_process_data(ar, raw_text)
+                    self.extraction_metrics.ai_extracted = len([v for v in en.values() if v])
+                    logger.info("Single Owner extraction complete")
+                    return en, ar, own
+        except Exception as e:
+            logger.error(f"Single Owner extraction failed: {e}", exc_info=True)
+        logger.warning("Single Owner extraction failed, returning empty data")
+        return ({f:"" for f in SINGLE_OWNER_ENGLISH_FIELDS},
+                {f:"" for f in SINGLE_OWNER_ARABIC_FIELDS}, {})
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # Multi Owner extraction
+    # ─────────────────────────────────────────────────────────────────────────
+    @retry_with_backoff(max_retries=MAX_RETRIES, base_delay=BASE_RETRY_DELAY)
+    def extract_multi_owner_with_ai(self, raw_text: str) -> Tuple[Dict, Dict, List[Dict], List[Dict]]:
+        N = len(MULTI_OWNER_ENGLISH_FIELDS)
+        prompt = f"""You are an expert AI extracting UAE Dubai Trade License data for a MULTIPLE OWNER company.
+
+=============================================================================
 🔴 DOUBLE-PASS EXTRACTION PROTOCOL
+=============================================================================
 Perform TWO independent passes. Compare results. Re-extract mismatches.
 
+=============================================================================
 📋 FIELDS TO EXTRACT
-ENGLISH fields ({len(MULTI_OWNER_ENGLISH_FIELDS)} total):
+=============================================================================
+ENGLISH fields ({N} total):
 {json.dumps(MULTI_OWNER_ENGLISH_FIELDS, indent=2)}
 
-ARABIC fields ({len(MULTI_OWNER_ENGLISH_FIELDS)} total):
+ARABIC fields ({N} total):
 {json.dumps(MULTI_OWNER_ARABIC_FIELDS, ensure_ascii=False, indent=2)}
 
+=============================================================================
 🟢 CRITICAL FIELDS (all 6 must be populated):
   license_number, company_name_english, trade_name_english,
   issue_date (DD/MM/YYYY), expiry_date (DD/MM/YYYY), legal_type
 
-🟡 MINIMUM THRESHOLD: At least 20/{len(MULTI_OWNER_ENGLISH_FIELDS)} base fields complete.
+🟡 MINIMUM THRESHOLD: At least 20/{N} base fields complete.
 
 {MANAGERS_PARTNERS_BLOCK}
 
+=============================================================================
 📤 OUTPUT FORMAT (JSON only — no markdown):
+=============================================================================
 {{
   "english": {json.dumps({f: _MO_EXAMPLE.get(f, "") for f in MULTI_OWNER_ENGLISH_FIELDS}, indent=4)},
   "arabic":  {json.dumps({f: "" for f in MULTI_OWNER_ARABIC_FIELDS}, indent=4, ensure_ascii=False)},
@@ -1294,47 +1325,13 @@ ARABIC fields ({len(MULTI_OWNER_ENGLISH_FIELDS)} total):
   }}
 }}
 
+=============================================================================
+📄 DOCUMENT TEXT:
+=============================================================================
+{raw_text[:25000]}
+
 Return ONLY the JSON object. No markdown. No explanation.
 BEGIN EXTRACTION NOW."""
-
-    @retry_with_backoff(max_retries=MAX_RETRIES, base_delay=BASE_RETRY_DELAY)
-    def extract_single_owner_with_ai(self, raw_text: str) -> Tuple[Dict, Dict, Dict]:
-        N = len(SINGLE_OWNER_ENGLISH_FIELDS)
-        prompt = f"Document Text:\n{raw_text[:20000]}"
-
-        return self._run_single_owner_extraction(prompt, raw_text, N)
-
-    def _run_single_owner_extraction(self, prompt, raw_text, N):
-        try:
-            resp = self.call_ai_api(
-                prompt,
-                max_tokens=self.get_dynamic_max_tokens(raw_text),
-                system_prompt=self._SYSTEM_PROMPT_SINGLE,
-            )
-            if resp and not resp.startswith("API"):
-                data = self._parse_json_response(resp)
-                if data:
-                    en  = self.ensure_all_fields(data.get("english", {}), SINGLE_OWNER_ENGLISH_FIELDS)
-                    ar  = self.ensure_all_fields(data.get("arabic",  {}), SINGLE_OWNER_ARABIC_FIELDS)
-                    own = data.get("owner", {})
-                    en  = self.post_process_data(en, raw_text)
-                    ar  = self.post_process_data(ar, raw_text)
-                    self.extraction_metrics.ai_extracted = len([v for v in en.values() if v])
-                    logger.info("Single Owner extraction complete")
-                    return en, ar, own
-        except Exception as e:
-            logger.error(f"Single Owner extraction failed: {e}", exc_info=True)
-        logger.warning("Single Owner extraction failed, returning empty data")
-        return ({f:"" for f in SINGLE_OWNER_ENGLISH_FIELDS},
-                {f:"" for f in SINGLE_OWNER_ARABIC_FIELDS}, {})
-
-    # ─────────────────────────────────────────────────────────────────────────
-    # Multi Owner extraction
-    # ─────────────────────────────────────────────────────────────────────────
-    @retry_with_backoff(max_retries=MAX_RETRIES, base_delay=BASE_RETRY_DELAY)
-    def extract_multi_owner_with_ai(self, raw_text: str) -> Tuple[Dict, Dict, List[Dict], List[Dict]]:
-        N = len(MULTI_OWNER_ENGLISH_FIELDS)
-        prompt = f"Document Text:\n{raw_text[:25000]}"
 
         return self._run_multi_owner_extraction(prompt, raw_text)
 
@@ -1342,8 +1339,7 @@ BEGIN EXTRACTION NOW."""
         try:
             resp = self.call_ai_api(
                 prompt,
-                max_tokens=self.get_dynamic_max_tokens(raw_text),
-                system_prompt=self._SYSTEM_PROMPT_MULTI,
+                max_tokens=self.get_dynamic_max_tokens(raw_text)
             )
             if resp and not resp.startswith("API"):
                 data = self._parse_json_response(resp)

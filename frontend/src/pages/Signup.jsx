@@ -7,8 +7,6 @@ import logo from '../assets/logo-growx.svg';
 import { toast } from 'react-hot-toast';
 import { CheckCircle, Mail, ShieldCheck, Loader, Lock, Eye, EyeOff, Calendar, Check, X } from 'lucide-react';
 import { validatePassword } from '../utils/validation';
-import { useLanguage } from '../context/LanguageContext';
-import LanguageToggle from '../components/common/LanguageToggle';
 
 const TERMS_SECTIONS = [
   ['1. Data Collection and Use', 'We collect personal and financial information including identification documents, income statements, transaction history, and contact details to provide banking services, comply with regulatory requirements, and improve our offerings.'],
@@ -25,7 +23,6 @@ const TERMS_SECTIONS = [
 
 const Signup = () => {
   const navigate = useNavigate();
-  const { t } = useLanguage();
 
   const [loading, setLoading] = useState(false);
   const [otpLoading, setOtpLoading] = useState(false);
@@ -91,33 +88,33 @@ const Signup = () => {
   // ── validation (whole form, single page) ──
   const validateForm = () => {
     const errs = {};
-    if (!formData.first_name.trim()) errs.first_name = t('auth.signup.errorFirstNameRequired');
-    if (!formData.last_name.trim()) errs.last_name = t('auth.signup.errorLastNameRequired');
+    if (!formData.first_name.trim()) errs.first_name = 'First name is required';
+    if (!formData.last_name.trim()) errs.last_name = 'Last name is required';
     if (!formData.phone_number.trim()) {
-      errs.phone_number = t('auth.signup.errorPhoneRequired');
+      errs.phone_number = 'Phone number is required';
     } else if (!/^\+?[\d\s\-()]+$/.test(formData.phone_number)) {
-      errs.phone_number = t('auth.signup.errorPhoneInvalid');
+      errs.phone_number = 'Invalid phone number format';
     }
     if (!formData.email.trim()) {
-      errs.email = t('auth.signup.errorEmailRequired');
+      errs.email = 'Email is required';
     } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
-      errs.email = t('auth.signup.errorEmailInvalid');
+      errs.email = 'Invalid email format';
     }
     if (!otpVerified) {
-      errs.email = errs.email || t('auth.signup.errorEmailNotVerified');
+      errs.email = errs.email || 'Please verify your email before continuing';
     }
-    if (!formData.business_name.trim()) errs.business_name = t('auth.signup.errorCompanyRequired');
+    if (!formData.business_name.trim()) errs.business_name = 'Company name is required';
 
     if (!formData.password) {
-      errs.password = t('auth.signup.errorPasswordRequired');
+      errs.password = 'Password is required';
     } else {
       const { isValid, errors: pwErrors } = validatePassword(formData.password);
       if (!isValid) errs.password = pwErrors[0];
     }
     if (formData.password !== formData.confirmPassword) {
-      errs.confirmPassword = t('auth.signup.errorPasswordsMismatch');
+      errs.confirmPassword = 'Passwords do not match';
     }
-    if (!formData.terms_accepted) errs.terms_accepted = t('auth.signup.errorTermsRequired');
+    if (!formData.terms_accepted) errs.terms_accepted = 'You must accept the terms and conditions';
 
     setErrors(errs);
     return Object.keys(errs).length === 0;
@@ -140,7 +137,7 @@ const Signup = () => {
 
   const handleSendOtp = async () => {
     if (!isEmailValid()) {
-      setErrors((prev) => ({ ...prev, email: t('auth.signup.errorEmailForOtp') }));
+      setErrors((prev) => ({ ...prev, email: 'Please enter a valid email first' }));
       return;
     }
     setOtpLoading(true);
@@ -148,9 +145,9 @@ const Signup = () => {
       await generateOtp({ email: formData.email });
       setOtpSent(true);
       setShowOtpPanel(true);
-      toast.success(t('auth.signup.toastOtpSent', { email: formData.email }));
+      toast.success(`OTP sent to ${formData.email}. Check your inbox.`);
     } catch (err) {
-      toast.error(extractErrorMessage(err) || t('auth.signup.toastOtpFailed'));
+      toast.error(extractErrorMessage(err) || 'Failed to send OTP. Please try again.');
     } finally {
       setOtpLoading(false);
     }
@@ -158,7 +155,7 @@ const Signup = () => {
 
   const handleVerifyOtp = async () => {
     if (!otpValue.trim() || otpValue.trim().length !== 6) {
-      setErrors((prev) => ({ ...prev, otp: t('auth.signup.errorOtpRequired') }));
+      setErrors((prev) => ({ ...prev, otp: 'Please enter the 6-digit OTP' }));
       return;
     }
     setOtpLoading(true);
@@ -166,9 +163,9 @@ const Signup = () => {
       await verifyOtp({ email: formData.email, otp: otpValue });
       setOtpVerified(true);
       setShowOtpPanel(false);
-      toast.success(t('auth.signup.toastEmailVerified'));
+      toast.success('Email verified!');
     } catch (err) {
-      setErrors((prev) => ({ ...prev, otp: extractErrorMessage(err) || t('auth.signup.errorOtpInvalid') }));
+      setErrors((prev) => ({ ...prev, otp: extractErrorMessage(err) || 'Invalid or expired OTP.' }));
     } finally {
       setOtpLoading(false);
     }
@@ -196,16 +193,16 @@ const Signup = () => {
       };
       const response = await signup(payload);
       if (response.data) {
-        toast.success(t('auth.signup.toastSuccess'));
+        toast.success('Login to continue to onboarding completed.');
         setTimeout(() => {
           navigate('/login');
         }, 1500);
       }
     } catch (error) {
       if (error.response?.status === 409) {
-        toast.error(t('auth.signup.toastEmailTaken'));
+        toast.error('Email already registered. Please login.');
       } else {
-        toast.error(extractErrorMessage(error) || t('auth.signup.toastSignupFailed'));
+        toast.error(extractErrorMessage(error) || 'Signup failed. Please try again.');
       }
     } finally {
       setLoading(false);
@@ -226,9 +223,6 @@ const Signup = () => {
   // ── render ──
   return (
     <div className="gx-main-layout">
-      <div className="fixed top-4 right-4 z-10">
-        <LanguageToggle />
-      </div>
       <div className="max-w-2xl w-full">
         <div className="bg-white rounded-2xl shadow-xl p-8">
 
@@ -238,7 +232,7 @@ const Signup = () => {
               <img src={logo} alt="Thrivv.ai Logo" className="h-16 w-auto max-w-full object-contain" />
             </div>
             <h1 className="text-3xl font-bold gradient-text">
-              {t('auth.signup.createAccount')}
+              Create Your Account
             </h1>
           </div>
 
@@ -249,7 +243,7 @@ const Signup = () => {
               <div className="flex gap-3">
                 <div className="flex-1">
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    {t('auth.signup.firstName')} <span className="text-red-500">*</span>
+                    First Name <span className="text-red-500">*</span>
                   </label>
                   <input
                     type="text"
@@ -263,7 +257,7 @@ const Signup = () => {
                 </div>
                 <div className="flex-1">
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    {t('auth.signup.lastName')} <span className="text-red-500">*</span>
+                    Last Name <span className="text-red-500">*</span>
                   </label>
                   <input
                     type="text"
@@ -280,7 +274,7 @@ const Signup = () => {
               {/* DOB optional */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  {t('auth.signup.dateOfBirth')} <span className="text-gray-400 text-xs font-normal">{t('auth.signup.optional')}</span>
+                  Date of Birth <span className="text-gray-400 text-xs font-normal">(optional)</span>
                 </label>
                 <input
                   type="date"
@@ -293,7 +287,7 @@ const Signup = () => {
                 {formData.dob && (
                   <div className="flex items-center gap-2 text-xs text-gray-400 mt-2 opacity-70 animate-in slide-in-from-top-1 duration-300">
                     <Calendar className="h-3.5 w-3.5 text-gray-400" />
-                    {t('auth.signup.age', { age: calculateAge(formData.dob) })}
+                    Age: {calculateAge(formData.dob)} Years
                   </div>
                 )}
               </div>
@@ -301,7 +295,7 @@ const Signup = () => {
               {/* Phone */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  {t('auth.signup.phoneNumber')} <span className="text-red-500">*</span>
+                  Phone Number <span className="text-red-500">*</span>
                 </label>
                 <input
                   type="tel"
@@ -317,7 +311,7 @@ const Signup = () => {
               {/* Email + OTP inline */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  {t('auth.signup.email')} <span className="text-red-500">*</span>
+                  Email <span className="text-red-500">*</span>
                 </label>
                 <div className="flex gap-2">
                   <input
@@ -332,7 +326,7 @@ const Signup = () => {
                   />
                   {otpVerified ? (
                     <span className="flex items-center gap-1 px-3 py-2 bg-green-100 text-green-700 rounded-lg text-sm font-medium border border-green-300 whitespace-nowrap">
-                      <CheckCircle className="h-4 w-4" /> {t('auth.signup.verified')}
+                      <CheckCircle className="h-4 w-4" /> Verified
                     </span>
                   ) : (
                     <button
@@ -342,7 +336,7 @@ const Signup = () => {
                       className="flex items-center gap-1 px-4 py-2 gradient-btn text-white rounded-lg text-sm font-medium hover:opacity-90 transition-opacity disabled:opacity-40 whitespace-nowrap"
                     >
                       {otpLoading ? <Loader className="h-4 w-4 animate-spin" /> : <Mail className="h-4 w-4" />}
-                      {otpSent ? t('auth.signup.resend') : t('auth.signup.sendOtp')}
+                      {otpSent ? 'Resend' : 'Send OTP'}
                     </button>
                   )}
                 </div>
@@ -364,7 +358,7 @@ const Signup = () => {
                   <div className="border border-blue-200 bg-blue-50 rounded-xl p-4 space-y-3">
                     <div className="flex items-center gap-2 text-sm text-brand-secondary-dark">
                       <Mail className="h-4 w-4 flex-shrink-0" />
-                      <span>{t('auth.signup.otpSentTo', { email: formData.email })}</span>
+                      <span>OTP sent to <strong>{formData.email}</strong>. Enter the 6-digit code below.</span>
                     </div>
                     <div>
                       <input
@@ -377,7 +371,7 @@ const Signup = () => {
                           if (errors.otp) setErrors((prev) => ({ ...prev, otp: '' }));
                         }}
                         className={`w-full px-4 py-3 text-center text-2xl tracking-[0.5em] border rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent bg-white ${errors.otp ? 'border-red-400' : 'border-blue-300'}`}
-                        placeholder={t('auth.signup.otpPlaceholder')}
+                        placeholder="------"
                         autoFocus
                       />
                       {errors.otp && <p className="text-red-500 text-sm mt-1">{errors.otp}</p>}
@@ -389,8 +383,8 @@ const Signup = () => {
                       className="w-full flex items-center justify-center gap-2 gradient-btn text-white px-4 py-2 rounded-lg hover:opacity-90 transition-opacity disabled:opacity-40 text-sm font-medium"
                     >
                       {otpLoading
-                        ? <><Loader className="h-4 w-4 animate-spin" /> {t('auth.signup.verifying')}</>
-                        : <><ShieldCheck className="h-4 w-4" /> {t('auth.signup.verifyAndConfirm')}</>}
+                        ? <><Loader className="h-4 w-4 animate-spin" /> Verifying...</>
+                        : <><ShieldCheck className="h-4 w-4" /> Verify & Confirm Email</>}
                     </button>
                   </div>
                 </div>
@@ -399,7 +393,7 @@ const Signup = () => {
               {/* Company Name */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  {t('auth.signup.companyName')} <span className="text-red-500">*</span>
+                  Company Name <span className="text-red-500">*</span>
                 </label>
                 <input
                   type="text"
@@ -417,13 +411,13 @@ const Signup = () => {
                 {!otpVerified && (
                   <div className="flex items-center gap-2 text-xs text-gray-400 mb-2">
                     <Lock className="h-3.5 w-3.5" />
-                    {t('auth.signup.unlockPasswordHint')}
+                    Verify your email above to unlock password fields
                   </div>
                 )}
                 <div className="space-y-2">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
-                      {t('auth.signup.password')} <span className="text-red-500">*</span>
+                      Password <span className="text-red-500">*</span>
                     </label>
                     <div className="relative group">
                       <input
@@ -450,16 +444,16 @@ const Signup = () => {
 
                     {/* Real-time password requirements checklist */}
                     <div className="flex items-center gap-2 flex-wrap mt-2 p-3 bg-gray-50 rounded-lg">
-                      <PasswordRule met={passwordChecks.length} label={t('auth.signup.ruleLength')} />
-                      <PasswordRule met={passwordChecks.uppercase} label={t('auth.signup.ruleUppercase')} />
-                      <PasswordRule met={passwordChecks.lowercase} label={t('auth.signup.ruleLowercase')} />
-                      <PasswordRule met={passwordChecks.number} label={t('auth.signup.ruleNumber')} />
-                      <PasswordRule met={passwordChecks.special} label={t('auth.signup.ruleSpecial')} />
+                      <PasswordRule met={passwordChecks.length} label="8+" />
+                      <PasswordRule met={passwordChecks.uppercase} label="A-Z" />
+                      <PasswordRule met={passwordChecks.lowercase} label="a-z" />
+                      <PasswordRule met={passwordChecks.number} label="0-9" />
+                      <PasswordRule met={passwordChecks.special} label="Symbol" />
                     </div>
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
-                      {t('auth.signup.confirmPassword')} <span className="text-red-500">*</span>
+                      Confirm Password <span className="text-red-500">*</span>
                     </label>
                     <div className="relative group">
                       <input
@@ -498,13 +492,13 @@ const Signup = () => {
                     className="mt-1 mr-3 h-5 w-5"
                   />
                   <span className="text-sm text-gray-800 font-medium">
-                    {t('auth.signup.agreeToTermsPrefix')}{' '}
+                    I agree to the{' '}
                     <button
                       type="button"
                       onClick={() => setShowTermsModal(true)}
                       className="text-brand-primary underline font-semibold hover:text-gray-700"
                     >
-                      {t('auth.signup.termsLinkText')}
+                      Terms and Conditions regarding Data Sharing and Privacy
                     </button>{' '}
                     <span className="text-red-500">*</span>
                   </span>
@@ -519,7 +513,7 @@ const Signup = () => {
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-brand-primary bg-opacity-50 p-4">
                   <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[85vh] flex flex-col">
                     <div className="flex items-center justify-between p-5 border-b bg-brand-primary text-white rounded-t-2xl">
-                      <h2 className="text-lg font-bold">{t('auth.signup.termsModalTitle')}</h2>
+                      <h2 className="text-lg font-bold">Terms and Conditions — Data Sharing and Privacy</h2>
                       <button
                         type="button"
                         onClick={() => setShowTermsModal(false)}
@@ -542,7 +536,7 @@ const Signup = () => {
                         onClick={() => setShowTermsModal(false)}
                         className="px-5 py-2.5 border-2 border-gray-300 text-gray-700 rounded-lg font-semibold hover:bg-gray-100 transition-colors"
                       >
-                        {t('auth.signup.close')}
+                        Close
                       </button>
                       <button
                         type="button"
@@ -553,7 +547,7 @@ const Signup = () => {
                         }}
                         className="px-5 py-2.5 bg-brand-primary text-white rounded-lg font-semibold hover:opacity-90 transition-all"
                       >
-                        {t('auth.signup.acceptAndClose')}
+                        Accept &amp; Close
                       </button>
                     </div>
                   </div>
@@ -569,7 +563,7 @@ const Signup = () => {
                 >
                   {loading
                     ? <Loader className="h-5 w-5 animate-spin" />
-                    : <><CheckCircle className="h-5 w-5" /> {t('auth.signup.completeRegistration')}</>}
+                    : <><CheckCircle className="h-5 w-5" /> Complete Registration</>}
                 </button>
               </div>
             </div>
@@ -577,9 +571,9 @@ const Signup = () => {
 
           <div className="mt-6 text-center">
             <p className="text-gray-600">
-              {t('auth.signup.alreadyHaveAccount')}{' '}
+              Already have an account?{' '}
               <Link to="/login" className="text-brand-primary hover:text-gray-700 font-medium">
-                {t('auth.signup.loginHere')}
+                Login here
               </Link>
             </p>
           </div>

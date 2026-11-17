@@ -2,13 +2,11 @@ import React, { useState } from 'react';
 import { ChevronDown, ChevronUp } from 'lucide-react';
 import { InfoRow } from '../../../../components/ui/InfoRow';
 import { formatLabel } from '../../utils/formatters';
-import { useReportI18n } from '../../utils/reportI18n';
 
 const GenericExtractedData = ({ data }) => {
-  const { L, R } = useReportI18n();
   const [showAll, setShowAll] = useState(false);
   if (!data || typeof data !== 'object') {
-    return <p className="text-sm text-gray-600">{R('noData')}</p>;
+    return <p className="text-sm text-gray-600">No extracted data available</p>;
   }
 
   const entries = Object.entries(data).filter(([key, value]) =>
@@ -21,7 +19,7 @@ const GenericExtractedData = ({ data }) => {
     <div className="bg-white p-3 rounded-lg">
       <div className="space-y-1 text-sm text-gray-700">
         {visibleEntries.map(([key, value]) => (
-          <InfoRow key={key} label={L(formatLabel(key))} value={value} />
+          <InfoRow key={key} label={formatLabel(key)} value={value} />
         ))}
       </div>
       {entries.length > 8 && (
@@ -30,9 +28,9 @@ const GenericExtractedData = ({ data }) => {
           className="mt-3 text-[10px] font-black text-brand-primary uppercase tracking-widest hover:text-brand-secondary transition-colors flex items-center gap-1"
         >
           {showAll ? (
-            <><ChevronUp className="h-3 w-3" /> {R('showLess')}</>
+            <><ChevronUp className="h-3 w-3" /> Show Less</>
           ) : (
-            <><ChevronDown className="h-3 w-3" /> {R('moreFields', { count: entries.length - 8 })}</>
+            <><ChevronDown className="h-3 w-3" /> More Fields ({entries.length - 8} more)</>
           )}
         </button>
       )}

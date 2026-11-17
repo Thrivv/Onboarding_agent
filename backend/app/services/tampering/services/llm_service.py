@@ -8,23 +8,24 @@ from app import config
 logger = logging.getLogger(__name__)
 
 # =====================================
-# AWS Bedrock Configuration
+# OpenRouter API Configuration
 # =====================================
-def get_bedrock_api_key():
-    api_key = config.AWS_BEARER_TOKEN_BEDROCK
+def get_openrouter_client():
+    api_key = config.OPENROUTER_API_KEY
     if not api_key:
-        raise ValueError("AWS_BEARER_TOKEN_BEDROCK not found in .env file")
+        raise ValueError("OPENROUTER_API_KEY not found in .env file")
     return api_key
 
-def call_llm_api(system_prompt: str, user_prompt: str) -> str:
-    # Model + endpoint come from llm_client (backed by bedrock_client.py).
-    from app.services.llm_client import LLM_API_URL, TEXT_PRIMARY
-    from app.services import bedrock_client
+def call_openrouter_api(system_prompt: str, user_prompt: str) -> str:
+    # Model + endpoint come from llm_client (env-driven). This used to read its
+    # own OPENROUTER_MODEL var defaulting to the ":free" variant, which quietly
+    # diverged from the model every other caller used.
+    from app.services.llm_client import OPENROUTER_API_URL, TEXT_PRIMARY
 
-    api_key = get_bedrock_api_key()
+    api_key = get_openrouter_client()
     model = TEXT_PRIMARY
 
-    url = LLM_API_URL
+    url = OPENROUTER_API_URL
     headers = {
         "Authorization": f"Bearer {api_key}",
         "Content-Type": "application/json"
@@ -40,7 +41,7 @@ def call_llm_api(system_prompt: str, user_prompt: str) -> str:
         "max_tokens": 150
     }
     
-    response = bedrock_client.post(url, headers=headers, json=payload)
+    response = requests.post(url, headers=headers, json=payload)
     response.raise_for_status()
     
     result = response.json()
@@ -198,8 +199,8 @@ IMPORTANT: Focus on modules with FAIL status first. Only mention regions if no m
 Line 1: Which module(s) failed and what tampering was detected?
 Line 2: Suggest uploading untampered document."""
         
-        # Call the Bedrock API
-        analysis_text = call_llm_api(system_prompt, user_prompt)
+        # Call OpenRouter API
+        analysis_text = call_openrouter_api(system_prompt, user_prompt)
         
         # Extract tampered sections from regions
         tampered_sections = []

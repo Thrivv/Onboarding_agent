@@ -22,17 +22,6 @@ import { getPackageStatus } from '../../api/products';
 import { getDocumentRequirements, getDocumentStatus } from '../../api/documents';
 import { logout } from '../../api/auth';
 import { useAuth } from '../../context/AuthContext';
-import { useLanguage } from '../../context/LanguageContext';
-import { translateDocName } from '../../features/onboarding/utils/reportI18n';
-import logger from '../../utils/logger';
-import { canonicalKeywords } from '../../features/onboarding/utils/i18nText';
-
-const SIDEBAR_SHORT_KEYS = {
-  fatca_declaration: 'report.docs.fatcaShort',
-  pep_declaration: 'report.docs.pepShort',
-  product_package: 'report.docs.productPackage',
-  summary_declaration: 'report.docs.final',
-};
 
 
 
@@ -51,7 +40,6 @@ const profileDropdownItems = [
 const Sidebar = ({ onSectionClick, activeSection }) => {
   const location = useLocation();
   const { user, logout } = useAuth();
-  const { t } = useLanguage();
   const [showUserDetails, setShowUserDetails] = useState(false);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const [expandedCategory, setExpandedCategory] = useState(activeSection || 'corporate'); // Default expanded category
@@ -87,7 +75,7 @@ const Sidebar = ({ onSectionClick, activeSection }) => {
         // Fetch requirements and logs in parallel
         const [reqRes, logsRes] = await Promise.all([
           getDocumentRequirements({ email: user.email }),
-          getConversationLogs(user.email, { limit: 100 })
+          getConversationLogs(user.email, { params: { limit: 100 } })
         ]);
 
         // 1. Determine Required Documents
@@ -97,19 +85,13 @@ const Sidebar = ({ onSectionClick, activeSection }) => {
         const logs = (logsRes.data?.logs || []).map(log => ({
           ...log,
           role: (log.role === 'agent' || log.role === 'bot') ? 'assistant' : log.role,
-          content: log.message || log.content || '',
-          // English rendering when known + EN aliases for AR/ES keywords, so
-          // the phrase checks below work in every language (utils/i18nText.js).
-          logicContent: canonicalKeywords(
-            ((typeof log.metadata === 'string' ? (() => { try { return JSON.parse(log.metadata); } catch (e) { return {}; } })() : log.metadata) || {}).i18n?.english
-            || log.message || log.content || ''
-          ),
+          content: log.message || log.content || ''
         }));
 
         // PRIORITY: Trust the chat instructions
         const welcomeMsgs = logs.filter(l =>
           l.role === 'assistant' &&
-          (l.content?.includes('Prepare these') || l.logicContent?.includes('required documents') || (l.metadata && (typeof l.metadata === 'string' ? JSON.parse(l.metadata).is_welcome : l.metadata.is_welcome)))
+          (l.content?.includes('Prepare these') || l.content?.includes('Required Documents') || (l.metadata && (typeof l.metadata === 'string' ? JSON.parse(l.metadata).is_welcome : l.metadata.is_welcome)))
         );
 
         if (welcomeMsgs.length > 0) {
@@ -197,7 +179,7 @@ const Sidebar = ({ onSectionClick, activeSection }) => {
           statusData = statusRes.data || {};
           approvedDocs = statusData.approved_documents || [];
         } catch (e) {
-          logger.warn('[Sidebar] Failed to fetch status pass 1', e);
+          console.warn('[Sidebar] Failed to fetch status pass 1', e);
         }
 
         // 3. Determine Status from Logs & Backend Sync
@@ -338,7 +320,7 @@ const Sidebar = ({ onSectionClick, activeSection }) => {
         chronLogs.forEach(log => {
           let metadata = {};
           try { metadata = typeof log.metadata === 'string' ? JSON.parse(log.metadata) : (log.metadata || {}); } catch (e) { }
-          const content = log.logicContent || (log.content || '').toLowerCase();
+          const content = (log.content || '').toLowerCase();
           const logType = (metadata.document_type || log.document_type || '').toLowerCase();
 
           const isAccepted = metadata.decision === 'ACCEPT' ||
@@ -414,7 +396,7 @@ const Sidebar = ({ onSectionClick, activeSection }) => {
           }));
         } catch (e) { }
       } catch (err) {
-        logger.error('[Sidebar] Component error:', err);
+        console.error('[Sidebar] Component error:', err);
       } finally { setLoadingDocs(false); }
     };
     fetchData();
@@ -461,7 +443,7 @@ const Sidebar = ({ onSectionClick, activeSection }) => {
   };
 
   return (
-    <div className="h-screen w-64 bg-[#3E5C9A] text-white flex flex-col fixed left-0 rtl:left-auto rtl:right-0 top-0 border-r rtl:border-r-0 rtl:border-l border-[#304B82] z-50 font-sans">
+    <div className="h-screen w-64 bg-[#3E5C9A] text-white flex flex-col fixed left-0 top-0 border-r border-[#304B82] z-50 font-sans">
       <style>{`
         .custom-sidebar-scroll {
           scrollbar-width: none; /* Firefox */
@@ -487,7 +469,7 @@ const Sidebar = ({ onSectionClick, activeSection }) => {
       <div className="flex-1 overflow-y-auto custom-sidebar-scroll px-4 space-y-4 pb-4">
         {/* Navigation Section - Tighter spacing */}
         <nav className="space-y-0.5">
-          <p className="text-[9px] font-black text-white/40 uppercase tracking-[0.2em] mb-1.5 px-1">{t('nav.mainMenu')}</p>
+          <p className="text-[9px] font-black text-white/40 uppercase tracking-[0.2em] mb-1.5 px-1">Main Menu</p>
           {navigationItems.map((item) => {
             const isActive = location.pathname === item.path;
             const Icon = item.icon;
@@ -495,7 +477,7 @@ const Sidebar = ({ onSectionClick, activeSection }) => {
               <Link key={item.path} to={item.path} className={`flex items-center justify-between px-3 py-2.5 rounded-xl transition-all ${isActive ? 'text-brand-primary text-white shadow-lg' : 'hover:bg-white/5 text-blue-100 opacity-80 hover:opacity-100'}`}>
                 <div className="flex items-center gap-3">
                   <Icon className={`h-4 w-4 ${isActive ? 'text-white' : 'text-blue-300'}`} />
-                  <span className="text-[11.5px] font-black tracking-tight">{item.path === '/ai-assistant' ? t('nav.aiAssistant') : item.name}</span>
+                  <span className="text-[11.5px] font-black tracking-tight">{item.name}</span>
                 </div>
                 {isActive && <ChevronRight className="h-3 w-3 opacity-70" />}
               </Link>
@@ -507,7 +489,7 @@ const Sidebar = ({ onSectionClick, activeSection }) => {
         <div className="px-1 mt-6">
           <div className="bg-[#2D4A85] rounded-3xl p-4 border border-white/5 shadow-inner">
             <div className="flex items-center justify-between mb-4 px-1">
-              <h3 className="text-[10px] font-black text-white/50 uppercase tracking-[0.2em]">{t('sidebar.verificationHub')}</h3>
+              <h3 className="text-[10px] font-black text-white/50 uppercase tracking-[0.2em]">Verification Hub</h3>
             </div>
 
             <div className="relative space-y-3">
@@ -533,10 +515,10 @@ const Sidebar = ({ onSectionClick, activeSection }) => {
                 ];
 
                 const categories = [
-                  { id: 'corporate', label: t('sidebar.corporate').toUpperCase(), icon: Building, items: allItems.filter(i => categorizer(i) === 'corporate') },
-                  { id: 'user', label: t('sidebar.identity').toUpperCase(), icon: User, items: allItems.filter(i => categorizer(i) === 'user') },
-                  { id: 'additional', label: t('sidebar.additional').toUpperCase(), icon: ShieldCheck, items: allItems.filter(i => categorizer(i) === 'additional') },
-                  { id: 'declaration', label: t('sidebar.declaration').toUpperCase(), icon: CheckCircle, items: allItems.filter(i => categorizer(i) === 'declaration') }
+                  { id: 'corporate', label: 'CORPORATE', icon: Building, items: allItems.filter(i => categorizer(i) === 'corporate') },
+                  { id: 'user', label: 'IDENTITY', icon: User, items: allItems.filter(i => categorizer(i) === 'user') },
+                  { id: 'additional', label: 'ADDITIONAL', icon: ShieldCheck, items: allItems.filter(i => categorizer(i) === 'additional') },
+                  { id: 'declaration', label: 'DECLARATION', icon: CheckCircle, items: allItems.filter(i => categorizer(i) === 'declaration') }
                 ];
 
                 return categories.map((cat, idx) => {
@@ -568,7 +550,7 @@ const Sidebar = ({ onSectionClick, activeSection }) => {
                           </div>
                           <div className="text-left">
                             <p className={`text-[10px] font-black tracking-widest ${isFullyDone ? 'text-white' : 'text-blue-100'}`}>{cat.label}</p>
-                            <p className="text-[8px] font-bold text-blue-400/60 uppercase">{t('ui.verifiedCount', { count: doneCount, total })}</p>
+                            <p className="text-[8px] font-bold text-blue-400/60 uppercase">{doneCount}/{total} Verified</p>
                           </div>
                         </div>
                       </button>
@@ -625,7 +607,7 @@ const Sidebar = ({ onSectionClick, activeSection }) => {
                                   <div className="flex items-center gap-2.5">
                                     <div className={`h-1.5 w-1.5 rounded-full ${isDone ? 'bg-emerald-400' : isSkipped ? 'bg-blue-300/40' : isInProgress ? 'text-brand-primary animate-pulse' : 'bg-brand-primary'}`} />
                                     <span className={`text-[10px] font-black tracking-tight ${isDone ? 'text-white' : isSkipped ? 'text-blue-300/60' : 'text-blue-300/80 group-hover:text-white transition-colors'}`}>
-                                      {SIDEBAR_SHORT_KEYS[item.key] ? t(SIDEBAR_SHORT_KEYS[item.key]) : translateDocName(t, item.label)}{isSkipped ? ` · ${t('ui.skipped')}` : ''}
+                                      {item.label}{isSkipped ? ' · Skipped' : ''}
                                     </span>
                                   </div>
                                   {isDone && <CheckCircle className="h-3 w-3 text-emerald-400 ml-auto opacity-60" />}
@@ -650,7 +632,7 @@ const Sidebar = ({ onSectionClick, activeSection }) => {
         {/* Profile Dropdown Panel — expands above the user button */}
         {showUserDetails && (
           <div className="mb-2 bg-brand-secondary-dark/50 rounded-xl border border-brand-primary/40 overflow-hidden animate-in fade-in slide-in-from-bottom-2 duration-200">
-            <p className="text-[8px] font-black text-blue-300 uppercase tracking-[0.2em] px-3 pt-2.5 pb-1 opacity-60">{t('ui.navigation')}</p>
+            <p className="text-[8px] font-black text-blue-300 uppercase tracking-[0.2em] px-3 pt-2.5 pb-1 opacity-60">Navigation</p>
             {profileDropdownItems.map((item) => {
               const Icon = item.icon;
               const isActive = location.pathname === item.path;
@@ -665,7 +647,7 @@ const Sidebar = ({ onSectionClick, activeSection }) => {
                     }`}
                 >
                   <Icon className={`h-3.5 w-3.5 flex-shrink-0 ${isActive ? 'text-brand-primary' : 'text-blue-300'}`} />
-                  <span className="text-[11px] font-black tracking-tight">{item.path === '/dashboard' ? t('nav.adminDashboard') : item.name}</span>
+                  <span className="text-[11px] font-black tracking-tight">{item.name}</span>
                   {isActive && <ChevronRight className="h-3 w-3 ml-auto opacity-60" />}
                 </Link>
               );
@@ -694,7 +676,7 @@ const Sidebar = ({ onSectionClick, activeSection }) => {
             className="px-5 h-10 ml-0.5 bg-red-500/10 hover:bg-red-500/20 text-red-400 hover:text-red-300 rounded-xl flex items-center gap-2 transition-all border border-red-500/20 shadow-lg shadow-red-950/20 flex-shrink-0 font-black text-[10px] uppercase tracking-widest group"
           >
             <LogOut className="h-3.5 w-3.5 group-hover:-translate-x-0.5 transition-transform" />
-            <span className="">{t('nav.logout')}</span>
+            <span className="">Logout</span>
           </button>
         </div>
 
@@ -706,9 +688,9 @@ const Sidebar = ({ onSectionClick, activeSection }) => {
         <div className="logout-modal-wrapper fixed inset-0 z-[1001] flex items-center justify-center lg:pl-64 p-4 bg-gray-900/60 backdrop-blur-[2px] transition-all duration-300">
           <div className="bg-white rounded-2xl w-full max-w-[320px] shadow-2xl border border-gray-100 animate-in fade-in zoom-in duration-200">
             <div className="p-6 text-center">
-              <h3 className="text-lg font-black text-gray-900 mb-2 tracking-tight">{t('sidebar.logoutTitle')}</h3>
+              <h3 className="text-lg font-black text-gray-900 mb-2 tracking-tight">Log out?</h3>
               <p className="text-[12px] font-bold text-slate-500 leading-relaxed px-2">
-                {t('sidebar.logoutBody')}
+                Are you sure you want to end your onboarding session?
               </p>
             </div>
 
@@ -717,13 +699,13 @@ const Sidebar = ({ onSectionClick, activeSection }) => {
                 onClick={handleLogout}
                 className="w-full py-3 bg-red-600 hover:bg-red-700 text-white rounded-xl font-black text-xs transition-all shadow-lg shadow-red-100"
               >
-                {t('sidebar.logoutConfirm')}
+                Yes, log out
               </button>
               <button
                 onClick={() => setShowLogoutConfirm(false)}
                 className="w-full py-3 bg-white hover:bg-gray-100 text-gray-600 rounded-xl font-black text-xs transition-all border border-gray-200"
               >
-                {t('sidebar.logoutCancel')}
+                Cancel
               </button>
             </div>
           </div>

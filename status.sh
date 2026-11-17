@@ -48,7 +48,7 @@ else
 fi
 
 echo "Checking Reply-Loop..."
-if docker ps | grep OnboardLG-reply-loop | grep -q "Up"; then
+if docker ps | grep Onboard-reply-loop | grep -q "Up"; then
     echo "✅ Reply-Loop is running"
 else
     echo "❌ Reply-Loop is not running"

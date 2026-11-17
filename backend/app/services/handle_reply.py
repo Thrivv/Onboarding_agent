@@ -1,6 +1,4 @@
 # backend/app/services/handle_reply.py
-from app import config
-from app.utils.pii_masker import mask_pii
 from app.services.run_model import call_local_llm
 from app.services.supabase_client import supabase
 # Canonical documents-directory resolver. Everything below used to build this
@@ -710,38 +708,17 @@ def save_member_progress(
 def generate_reasoning_for_wrong_document(raw_text: str, doc_type: str) -> str:
     """
     Generate reasoning for why the document is wrong using call_local_llm.
-
-    PII MASKING (prompt-remediation Phase 1, item #1): this is a downstream
-    consumer of already-extracted text, not the extraction call itself --
-    the extraction that produced raw_text has already run and captured
-    whatever real values it needed. Explaining *why a document was
-    rejected* never requires the reader (model or human) to see the actual
-    EID number, phone, email, or MRZ line, so raw_text is masked before it
-    is interpolated into the prompt. mask_pii() falls back to its free-text
-    regex pass (_mask_text_patterns) for a bare string like this one, the
-    same pass already used for log lines elsewhere in the codebase -- this
-    is simply the first time it runs before a model call instead of after.
     """
     try:
-        masked_text = mask_pii(raw_text)
-        # ARCHITECTURE FIX (prompt-remediation Phase 2): task-specific system
-        # prompt instead of the shared generic banking-assistant sentence in
-        # run_model.py, and a lower temperature (0.3) suited to a factual
-        # explanatory summary rather than open-ended chat.
-        system_prompt = (
-            f"You are a document-verification assistant for {config.BRAND_NAME}. "
-            "Explain, clearly and factually, why a submitted document was "
-            "rejected, in plain user-friendly language."
-        )
         prompt = f"""
-        The following raw text was extracted from a document of type '{doc_type}'.
+        You are an AI assistant. The following raw text was extracted from a document of type '{doc_type}'.
         The document was marked as invalid. Please summarize the extracted text and provide a detailed reason
         why the document is invalid. Ensure the response is clear and user-friendly.
 
         Raw Text:
-        {masked_text}
+        {raw_text}
         """
-        reasoning = call_local_llm(prompt, system_prompt=system_prompt, temperature=0.3)
+        reasoning = call_local_llm(prompt)
         return reasoning
     except Exception as e:
         logger.error(f"Failed to generate reasoning for wrong document: {e}")
@@ -1289,12 +1266,6 @@ def is_registered_user_in_company_documents(user_email: str) -> dict:
 # is the only caller, so keeping it in a separate top-level package added an
 # import hop for nothing. Behaviour is unchanged.
 
-def build_onboarding_system_prompt() -> str:
-    """Task-specific system prompt for the email-reply chat pipeline (see
-    build_onboarding_prompt / process_user_reply below)."""
-    return f"You are an intelligent and friendly onboarding assistant at {config.BRAND_NAME}."
-
-
 def build_onboarding_prompt(
     user_message: str, context: str = "", registration_data: dict = None
 ) -> str:
@@ -1302,37 +1273,14 @@ def build_onboarding_prompt(
     if context.startswith("Onboarding Step:"):
         onboarding_step = context.split("\n")[0].split(":")[1].strip()
 
-    # Build registration details string.
-    #
-    # PII MASKING (prompt-remediation Phase 1, item #1): date of birth,
-    # phone number, and email used to go into this prompt as plain text on
-    # every chat turn, even though none of the branches below ("Instructions:
-    # ...") ever reference those specific values -- the model only needs
-    # them, if at all, in generic form. mask_pii() replaces DOB with
-    # '***DOB***', the phone with a last-4-digits mask, and the email with a
-    # first-character + domain mask, so the conversational assistant can
-    # still see *that* these fields are on file without the raw bearer
-    # values leaving the process boundary into the model provider on every
-    # turn. The customer's own name is deliberately left unmasked here (and
-    # is NOT passed through mask_pii, which would otherwise hash it to
-    # "PERSON_<hash>") because this prompt's whole job is to let the model
-    # address the user personally in its reply -- masking it would be a
-    # real UX regression for no corresponding privacy gain, since it is the
-    # same user's own name being reflected back to them, not disclosed to a
-    # third party. Business/account fields (business_name, account_type,
-    # ownership_type) are never PII and pass through unchanged either way.
+    # Build registration details string
     reg_details = ""
     if registration_data:
-        _sensitive = mask_pii({
-            "dob": registration_data.get("dob"),
-            "phone_number": registration_data.get("phone_number"),
-            "email": registration_data.get("email"),
-        })
         reg_details = (
             f"- Name: {registration_data.get('name')}\n"
-            f"- Date of Birth: {_sensitive.get('dob')}\n"
-            f"- Phone Number: {_sensitive.get('phone_number')}\n"
-            f"- Email: {_sensitive.get('email')}\n"
+            f"- Date of Birth: {registration_data.get('dob')}\n"
+            f"- Phone Number: {registration_data.get('phone_number')}\n"
+            f"- Email: {registration_data.get('email')}\n"
             f"- Business Name: {registration_data.get('business_name')}\n"
             f"- Account Type: {registration_data.get('account_type')}\n"
             f"- Ownership Type: {registration_data.get('ownership_type')}\n"
@@ -1361,12 +1309,9 @@ def build_onboarding_prompt(
     else:
         instructions = "Respond helpfully to the user's query."
 
-    # ARCHITECTURE FIX (prompt-remediation Phase 2): the assistant-identity
-    # line moved out of the returned prompt text and into
-    # build_onboarding_system_prompt() below, so process_user_reply() can
-    # pass it through the model's actual system role instead of textually
-    # embedding it as the first line of the user turn.
     prompt = f"""
+You are an intelligent and friendly onboarding assistant at DigiOB.
+
 Current onboarding step: {onboarding_step}
 Instructions: {instructions}
 
@@ -1948,6 +1893,12 @@ def process_user_reply(from_email: str, body: str, attachments: list = None):
         "timestamp":  datetime.utcnow().isoformat(),
     })
 
+    # FAQ retrieval was removed along with ingestion/ — the retriever it called
+    # had been a stub returning [] for some time, so this was always an empty
+    # string. Kept as a named variable because build_onboarding_prompt() below
+    # still interpolates it into the prompt context.
+    faq_context = ""
+
     try:
         # BUGFIX: this filtered on .eq("email", ...), but the conversations
         # table has no `email` column — every other query against it (12 of
@@ -1966,7 +1917,7 @@ def process_user_reply(from_email: str, body: str, attachments: list = None):
 
     full_context = (
         f"Onboarding Step: {onboarding_step}\n\n"
-        f"{convo_context}"
+        f"{convo_context}\n\nFAQ:\n{faq_context}"
     )
 
     try:
@@ -1981,9 +1932,7 @@ def process_user_reply(from_email: str, body: str, attachments: list = None):
                 "ownership_type": user.get("ownership_type"),
             },
         )
-        llm_response = call_local_llm(
-            prompt, system_prompt=build_onboarding_system_prompt(), temperature=0.5
-        )
+        llm_response = call_local_llm(prompt)
     except Exception as e:
         logger.error(f"LLM call failed: {e}")
         llm_response = "Thank you for your message. Our team will respond to you shortly."

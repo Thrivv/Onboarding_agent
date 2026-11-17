@@ -13,9 +13,8 @@ import {
   RefreshCw,
   Download
 } from 'lucide-react';
-import { getAccountTypeSummary, getBedrockStatus, getOnboardingSummary, getPendingVerificationCount, getRegisteredThisWeek, getRegisteredToday, getTotalUsers, getVerifiedUsersCount, listUsers } from '../api/auth';
+import { getAccountTypeSummary, getOnboardingSummary, getPendingVerificationCount, getRegisteredThisWeek, getRegisteredToday, getTotalUsers, getVerifiedUsersCount, listUsers } from '../api/auth';
 import toast from 'react-hot-toast';
-import logger from '../utils/logger';
 
 const COLORS = ['#eea73b', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#EC4899'];
 
@@ -42,7 +41,6 @@ const Dashboard = () => {
   const [systemStatus, setSystemStatus] = useState({
     backendOnline: true,
     databaseConnected: true,
-    bedrockConnected: null, // null = not checked yet ("checking...")
     lastUpdated: ''
   });
 
@@ -62,30 +60,9 @@ const Dashboard = () => {
   };
 
   // Fetch all dashboard data
-  // Independent of the main metrics fetch below on purpose: a slow or
-  // unreachable Bedrock call must never block or fail the rest of the
-  // dashboard (user counts, charts, etc.) from loading. See
-  // backend/app/services/bedrock_client.py::check_connection for why this
-  // real ping lives here rather than in the Docker-polled /health endpoint.
-  const checkBedrockStatus = useCallback(async () => {
-    try {
-      const res = await getBedrockStatus();
-      setSystemStatus(prev => ({
-        ...prev,
-        bedrockConnected: !!res.data.bedrock_connected
-      }));
-    } catch (error) {
-      logger.error('Error checking Bedrock status:', error);
-      setSystemStatus(prev => ({ ...prev, bedrockConnected: false }));
-    }
-  }, []);
-
   const fetchDashboardData = useCallback(async () => {
     try {
       setIsLoading(true);
-
-      // Fire-and-forget — resolves independently, see checkBedrockStatus above.
-      checkBedrockStatus();
 
       const [
         totalRes,
@@ -127,7 +104,7 @@ const Dashboard = () => {
 
       toast.success('Dashboard data refreshed');
     } catch (error) {
-      logger.error('Error fetching dashboard data:', error);
+      console.error('Error fetching dashboard data:', error);
       toast.error('Failed to load dashboard data');
       setSystemStatus(prev => ({
         ...prev,
@@ -176,7 +153,7 @@ const Dashboard = () => {
     const url = window.URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `thrivv_users_${new Date().toISOString().split('T')[0]}.csv`;
+    a.download = `growx_users_${new Date().toISOString().split('T')[0]}.csv`;
     a.click();
     toast.success('CSV exported successfully');
   };
@@ -402,22 +379,13 @@ const Dashboard = () => {
                 {[
                   { label: 'API Gateway', status: systemStatus.backendOnline, text: 'Active & Scaling' },
                   { label: 'Database Cluster', status: systemStatus.databaseConnected, text: 'Transactional' },
-                  {
-                    label: 'AWS Bedrock (Claude Haiku)',
-                    status: systemStatus.bedrockConnected,
-                    text: systemStatus.bedrockConnected === null
-                      ? 'Checking...'
-                      : systemStatus.bedrockConnected
-                        ? 'Connected'
-                        : 'Unreachable'
-                  },
                 ].map((s, i) => (
                   <div key={i} className="flex items-center justify-between p-5 bg-white/10 border border-white/20 rounded-2xl backdrop-blur-md">
                     <div>
                       <div className="text-xs font-bold text-slate-300 capitalize mb-1 tracking-wider">{s.label}</div>
                       <div className="text-base font-black text-white">{s.text}</div>
                     </div>
-                    <div className={`w-3.5 h-3.5 rounded-full ${s.status === null ? 'bg-slate-400 animate-pulse' : s.status ? 'bg-emerald-400 shadow-[0_0_15px_rgba(52,211,153,0.6)]' : 'bg-red-500'}`} />
+                    <div className={`w-3.5 h-3.5 rounded-full ${s.status ? 'bg-emerald-400 shadow-[0_0_15px_rgba(52,211,153,0.6)]' : 'bg-red-500'}`} />
                   </div>
                 ))}
                 <div className="pt-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest text-center">

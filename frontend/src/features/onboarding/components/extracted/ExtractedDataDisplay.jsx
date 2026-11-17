@@ -6,10 +6,8 @@ import { EIDExtractedData } from './EIDExtractedData';
 import { EjariExtractedData } from './EjariExtractedData';
 import { GenericExtractedData } from './GenericExtractedData';
 import { MOAExtractedData } from './MOAExtractedData';
-import { useReportI18n } from '../../utils/reportI18n';
 
 const ExtractedDataDisplay = ({ data, documentType, isMinimal = false }) => {
-  const { R } = useReportI18n();
   const [open, setOpen] = useState(isMinimal);
   if (!data) return null;
 
@@ -52,7 +50,7 @@ const ExtractedDataDisplay = ({ data, documentType, isMinimal = false }) => {
       >
         <div className="flex items-center gap-2">
           <FileText className="h-4 w-4 text-brand-primary" />
-          <span className="text-xs font-semibold text-indigo-800">{R('extractedInfo')}</span>
+          <span className="text-xs font-semibold text-indigo-800">Extracted Information</span>
         </div>
         {open
           ? <ChevronUp className="h-4 w-4 text-indigo-500" />

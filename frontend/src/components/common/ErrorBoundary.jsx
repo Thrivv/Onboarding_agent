@@ -3,8 +3,6 @@
 import React from 'react';
 import { AlertTriangle, RefreshCw, Home } from 'lucide-react';
 import { reportClientError } from '../../api/errorLogger';
-import logger from '../../utils/logger';
-import { tStatic } from '../../i18n/tStatic';
 
 class ErrorBoundary extends React.Component {
   constructor(props) {
@@ -17,7 +15,7 @@ class ErrorBoundary extends React.Component {
   }
 
   componentDidCatch(error, errorInfo) {
-    logger.error('ErrorBoundary caught an error:', error, errorInfo);
+    console.error('ErrorBoundary caught an error:', error, errorInfo);
     this.setState({
       error: error,
       errorInfo: errorInfo
@@ -49,21 +47,21 @@ class ErrorBoundary extends React.Component {
               </div>
               
               <h1 className="text-3xl font-bold text-gray-900 mb-4">
-                {tStatic('ui.oops')}
+                Oops! Something went wrong
               </h1>
               
               <p className="text-gray-600 mb-8">
-                {tStatic('ui.sorryUnexpected')}
+                We're sorry, but something unexpected happened. Please try refreshing the page or go back to the home page.
               </p>
 
               {process.env.NODE_ENV === 'development' && this.state.error && (
-                <div className="mb-8 p-4 bg-gray-100 rounded-lg text-start">
+                <div className="mb-8 p-4 bg-gray-100 rounded-lg text-left">
                   <p className="text-sm font-mono text-red-600 mb-2">
-                    <strong>{tStatic('ui.errorLabel')}</strong> {this.state.error.toString()}
+                    <strong>Error:</strong> {this.state.error.toString()}
                   </p>
                   <details className="text-xs font-mono text-gray-700">
                     <summary className="cursor-pointer hover:text-gray-900">
-                      {tStatic('ui.stackTrace')}
+                      Stack trace
                     </summary>
                     <pre className="mt-2 overflow-auto">
                       {this.state.errorInfo?.componentStack}
@@ -78,7 +76,7 @@ class ErrorBoundary extends React.Component {
                   className="flex items-center gap-2 px-6 py-3 bg-brand-primary text-brand-primary text-white rounded-lg hover:opacity-90 transition-opacity"
                 >
                   <RefreshCw className="h-5 w-5" />
-                  {tStatic('ui.reloadPage')}
+                  Reload Page
                 </button>
                 
                 <button
@@ -86,7 +84,7 @@ class ErrorBoundary extends React.Component {
                   className="flex items-center gap-2 px-6 py-3 border-2 border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
                 >
                   <Home className="h-5 w-5" />
-                  {tStatic('ui.goHome')}
+                  Go Home
                 </button>
               </div>
             </div>

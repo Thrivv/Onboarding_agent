@@ -39,10 +39,6 @@ import json
 import logging
 from typing import Optional
 
-from app.i18n import localized
-from app.i18n.messages import doc_name
-from app.utils.language import normalize_language
-
 logger = logging.getLogger(__name__)
 
 
@@ -75,7 +71,6 @@ def check_and_expand_members(email: str, user: dict, language: str = "english") 
     caught and logged; a failure here must never break the upload response
     it's called from.
     """
-    language = normalize_language(language)
     try:
         from app.domain.onboarding.stage_table import (
             ACCOUNT_CORPORATE, OWNERSHIP_MULTIPLE, OWNERSHIP_PARTNERSHIP,
@@ -162,41 +157,26 @@ def check_and_expand_members(email: str, user: dict, language: str = "english") 
                     f"\n\n({len(_verified_now)} already have a verified identity "
                     f"document on file and won't be asked again.)" if _verified_now else ""
                 )
-                _already_note_es = (
-                    f"\n\n({len(_verified_now)} ya tienen un documento de identidad verificado "
-                    f"y no se les volverá a solicitar.)" if _verified_now else ""
-                )
-                _already_note_ar = (
-                    f"\n\n(لدى {len(_verified_now)} منهم مستند هوية موثّق مسبقاً ولن يُطلب منهم مرة أخرى.)"
-                    if _verified_now else ""
-                )
                 message = (
-                    localized(language,
-                        en=("Business ownership analysis complete. Emirates ID or Passport "
+                    "Análisis de propiedad empresarial completado. Se requiere verificación "
+                    "de Emirates ID o Pasaporte para los siguientes miembros:\n\n"
+                    f"{_member_list_str}{_already_note}\n\n"
+                    "Por favor confirme la lista de firmantes autorizados a continuación."
+                    if language == "spanish" else
+                    "Business ownership analysis complete. Emirates ID or Passport "
                     "verification is required for the following members:\n\n"
                     f"{_member_list_str}{_already_note}\n\n"
-                    "Please confirm the list of Authorised Signatories below."),
-                        es=("Análisis de propiedad empresarial completado. Se requiere verificación "
-                    "de Emirates ID o Pasaporte para los siguientes miembros:\n\n"
-                    f"{_member_list_str}{_already_note_es}\n\n"
-                    "Por favor confirme la lista de firmantes autorizados a continuación."),
-                        ar=("اكتمل تحليل ملكية الشركة. يلزم التحقق من الهوية الإماراتية أو جواز "
-                    "السفر للأعضاء التاليين:\n\n"
-                    f"{_member_list_str}{_already_note_ar}\n\n"
-                    "يُرجى تأكيد قائمة المخولين بالتوقيع أدناه."))
+                    "Please confirm the list of Authorised Signatories below."
                 )
             else:
                 message = (
-                    localized(language,
-                        en=("Business ownership analysis complete, and every member already has a "
-                    "verified identity document on file — nothing further needed there.\n\n"
-                    "Please confirm the list of Authorised Signatories below."),
-                        es=("Análisis de propiedad empresarial completado, y todos los miembros ya "
+                    "Análisis de propiedad empresarial completado, y todos los miembros ya "
                     "tienen un documento de identidad verificado registrado — no se necesita "
-                    "nada más ahí.\n\nPor favor confirme la lista de firmantes autorizados a continuación."),
-                        ar=("اكتمل تحليل ملكية الشركة، وجميع الأعضاء لديهم بالفعل مستند هوية موثّق "
-                    "مسجل — لا حاجة لأي إجراء إضافي هناك.\n\nيُرجى تأكيد قائمة المخولين "
-                    "بالتوقيع أدناه."))
+                    "nada más ahí.\n\nPor favor confirme la lista de firmantes autorizados a continuación."
+                    if language == "spanish" else
+                    "Business ownership analysis complete, and every member already has a "
+                    "verified identity document on file — nothing further needed there.\n\n"
+                    "Please confirm the list of Authorised Signatories below."
                 )
             logger.info(f"[MEMBER-EXPANSION] {email}: Type-1 auto-triggered -> {len(_members)} members")
             return {
@@ -331,41 +311,26 @@ def check_and_expand_members(email: str, user: dict, language: str = "english") 
                     f"\n\n({len(_verified_now)} already have a verified identity "
                     f"document on file and won't be asked again.)" if _verified_now else ""
                 )
-                _already_note_es = (
-                    f"\n\n({len(_verified_now)} ya tienen un documento de identidad verificado "
-                    f"y no se les volverá a solicitar.)" if _verified_now else ""
-                )
-                _already_note_ar = (
-                    f"\n\n(لدى {len(_verified_now)} منهم مستند هوية موثّق مسبقاً ولن يُطلب منهم مرة أخرى.)"
-                    if _verified_now else ""
-                )
                 message = (
-                    localized(language,
-                        en=("Ownership analysis is complete. Emirates ID or Passport "
+                    "Análisis de propiedad corporativa completo. Se requiere verificación "
+                    "de Emirates ID o Pasaporte para los siguientes beneficiarios:\n\n"
+                    f"{_member_list_str}{_already_note}\n\n"
+                    "Por favor confirme la lista de firmantes autorizados a continuación."
+                    if language == "spanish" else
+                    "Ownership analysis is complete. Emirates ID or Passport "
                     "verification is required for the following beneficial owners:\n\n"
                     f"{_member_list_str}{_already_note}\n\n"
-                    "Please confirm the list of Authorised Signatories below."),
-                        es=("Análisis de propiedad corporativa completo. Se requiere verificación "
-                    "de Emirates ID o Pasaporte para los siguientes beneficiarios:\n\n"
-                    f"{_member_list_str}{_already_note_es}\n\n"
-                    "Por favor confirme la lista de firmantes autorizados a continuación."),
-                        ar=("اكتمل تحليل الملكية. يلزم التحقق من الهوية الإماراتية أو جواز السفر "
-                    "للمستفيدين الفعليين التاليين:\n\n"
-                    f"{_member_list_str}{_already_note_ar}\n\n"
-                    "يُرجى تأكيد قائمة المخولين بالتوقيع أدناه."))
+                    "Please confirm the list of Authorised Signatories below."
                 )
             else:
                 message = (
-                    localized(language,
-                        en=("Ownership analysis is complete, and every beneficial owner already has a "
-                    "verified identity document on file — nothing further needed there.\n\n"
-                    "Please confirm the list of Authorised Signatories below."),
-                        es=("Análisis de propiedad corporativa completo, y todos los beneficiarios ya "
+                    "Análisis de propiedad corporativa completo, y todos los beneficiarios ya "
                     "tienen un documento de identidad verificado registrado — no se necesita "
-                    "nada más ahí.\n\nPor favor confirme la lista de firmantes autorizados a continuación."),
-                        ar=("اكتمل تحليل الملكية، وجميع المستفيدين الفعليين لديهم بالفعل مستند هوية "
-                    "موثّق مسجل — لا حاجة لأي إجراء إضافي هناك.\n\nيُرجى تأكيد قائمة "
-                    "المخولين بالتوقيع أدناه."))
+                    "nada más ahí.\n\nPor favor confirme la lista de firmantes autorizados a continuación."
+                    if language == "spanish" else
+                    "Ownership analysis is complete, and every beneficial owner already has a "
+                    "verified identity document on file — nothing further needed there.\n\n"
+                    "Please confirm the list of Authorised Signatories below."
                 )
             logger.info(f"[MEMBER-EXPANSION] {email}: Type-2 auto-triggered -> {len(_all_names)} members")
             return {

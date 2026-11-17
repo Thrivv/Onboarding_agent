@@ -1,15 +1,7 @@
 """
 Passport OCR Extractor - Adapted for DigiOB specialized_ocr pipeline.
 
-Extracts and validates passport data from images and PDFs.
-
-Primary path (prompt-remediation Phase 1, item #4, opt-in via
-config.TEXTRACT_ANALYZE_ID_ENABLED): AWS Textract AnalyzeID -- structured
-field extraction that never sends the passport image to a third-party LLM.
-Falls back automatically to the original vision-LLM extraction
-(PassportOCRClient below) whenever Textract is off, unavailable, or its
-result is missing a mandatory field. See textract_id_client.py and
-PassportProcessor._extract_page() for the fallback logic.
+Extracts and validates passport data from images and PDFs using LLaMA vision model.
 """
 
 import base64
@@ -29,21 +21,20 @@ from app import config
 
 
 # ─── Configuration (reads from environment, consistent with ocr_service.py) ──
-BEDROCK_API_KEY = config.AWS_BEARER_TOKEN_BEDROCK
-# Model name + endpoint come from llm_client (backed by bedrock_client.py).
-# Do not redeclare them here.
+OPENROUTER_API_KEY = config.OPENROUTER_API_KEY
+# Model names + endpoint come from llm_client (env-driven via .env.docker).
+# Do not redeclare them here — see the LLM MODEL ROUTING block in .env.docker.
 from app.services.llm_client import (
-    LLM_API_URL,
+    OPENROUTER_API_URL,
     TEXT_PRIMARY,
     TEXT_FALLBACK,
     VISION_PRIMARY,
 )
-from app.services import bedrock_client
-from app.services import textract_id_client
 import logging
 
 logger = logging.getLogger(__name__)
 
+# OPENROUTER_API_URL imported from llm_client below
 PASSPORT_MODEL = VISION_PRIMARY
 IMAGE_TARGET_WIDTH = 1200
 JPEG_QUALITY = 82
@@ -262,13 +253,13 @@ NO explanation. NO preamble. NO markdown. NO code blocks. ONLY raw JSON starting
   "page_type": null
 }
 
-IMPORTANT FOR MRZ: MRZ lines are the two rows of machine-readable text at the bottom of the bio-data page using only uppercase letters, digits, and '<' characters. Example: P<UTOSURNAME<<GIVENNAME<<<<<<<<<<<<<< and A1234567<8UTO9001019M3001019<<<<<<<<<<<<<<02
+IMPORTANT FOR MRZ: MRZ lines are the two rows of machine-readable text at the bottom of the bio-data page using only uppercase letters, digits, and '<' characters. Example: P<INDBALAJI<<VARSHA<<<<<<<<<<<<< and Z5434257<5IND9910104F3406234...
 Extract them exactly as they appear, character by character."""
 
     def __init__(self, api_key: str = None):
         """Initialize OCR client."""
-        self.api_key = api_key or BEDROCK_API_KEY
-        self.api_url = LLM_API_URL
+        self.api_key = api_key or OPENROUTER_API_KEY
+        self.api_url = OPENROUTER_API_URL
         self.model = PASSPORT_MODEL
 
     def extract_from_image(self, pil_img: Image.Image, page_label: str) -> Dict:
@@ -277,22 +268,14 @@ Extract them exactly as they appear, character by character."""
             processed = ImageProcessor.preprocess(pil_img)
             b64 = ImageProcessor.to_base64(processed)
 
-            # PROMPT CACHING (prompt-remediation Phase 3): USER_PROMPT is entirely
-            # static -- it carries no per-image interpolation, only the fixed
-            # output schema and MRZ instructions. Previously it was sent as a
-            # text block inside the user turn on every single call, which put
-            # it outside bedrock_client.py's ephemeral system-prompt caching
-            # (see _to_bedrock_payload) even though it never changes between
-            # calls. It now lives in the system message alongside
-            # SYSTEM_PROMPT so it is cached too; the user turn carries only
-            # the one thing that actually varies per call -- the image.
             payload = {
                 "model": self.model,
                 "messages": [
-                    {"role": "system", "content": self.SYSTEM_PROMPT + "\n\n" + self.USER_PROMPT},
+                    {"role": "system", "content": self.SYSTEM_PROMPT},
                     {
                         "role": "user",
                         "content": [
+                            {"type": "text", "text": self.USER_PROMPT},
                             {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{b64}"}},
                         ],
                     },
@@ -304,9 +287,11 @@ Extract them exactly as they appear, character by character."""
             headers = {
                 "Authorization": f"Bearer {self.api_key}",
                 "Content-Type": "application/json",
+                "HTTP-Referer": "https://digiob.app",
+                "X-Title": "DigiOB Passport Extractor",
             }
 
-            resp = bedrock_client.post(self.api_url, json=payload, headers=headers, timeout=API_TIMEOUT)
+            resp = requests.post(self.api_url, json=payload, headers=headers, timeout=API_TIMEOUT)
             resp.raise_for_status()
 
             raw_text = resp.json()["choices"][0]["message"]["content"]
@@ -388,50 +373,7 @@ class PassportProcessor:
 
     def __init__(self, api_key: str = None):
         """Initialize processor."""
-        self.ocr_client = PassportOCRClient(api_key or BEDROCK_API_KEY)
-
-    def _extract_page(self, img: Image.Image, page_label: str, warnings: List[str]) -> Dict:
-        """
-        Extract one passport page, trying Textract AnalyzeID first
-        (prompt-remediation Phase 1, item #4) when
-        config.TEXTRACT_ANALYZE_ID_ENABLED is on, falling back to the
-        vision-LLM path (self.ocr_client) whenever Textract is
-        unavailable or its result is missing a mandatory field.
-
-        This fallback is the reason Textract being wrong or UAE-document
-        coverage being thin can never make extraction worse than it is
-        today with the flag off: the vision-LLM call still runs as the
-        safety net, just skipped on the (expected, common) case where
-        Textract alone was already sufficient.
-        """
-        if config.TEXTRACT_ANALYZE_ID_ENABLED:
-            try:
-                processed = ImageProcessor.preprocess(img)
-                buf = io.BytesIO()
-                processed.save(buf, format="JPEG", quality=JPEG_QUALITY, optimize=True)
-                textract_fields = textract_id_client.analyze_identity_document(buf.getvalue())
-                mapped = textract_id_client.map_to_passport_fields(textract_fields)
-
-                if textract_id_client.is_passport_result_sufficient(mapped):
-                    mapped["_page"] = page_label
-                    mapped["_model"] = "aws-textract-analyze-id"
-                    logger.info(f"[PASSPORT] {page_label}: Textract AnalyzeID sufficient, skipping vision LLM")
-                    return mapped
-
-                logger.info(
-                    f"[PASSPORT] {page_label}: Textract AnalyzeID result incomplete "
-                    f"({sorted(mapped.keys())}), falling back to vision LLM"
-                )
-            except textract_id_client.TextractUnavailable as e:
-                logger.info(f"[PASSPORT] {page_label}: Textract unavailable ({e}), using vision LLM")
-            except Exception as e:
-                # Textract being flaky must never take down passport extraction
-                # entirely -- the vision-LLM path below is the existing,
-                # already-proven fallback.
-                warnings.append(f"{page_label}: Textract AnalyzeID error ({e}), used vision LLM instead")
-                logger.warning(f"[PASSPORT] {page_label}: Textract AnalyzeID error: {e}")
-
-        return self.ocr_client.extract_from_image(img, page_label)
+        self.ocr_client = PassportOCRClient(api_key or OPENROUTER_API_KEY)
 
     def process_file(self, file_bytes: bytes, filename: str) -> Tuple[PassportData, List[str]]:
         """
@@ -461,7 +403,7 @@ class PassportProcessor:
 
         for i, img in enumerate(images):
             try:
-                result = self._extract_page(img, f"page_{i+1}", warnings)
+                result = self.ocr_client.extract_from_image(img, f"page_{i+1}")
                 page_results.append(result)
             except ExtractionError as e:
                 warnings.append(f"Page {i+1} extraction failed: {str(e)}")

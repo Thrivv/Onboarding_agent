@@ -8,7 +8,6 @@ import { useNavigate } from 'react-router-dom';
 // no network request, and a generic "Login failed" in the UI.
 import { login as loginRequest, logout as logoutRequest, verifySession } from '../api/auth';
 import { toast } from 'react-hot-toast';
-import logger from '../utils/logger';
 
 const AuthContext = createContext();
 
@@ -17,41 +16,42 @@ export const AuthProvider = ({ children }) => {
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
 
-  // Initialize - Check for existing session on mount.
-  //
-  // The session id is now an httpOnly cookie (see api/client.js's
-  // withCredentials) rather than something read out of localStorage — so
-  // there is no longer a client-readable flag for "a session might exist".
-  // We always ask the backend via verifySession(); the browser attaches the
-  // cookie automatically if one is present, and the backend reports
-  // success:false if not. `user` is still cached in localStorage, but only
-  // as a non-sensitive display value for the brief instant before this
-  // check resolves — it is never what grants access to anything.
+  // Initialize - Check for existing session on mount
   useEffect(() => {
     const initAuth = async () => {
+      const sessionId = localStorage.getItem('session_id');
       const storedUser = localStorage.getItem('user');
-      logger.log('[AUTH] Initializing auth...');
 
-      try {
-        const response = await verifySession();
+      console.log('[AUTH] 🔍 Initializing auth...');
+      console.log('[AUTH] Session ID:', sessionId ? 'Found' : 'Not found');
+      console.log('[AUTH] Stored User:', storedUser ? 'Found' : 'Not found');
 
-        if (response.data.success) {
-          // Prefer the freshly-verified identity; fall back to the cached
-          // copy only for fields the verify-session response doesn't carry.
-          const cached = storedUser ? JSON.parse(storedUser) : {};
-          const userData = { ...cached, ...response.data.session };
-          setUser(userData);
-          localStorage.setItem('user', JSON.stringify(userData));
-          logger.log('[AUTH] Session restored');
-        } else {
-          logger.log('[AUTH] No valid session — clearing cached user');
+      if (sessionId && storedUser) {
+        try {
+          // Verify session is still valid
+          const response = await verifySession({
+            params: { session_id: sessionId }
+          });
+
+          if (response.data.success) {
+            const userData = JSON.parse(storedUser);
+            setUser(userData);
+            console.log('[AUTH] ✅ Session restored:', userData.email);
+          } else {
+            // Session invalid, clear storage
+            console.log('[AUTH] ❌ Session invalid, clearing...');
+            localStorage.removeItem('session_id');
+            localStorage.removeItem('user');
+            setUser(null);
+          }
+        } catch (error) {
+          console.error('[AUTH] ❌ Session verification failed:', error);
+          localStorage.removeItem('session_id');
           localStorage.removeItem('user');
           setUser(null);
         }
-      } catch (error) {
-        logger.error('[AUTH] Session verification failed:', error);
-        localStorage.removeItem('user');
-        setUser(null);
+      } else {
+        console.log('[AUTH] ℹ️ No existing session found');
       }
 
       setLoading(false);
@@ -62,26 +62,25 @@ export const AuthProvider = ({ children }) => {
 
   const login = React.useCallback(async (email, password) => {
     try {
-      logger.log('[AUTH] Attempting login for:', email);
+      console.log('[AUTH] 🔐 Attempting login for:', email);
 
       const response = await loginRequest({ email, password });
 
-      logger.log('[AUTH] Login response:', response.data);
+      console.log('[AUTH] 📦 Login response:', response.data);
 
       if (response.data.success) {
-        const { user: userData } = response.data;
+        const { user: userData, session_id } = response.data;
 
         // Store in state
         setUser(userData);
 
-        // The session itself now lives in an httpOnly cookie set by the
-        // backend response (see app/api/routes/auth.py's login handler) —
-        // nothing to store for it here. `user` is kept in localStorage only
-        // as a non-sensitive display cache (name/role for instant UI paint
-        // on the next load); it grants no access on its own.
+        // Store in localStorage
+        localStorage.setItem('session_id', session_id);
         localStorage.setItem('user', JSON.stringify(userData));
 
-        logger.log('[AUTH] Login successful, role:', userData.role);
+        console.log('[AUTH] ✅ Login successful');
+        console.log('[AUTH] 👤 User role:', userData.role);
+        console.log('[AUTH] 🎫 Session ID:', session_id);
 
         // Show success message — fallback through first+last → email prefix
         const displayName = userData.name
@@ -92,6 +91,7 @@ export const AuthProvider = ({ children }) => {
         // Small delay to ensure state updates
         setTimeout(() => {
           // Redirect based on role
+          console.log('[AUTH] 🔀 Redirecting to /ai-assistant');
           navigate('/ai-assistant', { replace: true });
         }, 100);
 
@@ -100,42 +100,33 @@ export const AuthProvider = ({ children }) => {
         throw new Error('Login failed');
       }
     } catch (error) {
-      logger.error('[AUTH] Login error:', error);
+      console.error('[AUTH] ❌ Login error:', error);
 
-      const code = error.response?.data?.code;
       const errorMessage = error.response?.data?.detail || 'Login failed. Please try again.';
-
-      if (code === 'PasswordResetRequiredError') {
-        // Distinct from a wrong-password failure: this account's hash
-        // predates the current password scheme (or was invalidated by the
-        // password-reset migration) and can never verify — send the user
-        // straight to the reset flow instead of leaving them to retry a
-        // login that will never succeed. See ResetPassword.jsx.
-        toast(errorMessage, { icon: '🔐' });
-        navigate('/reset-password', { state: { email }, replace: false });
-        return { success: false, error: errorMessage, code };
-      }
-
       toast.error(errorMessage);
-      return { success: false, error: errorMessage, code };
+
+      return { success: false, error: errorMessage };
     }
   }, [navigate]);
 
   const logout = React.useCallback(async () => {
     try {
-      logger.log('[AUTH] Logging out...');
-      // No session id to pass — the backend reads it from the httpOnly
-      // cookie and clears that cookie in the response. See
-      // app/api/routes/auth.py's logout handler.
-      await logoutRequest({});
+      const sessionId = localStorage.getItem('session_id');
+
+      console.log('[AUTH]  डोर Logging out...');
+
+      if (sessionId) {
+        await logoutRequest({ session_id: sessionId });
+      }
     } catch (error) {
-      logger.error('[AUTH] Logout error:', error);
+      console.error('[AUTH] ❌ Logout error:', error);
     } finally {
       // Clear everything
       setUser(null);
+      localStorage.removeItem('session_id');
       localStorage.removeItem('user');
 
-      logger.log('[AUTH] Logged out successfully');
+      console.log('[AUTH] ✅ Logged out successfully');
       toast.success('Logged out successfully');
 
       navigate('/login', { replace: true });

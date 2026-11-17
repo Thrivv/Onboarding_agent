@@ -5,14 +5,10 @@ by reference number, and reading or clearing conversation history.
 
 import logging
 import json
-from typing import Optional
 from datetime import datetime, timezone
 from fastapi import APIRouter, HTTPException
 import traceback
-from app.i18n import localized
-from app.i18n.messages import doc_name
 from app.services.message_generator import MessageGenerator, ai_message_gen
-from app.utils.language import normalize_language, detect_and_translate_input, translate_stored_messages_batch
 from app.services.chatupload_helpers import (
     user_docs_path,
     member_progress_path,
@@ -38,8 +34,6 @@ from app.services.chat_session_service import (
     get_active_reference_for_user,
 )
 from app.services.supabase_client import supabase, get_user_by_email
-from app import config
-from app.utils.pii_masker import mask_name
 from app.repositories.conversation_repository import ConversationRepository
 from app.repositories.user_repository import UserRepository
 from app.services.email_sender import (
@@ -87,53 +81,6 @@ logger = logging.getLogger(__name__)
 # app/api/routes/onboarding/__init__.py, so every path below is unchanged.
 router = APIRouter()
 
-# ARCHITECTURE FIX (prompt-remediation Phase 5): chat_conversational()'s prompt
-# below used to stuff the assistant's persona, the whole banking knowledge
-# base, the account-requirements table, and the 9-item instruction list --
-# every bit of it identical on every single call -- into the same long
-# user-turn string as the actual per-request context (chat history, the
-# user's live question), then called call_local_llm(prompt) with no
-# system_prompt at all, so it fell back to run_model.py's generic default
-# system prompt and the shared 0.7 temperature. This was flagged by name in
-# the original scorecard's #8 (chat/conversational prompt design) as the
-# clearest example of the "everything in one user-turn string" anti-pattern,
-# and Phase 2 fixed every OTHER chat/message call site (handle_reply.py,
-# message_generator.py, document_expiry_validator.py) but missed this one --
-# it only got its brand-name literal fixed in Phase 1. _CHAT_SYSTEM_PROMPT
-# below is the constant, request-independent part, now sent through the
-# model's actual system role (and Bedrock-cached the same way the extraction
-# prompts are, since bedrock_client.py caches any non-empty system text) --
-# see chat_conversational() further down for the user-turn half.
-_CHAT_SYSTEM_PROMPT = f"""You are a helpful banking assistant for {config.BRAND_NAME}, helping customers with account onboarding in the UAE.
-
-BANKING KNOWLEDGE BASE:
-- Shareholder: Person who owns shares in a company. Has equity stake, voting rights, receives dividends.
-- Signatory: Person authorized to sign documents and conduct transactions on behalf of a company. May not own shares.
-- UBO (Ultimate Beneficial Owner): Person who ultimately owns or controls a company, typically holding 25% or more of shares.
-- Corporate Account: Business bank account registered under a company's legal name for business transactions.
-- Trade License (Commercial License): Legal document issued by UAE authorities permitting business operations.
-- Emirates ID (EID): Official government-issued identification card required for all UAE residents.
-- Passport: Valid international passport accepted as an alternative identity document to Emirates ID.
-- Ejari: Government-registered tenancy contract in Dubai (required for bank accounts).
-- MOA (Memorandum of Association): Legal document defining company structure, ownership, and management.
-- Non-Resident: Can open corporate bank accounts in UAE with proper documentation (trade license, Emirates ID or Passport for signatories).
-
-ACCOUNT REQUIREMENTS:
-- Corporate Single Owner: Emirates ID or Passport + Commercial License + Ejari
-- Corporate Partnership: Commercial License + MOA + Emirates ID or Passport for each partner/manager/UBO
-
-INSTRUCTIONS:
-1. Answer the user's question clearly and helpfully
-2. If asked about banking concepts (shareholder, signatory, UBO, license, etc.), explain using the knowledge base
-3. If asked about account requirements, provide specific info for their account type
-4. If asked about document status, reference their current status
-5. If asked general questions, answer naturally and professionally
-6. Keep responses concise (2-5 sentences unless complex topic requires more)
-7. Be professional but friendly - like a helpful bank representative
-8. DO NOT tell them to upload documents unless they specifically ask what's needed
-9. If you don't know something specific to their case, acknowledge it honestly
-"""
-
 @router.post("/start-conversation")
 async def start_conversation(request: StartConversationRequest):
     """
@@ -145,7 +92,9 @@ async def start_conversation(request: StartConversationRequest):
         language = request.language.lower().strip() if hasattr(request, 'language') else "english"
         
         # ✅ VALIDATE LANGUAGE
-        language = normalize_language(language)
+        if language not in ["english", "spanish"]:
+            logger.warning(f"Invalid language '{language}', defaulting to english")
+            language = "english"
         
         logger.info(f"\n{'='*80}")
         logger.info(f"[START CONV] Initializing chat")
@@ -255,22 +204,20 @@ async def start_conversation(request: StartConversationRequest):
             # auto-classification block in upload_conversational()), so this
             # fallback can no longer branch on ownership_type either. Kept in
             # sync with MessageGenerator.generate_welcome_message().
-            if account_type == ACCOUNT_CORPORATE:
-                welcome_message = localized(language,
-                    en=(f"Good to have you here, {user_name}.\n\n"
-                        "Let's get your account set up. I'll guide you through it end to end — first up, "
-                        "I'll need your Commercial License to verify your business and pull the next steps for you."),
-                    es=(f"Un gusto tenerte aquí, {user_name}.\n\n"
-                        "Vamos a configurar tu cuenta. Te guiaré de principio a fin — para empezar, necesitaré "
-                        "tu Licencia Comercial para verificar tu negocio y definir los próximos pasos."),
-                    ar=(f"سعداء بانضمامك، {user_name}.\n\n"
-                        "لنبدأ بإعداد حسابك. سأرشدك خطوة بخطوة — أولاً، سأحتاج إلى رخصتك التجارية "
-                        "للتحقق من نشاطك التجاري وتحديد الخطوات التالية."))
+            if language == "spanish":
+                if account_type == ACCOUNT_CORPORATE:
+                    welcome_message = f"""Un gusto tenerte aquí, {user_name}.
+
+Vamos a configurar tu cuenta. Te guiaré de principio a fin — para empezar, necesitaré tu Licencia Comercial para verificar tu negocio y definir los próximos pasos."""
+                else:
+                    welcome_message = f"¡Bienvenido {user_name}!\n\nEstoy aquí para ayudarte con la incorporación de tu cuenta {account_type}. ¡Comencemos!"
             else:
-                welcome_message = localized(language,
-                    en=f"Welcome {user_name}!\n\nI'm here to help you with your {account_type} account onboarding. Let's get started!",
-                    es=f"¡Bienvenido {user_name}!\n\nEstoy aquí para ayudarte con la incorporación de tu cuenta {account_type}. ¡Comencemos!",
-                    ar=f"مرحباً {user_name}!\n\nأنا هنا لمساعدتك في تسجيل حسابك. لنبدأ!")
+                if account_type == ACCOUNT_CORPORATE:
+                    welcome_message = f"""Good to have you here, {user_name}.
+
+Let's get your account set up. I'll guide you through it end to end — first up, I'll need your Commercial License to verify your business and pull the next steps for you."""
+                else:
+                    welcome_message = f"Welcome {user_name}!\n\nI'm here to help you with your {account_type} account onboarding. Let's get started!"
         
         # ========================================================================
         # ✅ STORE WELCOME MESSAGE WITH LANGUAGE METADATA
@@ -360,29 +307,14 @@ async def chat_conversational(request: ChatConversationalRequest):
     # ============================================================================
     language = request.language.lower().strip() if hasattr(request, 'language') else "english"
 
-    language = normalize_language(language)
-
-    # ============================================================================
-    # AUTO-DETECT + TRANSLATE INCOMING MESSAGE
-    # ============================================================================
-    # The user may type in a different language than the chat's active
-    # language (e.g. active language is Arabic but they type in English).
-    # Detect what they typed and translate it into the active language
-    # before anything downstream (verification-keyword matching, the LLM
-    # prompt, conversation logging) sees it, so the selected language stays
-    # authoritative regardless of what language the user actually types in.
-    _detection = detect_and_translate_input(request.message, language)
-    original_message = request.message
-    if _detection["was_translated"]:
-        request.message = _detection["translated_message"]
+    if language not in ["english", "spanish"]:
+        logger.warning(f"[CHAT] Invalid language '{language}', defaulting to english")
+        language = "english"
 
     logger.info(f"\n{'='*80}")
     logger.info(f"[CHAT] Processing message")
     logger.info(f"[CHAT] Email: {email}")
     logger.info(f"[CHAT] Language: {language.upper()}")
-    if _detection["was_translated"]:
-        logger.info(f"[CHAT] Detected input language: {_detection['detected_language']} -> translated to {language}")
-        logger.info(f"[CHAT] Original message: {original_message[:100]}...")
     logger.info(f"[CHAT] Message: {request.message[:100]}...")
     logger.info(f"{'='*80}\n")
 
@@ -526,10 +458,13 @@ async def chat_conversational(request: ChatConversationalRequest):
                         except Exception as _ae:
                             logger.warning(f"AI corp-detected message failed, using fallback: {_ae}")
                             corp_list_str = ", ".join(pending_coi_list)
-                            alert_message = localized(None,
-                                en=f"The Commercial License has been received and reviewed. It contains the following corporate shareholders: {corp_list_str}. UAE banking regulations require a Certificate of Incorporation for each corporate entity. Please upload the Certificate of Incorporation for: {pending_coi_list[0]}.",
-                                es=f"Se ha recibido y revisado la Licencia Comercial. Incluye los siguientes accionistas corporativos: {corp_list_str}. La normativa bancaria de los EAU exige un Certificado de Constitución para cada entidad corporativa. Cargue el Certificado de Constitución de: {pending_coi_list[0]}.",
-                                ar=f"تم استلام الرخصة التجارية ومراجعتها. وهي تتضمن المساهمين الاعتباريين التاليين: {corp_list_str}. تشترط الأنظمة المصرفية في الإمارات تقديم شهادة تأسيس لكل كيان اعتباري. يُرجى تحميل شهادة التأسيس لـ: {pending_coi_list[0]}.")
+                            alert_message = (
+                                f"The Commercial License has been received and reviewed. "
+                                f"It contains the following corporate shareholders: {corp_list_str}. "
+                                f"UAE banking regulations require a Certificate of Incorporation "
+                                f"for each corporate entity. "
+                                f"Please upload the Certificate of Incorporation for: {pending_coi_list[0]}."
+                            )
 
                         try:
                             send_corporate_shareholder_request_email(
@@ -566,9 +501,6 @@ async def chat_conversational(request: ChatConversationalRequest):
                             "new_stage": STAGE_CORPORATE_SHAREHOLDER_DOCS,
                             "pending_coi": pending_coi_list,
                             "language": language,
-                            "was_translated": _detection["was_translated"],
-                            "detected_language": _detection["detected_language"],
-                            "translated_message": _detection["translated_message"] if _detection["was_translated"] else None,
                         }
 
                     # ── STANDARD PATH (no corporate shareholders) ─────────────
@@ -580,8 +512,8 @@ async def chat_conversational(request: ChatConversationalRequest):
                         for u in ubos
                     ]
 
-                    logger.info(f"Extracted members: {[mask_name(_n) for _n in members] if config.PII_LOG_MASKING_ENABLED else members}")
-                    logger.info(f"UBOs identified: {[mask_name(_n) for _n in ubo_names] if config.PII_LOG_MASKING_ENABLED else ubo_names}")
+                    logger.info(f"Extracted members: {members}")
+                    logger.info(f"UBOs identified: {ubo_names}")
 
                     if members and len(members) > 0:
                         save_member_progress(email, members, 0, ubo_names=ubo_names)
@@ -608,16 +540,18 @@ async def chat_conversational(request: ChatConversationalRequest):
                                 f"  {i}. {m} (UBO)" if m in ubo_names else f"  {i}. {m}"
                                 for i, m in enumerate(members, 1)
                             ])
-                            transition_message = localized(language,
-                                en=(f"The identification stage has been completed successfully.\n\n"
-                                    f"Emirates ID or Passport verification is now required for:\n\n{member_list}\n\n"
-                                    f"Please start with: {members[0]}"),
-                                es=(f"La etapa de identificacion se ha completado.\n\n"
+                            if language == "spanish":
+                                transition_message = (
+                                    f"La etapa de identificacion se ha completado.\n\n"
                                     f"Se requiere verificacion de Emirates ID o Pasaporte para:\n\n{member_list}\n\n"
-                                    f"Comience con el Emirates ID o Pasaporte de: {members[0]}"),
-                                ar=(f"اكتملت مرحلة التعريف بنجاح.\n\n"
-                                    f"يلزم الآن التحقق من الهوية الإماراتية أو جواز السفر لكلٍّ من:\n\n{member_list}\n\n"
-                                    f"يُرجى البدء بـ: {members[0]}"))
+                                    f"Comience con el Emirates ID o Pasaporte de: {members[0]}"
+                                )
+                            else:
+                                transition_message = (
+                                    f"The identification stage has been completed successfully.\n\n"
+                                    f"Emirates ID or Passport verification is now required for:\n\n{member_list}\n\n"
+                                    f"Please start with: {members[0]}"
+                                )
 
                         try:
                             insert_conversation_log(
@@ -647,9 +581,6 @@ async def chat_conversational(request: ChatConversationalRequest):
                             "ubo_names": ubo_names,
                             "current_member": members[0] if members else None,
                             "language": language,
-                            "was_translated": _detection["was_translated"],
-                            "detected_language": _detection["detected_language"],
-                            "translated_message": _detection["translated_message"] if _detection["was_translated"] else None,
                             # ── v3: frontend MOA AS selection trigger ─────
                             "moa_as_trigger": True,
                             "moa_members": members,
@@ -735,9 +666,6 @@ async def chat_conversational(request: ChatConversationalRequest):
                         "new_stage": STAGE_CORPORATE_SHAREHOLDER_DOCS,
                         "pending_coi": _early_pending_coi,
                         "language": language,
-                        "was_translated": _detection["was_translated"],
-                        "detected_language": _detection["detected_language"],
-                        "translated_message": _detection["translated_message"] if _detection["was_translated"] else None,
                     }
 
             # Return normal verification response if no stage transition.
@@ -764,18 +692,12 @@ async def chat_conversational(request: ChatConversationalRequest):
                         "pep_trigger": verification.get("pep_trigger", False),
                         "self_declaration_trigger": verification.get("self_declaration_trigger", False),
                         "language": language,
-                        "was_translated": _detection["was_translated"],
-                        "detected_language": _detection["detected_language"],
-                        "translated_message": _detection["translated_message"] if _detection["was_translated"] else None,
                     }
                 return {
                     "response": response,
                     "verification_accepted": verification["verified"],
                     "is_complete": verification.get("is_complete", False),
-                    "language": language,
-                    "was_translated": _detection["was_translated"],
-                    "detected_language": _detection["detected_language"],
-                    "translated_message": _detection["translated_message"] if _detection["was_translated"] else None,
+                    "language": language
                 }
             # else: fall through to the corporate_shareholder_docs handler
 
@@ -820,13 +742,12 @@ async def chat_conversational(request: ChatConversationalRequest):
                             )
                             logger.info("[TYPE-2] All CoIs done but MOA still missing — requesting MOA")
                             _moa_msg = (
-                                localized(language,
-                                    en=("All Certificates of Incorporation have been received. "
-                                "Please now upload the Memorandum of Association (MOA) to proceed."),
-                                    es=("Se han recibido todos los Certificados de Incorporación. "
-                                "Ahora, por favor suba el Memorando de Asociación (MOA)."),
-                                    ar=("تم استلام جميع شهادات التأسيس. "
-                                "يُرجى الآن تحميل عقد التأسيس (MOA) للمتابعة."))
+                                "Se han recibido todos los Certificados de Incorporación. "
+                                "Ahora, por favor suba el Memorando de Asociación (MOA)."
+                                if language == "spanish"
+                                else
+                                "All Certificates of Incorporation have been received. "
+                                "Please now upload the Memorandum of Association (MOA) to proceed."
                             )
                             try:
                                 insert_conversation_log(
@@ -843,9 +764,6 @@ async def chat_conversational(request: ChatConversationalRequest):
                                 "stage_transition": False,
                                 "awaiting_moa": True,
                                 "language": language,
-                                "was_translated": _detection["was_translated"],
-                                "detected_language": _detection["detected_language"],
-                                "translated_message": _detection["translated_message"] if _detection["was_translated"] else None,
                             }
 
                         # All CoIs collected AND MOA present — run full Type-2 analysis
@@ -965,10 +883,12 @@ async def chat_conversational(request: ChatConversationalRequest):
                                 + (" (UBO)" if _o.get('is_ubo') else "")
                                 for _i, _o in enumerate(expanded_owners, 1)
                             ])
-                            transition_message = localized(None,
-                                en=f"Corporate ownership analysis is complete. Emirates ID or Passport verification is now required for all beneficial owners:\n\n{member_list_fb}\n\nPlease begin by uploading the Emirates ID or Passport for: {first_member}",
-                                es=f"El análisis de la propiedad corporativa está completo. Ahora se requiere verificar el Emirates ID o pasaporte de todos los beneficiarios finales:\n\n{member_list_fb}\n\nComience cargando el Emirates ID o pasaporte de: {first_member}",
-                                ar=f"اكتمل تحليل الملكية الاعتبارية. يلزم الآن التحقق من الهوية الإماراتية أو جواز السفر لجميع المستفيدين الفعليين:\n\n{member_list_fb}\n\nيُرجى البدء بتحميل الهوية الإماراتية أو جواز السفر لـ: {first_member}")
+                            transition_message = (
+                                f"Corporate ownership analysis is complete. "
+                                f"Emirates ID or Passport verification is now required for all beneficial owners:\n\n"
+                                f"{member_list_fb}\n\n"
+                                f"Please begin by uploading the Emirates ID or Passport for: {first_member}"
+                            )
 
                         # Log
                         try:
@@ -1009,9 +929,6 @@ async def chat_conversational(request: ChatConversationalRequest):
                             "ubo_names": ubo_names,
                             "current_member": first_member,
                             "language": language,
-                            "was_translated": _detection["was_translated"],
-                            "detected_language": _detection["detected_language"],
-                            "translated_message": _detection["translated_message"] if _detection["was_translated"] else None,
                             # ── v4: FATCA/PEP fires from verify path after all EIDs ──
                             "fatca_trigger": False,
                             "pep_trigger": False,
@@ -1041,10 +958,10 @@ async def chat_conversational(request: ChatConversationalRequest):
                                 language=language,
                             )
                         except Exception as _cr:
-                            coi_req_message = localized(None,
-                                en=f"The Certificate of Incorporation for the previous entity has been received. Please now upload the Certificate of Incorporation for: {next_corp}.",
-                                es=f"Se ha recibido el Certificado de Constitución de la entidad anterior. Cargue ahora el Certificado de Constitución de: {next_corp}.",
-                                ar=f"تم استلام شهادة التأسيس للكيان السابق. يُرجى الآن تحميل شهادة التأسيس لـ: {next_corp}.")
+                            coi_req_message = (
+                                f"The Certificate of Incorporation for the previous entity has been received. "
+                                f"Please now upload the Certificate of Incorporation for: {next_corp}."
+                            )
 
                         # Also trigger email notification for next CoI
                         try:
@@ -1080,9 +997,6 @@ async def chat_conversational(request: ChatConversationalRequest):
                             "stage_transition": False,
                             "pending_coi": remaining_coi,
                             "language": language,
-                            "was_translated": _detection["was_translated"],
-                            "detected_language": _detection["detected_language"],
-                            "translated_message": _detection["translated_message"] if _detection["was_translated"] else None,
                         }
 
                 except Exception as _pe:
@@ -1118,10 +1032,11 @@ async def chat_conversational(request: ChatConversationalRequest):
     else:
         status_context = "Processing current documents"
 
-    # Arabic-aware instruction reused from MessageGenerator (already imported
-    # above) instead of a third hand-rolled English/Spanish-only conditional --
-    # see docs/language-mirroring-verdict.html, Phase 0, item 3.
-    language_instruction = MessageGenerator._build_language_instruction(language)
+    language_instruction = (
+        "Respond in Spanish. Use professional Spanish banking terminology."
+        if language == "spanish"
+        else "Respond in English."
+    )
 
     chat_history_context = ""
     if request.chat_history and len(request.chat_history) > 0:
@@ -1133,12 +1048,27 @@ async def chat_conversational(request: ChatConversationalRequest):
         chat_history_context = "\n".join(history_lines)
 
     # ============================================================================
-    # BUILD PROMPT — request-specific half only; the persona, knowledge base,
-    # account-requirements table, and instructions live in the cached
-    # _CHAT_SYSTEM_PROMPT system message now (see its definition above the
-    # router for why — prompt-remediation Phase 5).
+    # BUILD COMPREHENSIVE PROMPT
     # ============================================================================
-    prompt = f"""{language_instruction}
+    prompt = f"""You are a helpful banking assistant for Thrivv Bank, helping customers with account onboarding in the UAE.
+
+{language_instruction}
+
+BANKING KNOWLEDGE BASE:
+- Shareholder: Person who owns shares in a company. Has equity stake, voting rights, receives dividends.
+- Signatory: Person authorized to sign documents and conduct transactions on behalf of a company. May not own shares.
+- UBO (Ultimate Beneficial Owner): Person who ultimately owns or controls a company, typically holding 25% or more of shares.
+- Corporate Account: Business bank account registered under a company's legal name for business transactions.
+- Trade License (Commercial License): Legal document issued by UAE authorities permitting business operations.
+- Emirates ID (EID): Official government-issued identification card required for all UAE residents.
+- Passport: Valid international passport accepted as an alternative identity document to Emirates ID.
+- Ejari: Government-registered tenancy contract in Dubai (required for bank accounts).
+- MOA (Memorandum of Association): Legal document defining company structure, ownership, and management.
+- Non-Resident: Can open corporate bank accounts in UAE with proper documentation (trade license, Emirates ID or Passport for signatories).
+
+ACCOUNT REQUIREMENTS:
+- Corporate Single Owner: Emirates ID or Passport + Commercial License + Ejari
+- Corporate Partnership: Commercial License + MOA + Emirates ID or Passport for each partner/manager/UBO
 
 USER CONTEXT:
 - Name: {user_name}
@@ -1151,14 +1081,25 @@ RECENT CONVERSATION:
 USER'S QUESTION:
 {request.message}
 
+INSTRUCTIONS:
+1. Answer the user's question clearly and helpfully
+2. If asked about banking concepts (shareholder, signatory, UBO, license, etc.), explain using the knowledge base
+3. If asked about account requirements, provide specific info for their account type
+4. If asked about document status, reference their current status
+5. If asked general questions, answer naturally and professionally
+6. Keep responses concise (2-5 sentences unless complex topic requires more)
+7. Be professional but friendly - like a helpful bank representative
+8. DO NOT tell them to upload documents unless they specifically ask what's needed
+9. If you don't know something specific to their case, acknowledge it honestly
+
 Generate your response:"""
 
     # ============================================================================
     # CALL LLM
     # ============================================================================
     try:
-        logger.info(f"[LLM] Calling local LLM with task-specific system prompt...")
-        answer = call_local_llm(prompt, system_prompt=_CHAT_SYSTEM_PROMPT, temperature=0.5)
+        logger.info(f"[LLM] Calling local LLM with comprehensive prompt...")
+        answer = call_local_llm(prompt)
         logger.info(f"[LLM] Response generated ({len(answer)} chars)")
         logger.info(f"[LLM] Preview: {answer[:150]}...")
     except Exception as e:
@@ -1167,16 +1108,7 @@ Generate your response:"""
         logger.error(traceback.format_exc())
 
         try:
-            # MessageGenerator is already imported at module level (top of
-            # this file) -- this used to re-import it locally too, which in
-            # Python makes the name local to the WHOLE chat_conversational()
-            # function (not just this block), shadowing the module-level
-            # import even for code earlier in the function. That broke the
-            # Phase 0 STEP-2 fix above (`MessageGenerator._build_language_
-            # instruction(language)`) with "cannot access local variable
-            # 'MessageGenerator'" -- UnboundLocalError, since that line runs
-            # before this local import statement does. Removed; nothing
-            # else in this file relied on this import happening HERE.
+            from app.services.message_generator import MessageGenerator
             answer = MessageGenerator.friendly_error(
                 error_type="Chat Error",
                 context="LLM service temporarily unavailable",
@@ -1186,32 +1118,22 @@ Generate your response:"""
             logger.info(f"[SUCCESS] AI error response generated in {language.upper()}")
         except Exception as err:
             logger.warning(f"Error response generation failed: {err}")
-            # BUGFIX: this last-resort fallback (both the LLM reply AND
-            # MessageGenerator.friendly_error() failed) only had English and
-            # Spanish variants — an Arabic-language chat that hit this path
-            # silently showed English text instead. Same pattern as every
-            # other language branch in this module; see normalize_language()
-            # in app/utils/language.py for the source of truth on supported
-            # values.
-            answer = localized(language,
-                en=("Sorry, I'm experiencing temporary technical difficulties. Please try again in a moment."),
-                es=("Lo siento, estoy teniendo problemas técnicos temporales. Por favor, intenta nuevamente."),
-                ar=("عذرًا، أواجه مشكلة تقنية مؤقتة. يرجى المحاولة مرة أخرى بعد قليل."))
+            answer = (
+                "Lo siento, estoy teniendo problemas técnicos temporales. Por favor, intenta nuevamente."
+                if language == "spanish"
+                else "Sorry, I'm experiencing temporary technical difficulties. Please try again in a moment."
+            )
 
     # ============================================================================
     # STEP 3: Log conversation
     # ============================================================================
     try:
-        _user_log_metadata = {"language": language, "message_type": "general_question"}
-        if _detection["was_translated"]:
-            _user_log_metadata["detected_language"] = _detection["detected_language"]
-            _user_log_metadata["original_message"] = original_message
         insert_conversation_log(
             user_email=email,
             role="user",
             message=request.message,
             channel="chat",
-            metadata=_user_log_metadata
+            metadata={"language": language, "message_type": "general_question"}
         )
         insert_conversation_log(
             user_email=email,
@@ -1231,36 +1153,19 @@ Generate your response:"""
         "response": answer,
         "verification_accepted": False,
         "is_complete": False,
-        "language": language,
-        "was_translated": _detection["was_translated"],
-        "detected_language": _detection["detected_language"],
-        "translated_message": _detection["translated_message"] if _detection["was_translated"] else None,
+        "language": language
     }
 
 
 @router.get("/conversation-logs/{email}")
 async def get_conversation_logs(
-    email: str,
-    limit: int = 20,
+    email: str, 
+    limit: int = 20, 
     channel: str = "chat",
-    exclude_welcome: bool = False,
-    language: Optional[str] = None,
+    exclude_welcome: bool = False 
 ):
     """
-    Get conversation history filtered by channel.
-
-    `language`, when given, retroactively translates the returned messages
-    into that language (Phase 2, docs/language-mirroring-verdict.html) —
-    normalized the same way every other language input in this app is
-    (normalize_language(), so LANGUAGE_TOGGLE_ENABLED is enforced here too:
-    the toggle being off means this can't be used to pull non-English
-    history either). Each row's translation is cached on first request in
-    `metadata.translations.<language>`; a later request for the same
-    conversation + language is then a plain DB read, not a new LLM call.
-    Rows already stored in the requested language (`metadata.language ==
-    language`) are returned as-is — no translation, no cache entry needed.
-    Omit `language` (or leave it unset) for the original pre-Phase-2
-    behaviour — logs come back exactly as stored.
+    Get conversation history filtered by channel
     """
     try:
         # `"all"` is the sentinel this endpoint uses for "no channel filter";
@@ -1274,93 +1179,25 @@ async def get_conversation_logs(
         )
 
         logs = response.data if response.data else []
-
+        
         # ========================================================================
         # ✅ FILTER OUT INITIAL WELCOME MESSAGES IF REQUESTED
         # ========================================================================
         if exclude_welcome and logs:
             original_count = len(logs)
-
+            
             logs = [
-                log for log in logs
+                log for log in logs 
                 if not (
-                    log.get("metadata") and
+                    log.get("metadata") and 
                     log["metadata"].get("message_type") == "initial_welcome"
                 )
             ]
-
+            
             filtered_count = original_count - len(logs)
             if filtered_count > 0:
                 logger.info(f"Filtered out {filtered_count} initial welcome message(s)")
-
-        # ========================================================================
-        # PHASE 2: RETROACTIVE TRANSLATION ON ?language= (with per-row caching)
-        # ========================================================================
-        if language and logs:
-            target_language = normalize_language(language)
-            to_translate = []  # [{"id", "text", "source_language"}, ...]
-
-            for log in logs:
-                metadata = log.get("metadata") or {}
-                # Keep the stored text next to whatever this request swaps into
-                # `message`, so the frontend can run its (English-keyed)
-                # parsing/section logic on a stable text regardless of the
-                # display language (docs/multilingual-flow-approach.html, R1).
-                log.setdefault("original_message", log.get("message"))
-                source_language = metadata.get("language")
-
-                # Deterministic catalog message (app/i18n): every language's
-                # rendering was stored at write time — serve it directly, no
-                # LLM call. Checked first so a toggle back to the original
-                # language also returns the exact catalog text.
-                stored_variant = (metadata.get("i18n") or {}).get(target_language)
-                if stored_variant:
-                    log["message"] = stored_variant
-                    continue
-
-                if source_language == target_language:
-                    continue  # already in the requested language — leave as-is
-
-                cached = (metadata.get("translations") or {}).get(target_language)
-                if cached:
-                    log["message"] = cached
-                    continue
-
-                if log.get("message"):
-                    to_translate.append({
-                        "id": log.get("id"),
-                        "text": log["message"],
-                        "source_language": source_language,
-                    })
-
-            if to_translate:
-                translations = translate_stored_messages_batch(to_translate, target_language)
-                logs_by_id = {log.get("id"): log for log in logs}
-
-                for item in to_translate:
-                    translated_text = translations.get(str(item["id"]))
-                    if not translated_text:
-                        continue  # fail open — this row keeps its original text
-
-                    row = logs_by_id.get(item["id"])
-                    if not row:
-                        continue
-
-                    row["message"] = translated_text
-
-                    try:
-                        updated_metadata = dict(row.get("metadata") or {})
-                        cache = dict(updated_metadata.get("translations") or {})
-                        cache[target_language] = translated_text
-                        updated_metadata["translations"] = cache
-                        ConversationRepository.update_metadata(item["id"], updated_metadata)
-                        row["metadata"] = updated_metadata
-                    except Exception as cache_err:
-                        # This response still carries the translation even if
-                        # caching it failed — worst case, the next request
-                        # for this language re-translates this one row.
-                        logger.warning(f"[LANGUAGE] Failed to cache translation for row {item['id']}: {cache_err}")
-
+        
         return {
             "email": email,
             "channel": channel,

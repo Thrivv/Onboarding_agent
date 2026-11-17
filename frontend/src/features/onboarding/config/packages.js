@@ -20,7 +20,7 @@ const PACKAGE_DEFINITIONS = {
     'Instant Transfers', 'International Transfers', 'Bill Payments', 'Card Payments',
     'Loan Payments', 'Bulk Payments', 'Payroll', 'Non WPS',
     'Request To Pay', 'EIPP', 'Checkbook Request', 'Balance Confirmation', 'Payer',
-    'Tally', 'Zoho', 'RFM Loyalty', 'Stripe', 'RewardX', 'HRMS',
+    'GrowX ERP', 'Tally', 'Zoho', 'RFM Loyalty', 'Stripe', 'RewardX', 'HRMS',
   ],
 };
 
@@ -30,7 +30,7 @@ const OFFERED_PRODUCTS = [
   'Instant Transfers', 'International Transfers', 'Bill Payments', 'Card Payments',
   'Loan Payments', 'Bulk Payments', 'Payroll', 'Non WPS',
   'Request To Pay', 'EIPP', 'Checkbook Request', 'Balance Confirmation', 'Payer',
-  'Tally', 'Zoho', 'RFM Loyalty', 'Stripe', 'RewardX', 'HRMS',
+  'GrowX ERP', 'Tally', 'Zoho', 'RFM Loyalty', 'Stripe', 'RewardX', 'HRMS',
 ];
 
 const PACKAGE_ICONS = { Essential: '⭐', Plus: '🚀', Advanced: '💎' };

@@ -2,14 +2,11 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { selectMoaAuthorisedSignatory } from '../../../../api/keyIndividuals';
 import { CheckCircle, Loader, Users } from 'lucide-react';
 import { KiLoopCard } from './KiLoopCard';
-import logger from '../../../../utils/logger';
-import { useLanguage } from '../../../../context/LanguageContext';
 
 const AsKiManagementCard = ({
   userEmail, preloadedMembers, uboNames, ownershipMap, onKiSavedCallback, onProceed,
   memberSource, isCompleted = false, initialIndividuals = null, membersInfo, messages
 }) => {
-  const { t, language } = useLanguage();
   // ✅ STABILIZE DEPENDENCIES: Use useMemo to prevent infinite update loops
   const effectiveOwnershipMap = useMemo(() => {
     // 1. Check if we have an explicit map passed as a prop
@@ -58,7 +55,7 @@ const AsKiManagementCard = ({
       .map(n => n.toUpperCase()));
   }, [uboNames]);
 
-  logger.log('[DEBUG-SYNC] Chat Card Data Sync:', {
+  console.log('[DEBUG-SYNC] Chat Card Data Sync:', {
     effectiveMapKeys: Object.keys(effectiveOwnershipMap),
     preloadedMembers
   });
@@ -233,13 +230,12 @@ const AsKiManagementCard = ({
         moaMembers.forEach(m => { roleMap[m.display_name] = m.role || 'AS'; });
         const resp = await selectMoaAuthorisedSignatory({
           email: userEmail,
-          language,
           member_role_map: roleMap,
         });
         moaResponseData = resp?.data || null;
       }
     } catch (e) {
-      logger.warn('[AsKiCard] Failed to save role map:', e);
+      console.warn('[AsKiCard] Failed to save role map:', e);
     } finally {
       setIsSaving(false);
     }
@@ -251,35 +247,25 @@ const AsKiManagementCard = ({
     return null; // Don't show an empty card during planning/initial stages
   }
 
-  // "Select {as} or {member} for each individual below." — the highlighted
-  // terms' surrounding words/order vary by language, so the translated
-  // template carries literal `{as}`/`{member}` tokens and we split on them
-  // (same technique as KiLoopCard's description) rather than hardcoding
-  // English word order here.
-  const [hintPre, hintAfterAs] = t('cards.asManagement.selectRoleHint').split('{as}');
-  const [hintMid, hintPost] = (hintAfterAs || '').split('{member}');
-
   return (
     <div className="mt-3 p-4 bg-white rounded-xl border-2 border-blue-200 shadow-lg shadow-blue-200">
       <div className="flex items-center justify-between mb-2">
         <div className="flex items-center gap-2">
           <Users className="h-5 w-5 text-brand-primary" />
-          <p className="text-sm font-bold text-brand-secondary">{t('cards.asManagement.title')}</p>
+          <p className="text-sm font-bold text-brand-secondary">Authorised Signatories &amp; Key Individuals</p>
         </div>
         {!proceeded && (
-          <span className="text-xs text-gray-400">
-            {t(individuals.length !== 1 ? 'cards.asManagement.memberCountPlural' : 'cards.asManagement.memberCount', { count: individuals.length })}
-          </span>
+          <span className="text-xs text-gray-400">{individuals.length} member{individuals.length !== 1 ? 's' : ''}</span>
         )}
       </div>
       <p className="text-xs text-gray-500 mb-3">
-        {hintPre}<span className="font-semibold text-purple-700">{t('cards.common.authorisedSignatory')}</span>{hintMid}{' '}
-        <span className="font-semibold text-indigo-700">{t('cards.common.member')}</span>{hintPost}
+        Select <span className="font-semibold text-purple-700">Authorised Signatory</span> or{' '}
+        <span className="font-semibold text-indigo-700">Member</span> for each individual below.
       </p>
 
       {/* Individual List */}
       {individuals.length === 0 ? (
-        <p className="text-xs text-gray-400 italic mb-3">{t('cards.asManagement.noIndividuals')}</p>
+        <p className="text-xs text-gray-400 italic mb-3">No individuals found.</p>
       ) : (
         <div className="space-y-2 mb-3">
           {individuals.map((ind, idx) => (
@@ -293,13 +279,13 @@ const AsKiManagementCard = ({
                 </p>
                 {ind.ownershipText && (
                   <span className="flex-shrink-0 px-2 py-0.5 bg-blue-50 text-brand-secondary border border-blue-100 rounded-lg text-[9px] font-black tracking-tight shadow-sm">
-                    {t('cards.asManagement.share')} {String(ind.ownershipText).split(' ')[0]}
+                    Share: {String(ind.ownershipText).split(' ')[0]}
                   </span>
                 )}
 
                 {ind.is_ubo && (
                   <span className="flex-shrink-0 px-2 py-0.5 bg-amber-50 text-amber-600 border border-amber-200 rounded-lg text-[10px] font-black tracking-tight">
-                    {t('cards.asManagement.ubo')}
+                    UBO
                   </span>
                 )}
               </div>
@@ -313,7 +299,7 @@ const AsKiManagementCard = ({
                       : 'bg-white border-gray-300 text-gray-500 hover:border-purple-400 hover:text-purple-600'
                       }`}
                   >
-                    {t('cards.common.authorisedSignatory')}
+                    Authorised Signatory
                   </button>
                   <button
                     onClick={() => handleRoleChange(idx, 'MEMBER')}
@@ -322,7 +308,7 @@ const AsKiManagementCard = ({
                       : 'bg-white border-gray-300 text-gray-500 hover:border-indigo-400 hover:text-indigo-600'
                       }`}
                   >
-                    {t('cards.common.member')}
+                    Member
                   </button>
                 </div>
               ) : (
@@ -330,7 +316,7 @@ const AsKiManagementCard = ({
                   ? 'bg-purple-100 text-purple-700'
                   : 'bg-indigo-100 text-indigo-700'
                   }`}>
-                  {ind.role === 'AS' ? t('cards.common.authorisedSignatory') : t('cards.common.member')}
+                  {ind.role === 'AS' ? 'Authorised Signatory' : 'Member'}
                 </span>
               )}
             </div>
@@ -347,15 +333,15 @@ const AsKiManagementCard = ({
             className="flex-1 py-2.5 bg-brand-primary text-white rounded-xl font-semibold text-sm hover:opacity-90 transition-all disabled:opacity-50 flex items-center justify-center gap-2"
           >
             {isSaving
-              ? <><Loader className="h-4 w-4 animate-spin" /> {t('cards.common.saving')}</>
-              : <><CheckCircle className="h-4 w-4 text-white" /> {t('cards.asManagement.proceed')}</>
+              ? <><Loader className="h-4 w-4 animate-spin" /> Saving...</>
+              : <><CheckCircle className="h-4 w-4 text-white" /> Proceed</>
             }
           </button>
         </div>
       ) : (
         <div className="flex items-center gap-2 text-green-700 text-sm font-semibold mt-1 p-2 bg-green-50 rounded-lg border border-green-200">
           <CheckCircle className="h-4 w-4" />
-          {t('cards.asManagement.confirmedProceedingVerification')}
+          Confirmed — proceeding to verification.
         </div>
       )}
     </div>

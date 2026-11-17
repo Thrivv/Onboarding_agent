@@ -1,39 +1,48 @@
 # ============================================================================
 # Backend dependencies — Thrivv Onboarding Agent
+#
+# Single source of truth. The Dockerfile installs from this file
+# (`COPY backend/requirements.txt`). The former duplicates at the repo root
+# and in frontend/ have been removed — the root copy was never used by any
+# build, and frontend/requirements.txt listed Python packages inside a React
+# project.
+#
+# Every entry below is either imported directly by backend/app (verified by
+# AST scan across all 69 modules) or required at runtime without a direct
+# import. Anything that was neither has been removed — see
+# docs/dependency-audit.md for the full record of what was dropped and why.
 # ============================================================================
 
 # ── Web framework & server ──────────────────────────────────────────────────
 fastapi
 uvicorn[standard]
 pydantic[email]
-slowapi                     
-python-multipart            
-
-email-validator             
-bcrypt                      
+slowapi                     # rate limiting — app/main.py
+python-multipart            # REQUIRED for FastAPI file uploads. No direct
+                            # import; removing it breaks every upload endpoint.
+email-validator             # REQUIRED by pydantic EmailStr. No direct import.
 
 # ── HTTP clients ────────────────────────────────────────────────────────────
 requests
+httpx                       # app/api/routes/growx_integration.py
+                            # NOTE: was missing from this file and resolved
+                            # only transitively via supabase. Now explicit.
 
 # ── Configuration & data store ──────────────────────────────────────────────
 python-dotenv
 supabase
 
 # ── Document processing ─────────────────────────────────────────────────────
-pymupdf                     
+pymupdf                     # imported as `fitz`
 PyPDF2
-fpdf2                       
-reportlab                   
-pillow>=10.0.0              
+fpdf2                       # imported as `fpdf`
+reportlab                   # app/services/pdf_summary_service.py
+                            # NOTE: was missing from this file. The summary-PDF
+                            # endpoint imports it lazily, so its absence would
+                            # surface only when a user downloads the summary.
+pillow>=10.0.0              # imported as `PIL`
 
 # ── Tampering detection / image forensics ───────────────────────────────────
-opencv-python-headless     
+opencv-python-headless      # imported as `cv2`
 numpy
 scipy
-
-# ── Orchestration — LangGraph (see docs/langgraph-migration/) ───────────────
-
-langgraph                   
-langgraph-checkpoint-postgres  
-psycopg[binary]              
-                            

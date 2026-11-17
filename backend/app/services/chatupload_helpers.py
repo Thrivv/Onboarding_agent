@@ -510,25 +510,6 @@ def insert_conversation_log(
         # Add metadata if provided
         if metadata:
             conversation_data["metadata"] = metadata if isinstance(metadata, dict) else json.loads(metadata)
-
-        # i18n (docs/multilingual-flow-approach.html, rule 2): a LocalizedStr
-        # message carries all three renderings — persist them so a language
-        # toggle / reload serves the stored rendering directly instead of an
-        # LLM translation. Also stamp the language every agent row was
-        # written in, so history translation knows its source language.
-        try:
-            from app.i18n import i18n_metadata
-            from app.utils.language import request_language
-            _i18n = i18n_metadata(message)
-            if _i18n or role in ("agent", "assistant"):
-                md = dict(conversation_data.get("metadata") or {})
-                if _i18n:
-                    md.update(_i18n)
-                md.setdefault("language", request_language())
-                conversation_data["metadata"] = md
-            conversation_data["message"] = str(message)
-        except Exception as _i18n_err:
-            logger.warning(f"insert_conversation_log: i18n metadata skipped: {_i18n_err}")
         
         # Insert into database
         result = ConversationRepository.insert(conversation_data)

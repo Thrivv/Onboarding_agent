@@ -1,10 +1,8 @@
 import React from 'react';
-import { useLanguage } from '../../../../context/LanguageContext';
 import { CheckCircle, Copy } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 const FinalSuccessModal = ({ isOpen, onClose, referenceNumber }) => {
-  const { t } = useLanguage();
   if (!isOpen) return null;
   return (
     <div className="fixed inset-0 z-[1000] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-300">
@@ -12,22 +10,22 @@ const FinalSuccessModal = ({ isOpen, onClose, referenceNumber }) => {
         <div className="w-20 h-20 bg-emerald-100 rounded-full flex items-center justify-center mb-6 shadow-xl shadow-emerald-500/10">
           <CheckCircle className="h-10 w-10 text-emerald-600" />
         </div>
-        <h2 className="text-2xl font-black text-slate-900 mb-4 uppercase tracking-tight">{t('ui.submissionSuccessful')}</h2>
+        <h2 className="text-2xl font-black text-slate-900 mb-4 uppercase tracking-tight">Submission Successful</h2>
         <p className="text-slate-600 mb-8 leading-relaxed font-medium">
-          {t('ui.submittedProcessing')}
+          Your registration documents have been submitted successfully and are now being processed.
         </p>
 
         {referenceNumber && (
           <div className="w-full p-6 bg-slate-50 rounded-3xl border border-slate-100 mb-8 relative group">
             <div className="flex items-center justify-between mb-2">
-              <p className="text-[11px] font-black text-slate-400 uppercase tracking-widest">{t('ui.referenceNumber')}</p>
+              <p className="text-[11px] font-black text-slate-400 uppercase tracking-widest">Reference Number</p>
               <button
                 onClick={() => {
                   navigator.clipboard.writeText(referenceNumber);
-                  toast.success(t('ui.referenceCopied'));
+                  toast.success('Reference ID copied!');
                 }}
                 className="p-2 hover:bg-slate-200 rounded-xl transition-all text-slate-400 hover:text-slate-900 active:scale-90"
-                title={t('ui.copyReferenceNumber')}
+                title="Copy Reference Number"
               >
                 <Copy className="h-4 w-4" />
               </button>
@@ -36,7 +34,7 @@ const FinalSuccessModal = ({ isOpen, onClose, referenceNumber }) => {
               {referenceNumber}
             </p>
             <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-2 italic">
-              {t('ui.saveForReference')}
+              * Please save this number for future reference
             </p>
           </div>
         )}
@@ -44,7 +42,7 @@ const FinalSuccessModal = ({ isOpen, onClose, referenceNumber }) => {
           onClick={onClose}
           className="w-full py-4 bg-slate-900 text-white rounded-2xl font-black uppercase tracking-widest hover:bg-slate-800 transition-all shadow-xl shadow-slate-200 active:scale-[0.98]"
         >
-          {t('ui.close')}
+          Close
         </button>
       </div>
     </div>

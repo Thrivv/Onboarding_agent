@@ -46,6 +46,7 @@ OFFERED_PRODUCTS: List[str] = [
     "Checkbook Request",
     "Balance Confirmation",
     "Payer",
+    "GrowX ERP",
     "Tally",
     "Zoho",
     "RFM Loyalty",
@@ -118,6 +119,7 @@ PACKAGE_DEFINITIONS: Dict[str, List[str]] = {
         "Checkbook Request",
         "Balance Confirmation",
         "Payer",
+        "GrowX ERP",
         "Tally",
         "Zoho",
         "RFM Loyalty",
@@ -224,6 +226,16 @@ def get_package_selection(email: str) -> Optional[Dict[str, Any]]:
 # ============================================================================
 # GET PACKAGE STATUS (for sidebar / status endpoint)
 # ============================================================================
+
+def get_fee_id(selected_package: str) -> int:
+    """
+    Map a package name to its GrowX fee ID.
+        Essential → 1
+        Plus      → 2
+        Advanced  → 3
+    """
+    return {"Essential": 1, "Plus": 2, "Advanced": 3}.get(selected_package, 1)
+
 
 def get_package_status(email: str) -> str:
     """
@@ -367,7 +379,7 @@ AVAILABLE BANKING PRODUCT PACKAGES:
              request-to-pay capabilities alongside core banking.
 
 3. Advanced
-   Products: Everything in Plus, plus: Tally, Zoho, RFM Loyalty, Stripe,
+   Products: Everything in Plus, plus: GrowX ERP, Tally, Zoho, RFM Loyalty, Stripe,
              RewardX, HRMS
    Best for: Complex corporate operations requiring ERP integrations, loyalty platforms,
              fintech connectors, and HRMS connectivity.

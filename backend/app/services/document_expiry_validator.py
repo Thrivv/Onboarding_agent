@@ -1,13 +1,12 @@
 """
 Document Expiry Validation Service
-Handles expiry date validation for all document types in the onboarding system
+Handles expiry date validation for all document types in Thrivv Bank system
 """
 
 from datetime import datetime
 import json
 import logging
 from typing import Dict, Any, Tuple, Optional
-from app import config
 from app.services.run_model import call_local_llm  # ✅ CORRECT IMPORT
 
 logger = logging.getLogger(__name__)
@@ -256,13 +255,10 @@ def generate_expiry_failure_message(
     else:
         context = f"{display_name} expired on {expiry_date_found}"
     
-    # Create prompt for LLM.
-    # ARCHITECTURE FIX (prompt-remediation Phase 2): the assistant-identity
-    # line now goes through the model's system role instead of being
-    # textually embedded as the first line of the user prompt -- see
-    # call_local_llm(prompt, system_prompt=..., temperature=...) below.
-    _system_prompt = f"You are a professional banking assistant for {config.BRAND_NAME}."
-    prompt = f"""Document Type: {display_name}
+    # Create prompt for LLM
+    prompt = f"""You are a professional banking assistant for Thrivv Bank.
+
+Document Type: {display_name}
 Issue: {context}
 Current Date: {current_date}
 Reason: {reason}
@@ -281,12 +277,8 @@ Requirements:
 Message:"""
 
     try:
-        # Call LLM with retry logic (your existing function). Lower
-        # temperature (0.3, down from the shared 0.7 default) -- this output
-        # is a short, format-locked message (2-3 sentences, no greeting/
-        # closing), which benefits from lower variance the same way
-        # message_generator.py's prompts do.
-        ai_message = call_local_llm(prompt, system_prompt=_system_prompt, temperature=0.3)
+        # Call LLM with retry logic (your existing function)
+        ai_message = call_local_llm(prompt)
         
         if not ai_message or len(ai_message.strip()) < 20:
             logger.error("LLM returned insufficient message")

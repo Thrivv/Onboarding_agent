@@ -1,34 +1,25 @@
 """
 app/services/llm_client.py
 ==========================
-Centralized LLM client for every model call in the app.
+Centralized LLM client for ALL OpenRouter API calls.
 
-SINGLE SOURCE OF TRUTH for the model and endpoint. Every text and vision call
-in the app goes through AWS Bedrock (see app/services/bedrock_client.py for
-the actual request/response translation) using one model —
-bedrock_client.MODEL_ID (Claude Haiku) — for every task. Do NOT re-declare
-model names or endpoints in individual extractors — import them from here.
+SINGLE SOURCE OF TRUTH for model names and the OpenRouter endpoint. Every
+value below comes from .env.docker, so a model can be swapped with a container
+restart instead of a code change + rebuild. Do NOT re-declare model names in
+individual extractors — import them from here.
 
-TEXT_PRIMARY/TEXT_FALLBACK and VISION_PRIMARY/VISION_FALLBACK are kept as
-four separate names, all pointing at the same Bedrock model, purely for
-backward compatibility with every extractor that already imports them —
-removing them would mean touching every extractor's imports for no behaviour
-change. The primary/fallback retry loop below (and the equivalent loops in
-ocr_service.py and the extractors) still runs, it just retries the same
-model once.
-
-This app previously called OpenRouter (two open-weight models per task,
-picked via a "model" field in the request) with an optional independent
-SECONDARY_LLM_* provider as a third attempt if both OpenRouter models
-failed. Both are gone: there's one provider (Bedrock) and one model now, so
-the multi-provider fallback chain no longer applies.
+Env vars (see the "LLM MODEL ROUTING" block in .env.docker):
+    OPENROUTER_API_URL
+    LLM_VISION_PRIMARY / LLM_VISION_FALLBACK   — EID, Passport (image based)
+    LLM_TEXT_PRIMARY   / LLM_TEXT_FALLBACK     — Commercial, COI, MOA, Ejari,
+                                                 BVI, and message generation
 
 Usage
 -----
   from app.services.llm_client import (
       TEXT_PRIMARY, TEXT_FALLBACK,
       VISION_PRIMARY, VISION_FALLBACK,
-      LLM_API_URL,
+      OPENROUTER_API_URL,
       call_text_llm, call_vision_llm,
       is_identity_doc,
   )
@@ -36,17 +27,14 @@ Usage
 
 import time
 import logging
+import requests
 from typing import Optional
 from app import config
-from app.services import bedrock_client
 
 logger = logging.getLogger(__name__)
 
 # ── API endpoint ─────────────────────────────────────────────────────────────
-# Model selection happens via the Bedrock invoke URL, not a per-call "model"
-# field, so there is only one URL for every call site that used to import
-# OPENROUTER_API_URL.
-LLM_API_URL = bedrock_client.INVOKE_URL
+OPENROUTER_API_URL = config.OPENROUTER_API_URL
 
 # ── Default per-model call timeout ───────────────────────────────────────────
 # Configurable via LLM_CALL_TIMEOUT_SECONDS in .env.docker — change + restart
@@ -57,13 +45,17 @@ LLM_API_URL = bedrock_client.INVOKE_URL
 # further up the stack, to the fallback template text) much faster.
 DEFAULT_LLM_TIMEOUT_SECONDS = config.LLM_CALL_TIMEOUT_SECONDS
 
-# ── Model  (single Bedrock model for vision + text + chat) ───────────────────
-# See the module docstring — these four names all resolve to the same
-# bedrock_client.MODEL_ID now that there is one provider and one model.
-VISION_PRIMARY  = bedrock_client.MODEL_ID
-VISION_FALLBACK = bedrock_client.MODEL_ID
-TEXT_PRIMARY    = bedrock_client.MODEL_ID
-TEXT_FALLBACK   = bedrock_client.MODEL_ID
+# ── Vision models  (EID / Passport only) ─────────────────────────────────────
+# Default is qwen2.5-vl-72b, matching what ocr_service has actually been using.
+# The previous hardcoded default here was meta-llama/llama-3.2-11b-vision-instruct,
+# which ocr_service had already abandoned with the note "llama-3.2-11b returning
+# 404" — it survived only because nothing outside this module imported it.
+VISION_PRIMARY  = config.LLM_VISION_PRIMARY
+VISION_FALLBACK = config.LLM_VISION_FALLBACK
+
+# ── Text models  (Commercial, COI, MOA, Ejari, BVI, everything else) ─────────
+TEXT_PRIMARY    = config.LLM_TEXT_PRIMARY
+TEXT_FALLBACK   = config.LLM_TEXT_FALLBACK
 
 # ── Identity doc types that require the vision model ─────────────────────────
 IDENTITY_DOC_TYPES = {
@@ -80,9 +72,9 @@ IDENTITY_DOC_TYPES = {
 # ── Internal helpers ──────────────────────────────────────────────────────────
 
 def _api_key() -> str:
-    key = config.AWS_BEARER_TOKEN_BEDROCK or ""
+    key = config.OPENROUTER_API_KEY or ""
     if not key:
-        raise ValueError("[LLM_CLIENT] AWS_BEARER_TOKEN_BEDROCK is not set")
+        raise ValueError("[LLM_CLIENT] OPENROUTER_API_KEY is not set")
     return key
 
 
@@ -91,37 +83,6 @@ def _headers() -> dict:
         "Authorization": f"Bearer {_api_key()}",
         "Content-Type": "application/json",
     }
-
-
-def _post_chat_completion(url: str, headers: dict, model: str, messages: list,
-                           temperature: float, max_tokens: int, timeout: int) -> str:
-    """
-    Shared chat-completions call, routed through bedrock_client.post (see
-    that module for the OpenAI-shape-in/out translation to Bedrock's
-    Anthropic Messages format). Raises on any failure (HTTP error,
-    malformed response, empty completion); callers decide what "failure"
-    means for their retry loop.
-    """
-    resp = bedrock_client.post(
-        url,
-        headers=headers,
-        json={
-            "model": model,
-            "messages": messages,
-            "temperature": temperature,
-            "max_tokens": max_tokens,
-        },
-        timeout=timeout,
-    )
-    resp.raise_for_status()
-    result = resp.json()["choices"][0]["message"]["content"]
-    # A 200 response with a null/empty completion (seen under concurrent
-    # load — see ocr_service.call_api_with_retry for the same failure mode)
-    # would otherwise be returned as-is, silently skipping the next model in
-    # the fallback chain. Treat it as a failure instead.
-    if not result or not result.strip():
-        raise RuntimeError(f"{model} returned empty/null completion content")
-    return result
 
 
 # ── Public helpers ────────────────────────────────────────────────────────────
@@ -148,27 +109,43 @@ def call_text_llm(
     timeout: int = DEFAULT_LLM_TIMEOUT_SECONDS,
 ) -> str:
     """
-    Call the text LLM (no image), via Bedrock. Retries once (TEXT_PRIMARY,
-    then TEXT_FALLBACK — the same Bedrock model both times, see the module
-    docstring) before giving up.
+    Call a text-only LLM (no image).
+    Tries TEXT_PRIMARY first, falls back to TEXT_FALLBACK automatically.
     """
-    messages = []
-    if system_prompt:
-        messages.append({"role": "system", "content": system_prompt})
-    messages.append({"role": "user", "content": prompt})
-
     for model in [TEXT_PRIMARY, TEXT_FALLBACK]:
         try:
-            result = _post_chat_completion(
-                LLM_API_URL, _headers(), model, messages, temperature, max_tokens, timeout
+            messages = []
+            if system_prompt:
+                messages.append({"role": "system", "content": system_prompt})
+            messages.append({"role": "user", "content": prompt})
+
+            resp = requests.post(
+                OPENROUTER_API_URL,
+                headers=_headers(),
+                json={
+                    "model": model,
+                    "messages": messages,
+                    "temperature": temperature,
+                    "max_tokens": max_tokens,
+                },
+                timeout=timeout,
             )
+            resp.raise_for_status()
+            result = resp.json()["choices"][0]["message"]["content"]
+            # A 200 response with a null/empty completion (seen under
+            # concurrent load — see ocr_service.call_api_with_retry for the
+            # same failure mode) used to be returned as-is here, silently
+            # skipping the fallback model below. Treat it as a failure so it
+            # falls through to the next model in the loop instead.
+            if not result or not result.strip():
+                raise RuntimeError(f"{model} returned empty/null completion content")
             logger.info(f"[LLM_CLIENT] text call OK — model={model}")
             return result
         except Exception as e:
-            logger.warning(f"[LLM_CLIENT] {model} failed: {e}. Retrying…")
+            logger.warning(f"[LLM_CLIENT] {model} failed: {e}. Trying fallback…")
             time.sleep(2)
 
-    raise RuntimeError("[LLM_CLIENT] All text model attempts failed")
+    raise RuntimeError("[LLM_CLIENT] All text models failed")
 
 
 def call_vision_llm(
@@ -180,28 +157,40 @@ def call_vision_llm(
     timeout: int = DEFAULT_LLM_TIMEOUT_SECONDS,
 ) -> str:
     """
-    Call the vision LLM with a base64-encoded image data-URL, via Bedrock.
-    Retries once (VISION_PRIMARY, then VISION_FALLBACK — the same Bedrock
-    model both times, see the module docstring) before giving up.
+    Call a vision LLM with a base64-encoded image data-URL.
+    Tries VISION_PRIMARY first, falls back to VISION_FALLBACK automatically.
     """
-    content = [
-        {"type": "text", "text": prompt},
-        {"type": "image_url", "image_url": {"url": image_b64_url}},
-    ]
-    messages = []
-    if system_prompt:
-        messages.append({"role": "system", "content": system_prompt})
-    messages.append({"role": "user", "content": content})
-
     for model in [VISION_PRIMARY, VISION_FALLBACK]:
         try:
-            result = _post_chat_completion(
-                LLM_API_URL, _headers(), model, messages, temperature, max_tokens, timeout
+            content = [
+                {"type": "text", "text": prompt},
+                {"type": "image_url", "image_url": {"url": image_b64_url}},
+            ]
+            messages = []
+            if system_prompt:
+                messages.append({"role": "system", "content": system_prompt})
+            messages.append({"role": "user", "content": content})
+
+            resp = requests.post(
+                OPENROUTER_API_URL,
+                headers=_headers(),
+                json={
+                    "model": model,
+                    "messages": messages,
+                    "temperature": temperature,
+                    "max_tokens": max_tokens,
+                },
+                timeout=timeout,
             )
+            resp.raise_for_status()
+            result = resp.json()["choices"][0]["message"]["content"]
+            # Same empty-content guard as call_text_llm above — see its comment.
+            if not result or not result.strip():
+                raise RuntimeError(f"{model} returned empty/null completion content")
             logger.info(f"[LLM_CLIENT] vision call OK — model={model}")
             return result
         except Exception as e:
-            logger.warning(f"[LLM_CLIENT] {model} failed: {e}. Retrying…")
+            logger.warning(f"[LLM_CLIENT] {model} failed: {e}. Trying fallback…")
             time.sleep(2)
 
-    raise RuntimeError("[LLM_CLIENT] All vision model attempts failed")
+    raise RuntimeError("[LLM_CLIENT] All vision models failed")

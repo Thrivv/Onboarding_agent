@@ -114,24 +114,6 @@ def _sha(data) -> str:
     return hashlib.sha1(data).hexdigest()
 
 
-def _estimate_tokens(text: str) -> int:
-    """Rough token count for a prompt string.
-
-    This is a character-count heuristic (~4 chars/token for English), NOT a
-    real tokenizer run against Claude's vocabulary — Bedrock exposes no
-    tokenize-only endpoint, and pulling in a third-party tokenizer (tiktoken,
-    the anthropic SDK) as a new test dependency was judged not worth it for
-    an estimate this document already labels as approximate everywhere it is
-    shown (see prompt-remediation-plan.html, section 03). Treat this as
-    "close enough to catch a prompt that tripled in size," not as a billing
-    figure. Phase 3 replaces the ceiling this feeds with a measured number
-    once the real Bedrock usage stats are available from a live call.
-    """
-    if not text:
-        return 0
-    return max(1, round(len(text) / 4))
-
-
 def _load(path: Path):
     if not path.exists():
         return None
@@ -502,19 +484,6 @@ def check_text(record: bool = False) -> None:
     sys.path.insert(0, str(BACKEND))
     results: dict[str, dict] = {}
     for doc_type, paths in sorted(fixtures.items()):
-        stem = FIXTURE_TYPES[doc_type]
-        if EXTRACTORS[stem][1] is None:
-            # No text_method for this extractor (currently: passport_extractor,
-            # which goes straight from PDF/image pages to Textract or a vision
-            # model -- there is no intermediate "extracted raw text" stage the
-            # way there is for the four text-based extractors). This is a
-            # real architectural difference, not a gap: forcing an
-            # extract_text_from_pdf onto an image pipeline would be the same
-            # mistake this file's own module docstring warns against (a
-            # unifying base-class method that quietly changes behaviour).
-            # Layer 2 (request shape) still covers passport separately, via
-            # extract_from_image -- see _run_intercepted below.
-            continue
         for path in paths:
             key = f"{doc_type}/{path.name}"
             try:
@@ -599,26 +568,6 @@ class _Interceptor:
             content = "".join(
                 part.get("text", "") for part in content if isinstance(part, dict)
             )
-
-        # Prompt caching (prompt-remediation Phase 3): this `payload` is the
-        # already-translated Bedrock format (bedrock_client._to_bedrock_
-        # payload runs before requests.post is called), where a cached
-        # system prompt lives in a separate top-level "system" key, not in
-        # `messages`. Recording it separately from the dynamic user-turn
-        # `content` above is what makes "how much did Phase 3 actually
-        # shrink the dynamic per-call prompt" and "how much is now cached
-        # instead of removed" two different, honestly-reported numbers,
-        # rather than one figure that looks like a bigger reduction than it
-        # is because it silently stopped counting the (still-sent, just
-        # cached) system block.
-        system_blocks = payload.get("system") or []
-        system_text = "".join(
-            b.get("text", "") for b in system_blocks if isinstance(b, dict)
-        )
-        system_cached = any(
-            isinstance(b, dict) and b.get("cache_control") for b in system_blocks
-        )
-
         prompt_sha = _sha(content)
         self.calls.append(
             {
@@ -629,10 +578,6 @@ class _Interceptor:
                 "timeout": timeout,
                 "prompt_sha1": prompt_sha,
                 "prompt_chars": len(content),
-                "prompt_tokens_est": _estimate_tokens(content),
-                "system_chars": len(system_text),
-                "system_tokens_est": _estimate_tokens(system_text),
-                "system_cached": system_cached,
             }
         )
         if self.mode == "verify":
@@ -662,30 +607,14 @@ def _run_intercepted(stem: str, doc_type: str, path: Path, mode: str, cassette=N
     try:
         extractor = _instantiate(stem)
         raw = path.read_bytes()
-        text_method = EXTRACTORS[stem][1]
-        if text_method is None:
-            # Image-pipeline extractor (currently: passport_extractor) --
-            # no extract_text_from_pdf/_from_docx stage exists to drive.
-            # Build a PIL Image straight from the fixture bytes (a JPEG
-            # fixture, per FIXTURE_TYPES) and call the API method
-            # (extract_from_image) directly, which is what actually
-            # produces the outbound request this layer measures.
-            from PIL import Image
-            import io as _io
-            img = Image.open(_io.BytesIO(raw)).convert("RGB")
-            extractor.extract_from_image(img, "page_1")
-        elif path.suffix.lower() == ".docx":
+        if path.suffix.lower() == ".docx":
             text = extractor.extract_text_from_docx(raw)
-            for method in ("extract_with_ai", "_extract_with_ai"):
-                if hasattr(extractor, method):
-                    getattr(extractor, method)(text)
-                    break
         else:
             text = extractor.extract_text_from_pdf(raw)
-            for method in ("extract_with_ai", "_extract_with_ai"):
-                if hasattr(extractor, method):
-                    getattr(extractor, method)(text)
-                    break
+        for method in ("extract_with_ai", "_extract_with_ai"):
+            if hasattr(extractor, method):
+                getattr(extractor, method)(text)
+                break
     except _StopExtraction:
         pass
     finally:
@@ -878,7 +807,7 @@ def self_test() -> int:
     probe = _Interceptor("verify")
     try:
         probe(
-            "https://bedrock-runtime.ap-south-1.amazonaws.com/model/test/invoke",
+            "https://openrouter.ai/api/v1/chat/completions",
             json={"model": "m", "messages": [{"content": "hello"}], "temperature": 0.1},
             timeout=30,
         )
@@ -931,24 +860,6 @@ def report() -> int:
 
     cassettes = sorted(CASSETTES.glob("*.json")) if CASSETTES.exists() else []
     print(f"  {DIM}cassettes: {len(cassettes)}{RESET}")
-
-    request_data = _load(REQUEST_FILE)
-    if request_data:
-        print(f"\n{DIM}Prompt size (Layer 2, most recent recording){RESET}")
-        rows = []
-        for key in sorted(request_data):
-            for call in request_data[key]:
-                tok = call.get("prompt_tokens_est")
-                if tok is None:
-                    continue
-                rows.append((key, tok, call.get("prompt_chars", 0)))
-        if rows:
-            width = max(len(r[0]) for r in rows)
-            for key, tok, chars in rows:
-                print(f"  {key.ljust(width)}  ~{tok:>6,} tok est.  ({chars:,} chars)")
-            print(f"  {DIM}estimate only, ~4 chars/token — see _estimate_tokens(){RESET}")
-        else:
-            print(f"  {DIM}no successful call recorded a prompt yet{RESET}")
 
     ready = bool(fixtures) and DIVERGENCE_FILE.exists() and TEXT_FILE.exists()
     print("\n" + "=" * 72)

@@ -2,20 +2,16 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { useLanguage } from '../context/LanguageContext';
 import { toast } from 'react-hot-toast';
 import logo from '../assets/logo-growx.svg';
 import { Mail, Lock, Eye, EyeOff, Loader } from 'lucide-react';
 import PremiumLoader from '../components/layout/PremiumLoader';
-import logger from '../utils/logger';
-import LanguageToggle from '../components/common/LanguageToggle';
 
 
 const Login = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const { login, user, loading: authLoading } = useAuth();
-  const { t } = useLanguage();
 
   const [formData, setFormData] = useState({
     email: '',
@@ -49,13 +45,13 @@ const Login = () => {
     const newErrors = {};
 
     if (!formData.email.trim()) {
-      newErrors.email = t('auth.login.errorEmailRequired');
+      newErrors.email = 'Email is required';
     } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
-      newErrors.email = t('auth.login.errorEmailInvalid');
+      newErrors.email = 'Invalid email format';
     }
 
     if (!formData.password) {
-      newErrors.password = t('auth.login.errorPasswordRequired');
+      newErrors.password = 'Password is required';
     }
 
     setErrors(newErrors);
@@ -74,8 +70,8 @@ const Login = () => {
     try {
       await login(formData.email, formData.password);
     } catch (error) {
-      logger.error('[LOGIN] Unexpected error:', error);
-      toast.error(t('auth.login.unexpectedError'));
+      console.error('[LOGIN] Unexpected error:', error);
+      toast.error('An unexpected error occurred. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -87,9 +83,6 @@ const Login = () => {
 
   return (
     <div className="gx-main-layout">
-      <div className="fixed top-4 right-4 z-10">
-        <LanguageToggle />
-      </div>
       <div className="max-w-md w-full">
         <div className="bg-white rounded-2xl shadow-xl p-8 border border-gray-100">
           {/* Header */}
@@ -98,10 +91,10 @@ const Login = () => {
               <img src={logo} alt="Thrivv.ai Logo" className="h-16 w-auto max-w-full object-contain" />
             </div>
             <h1 className="gx-welcome">
-              {t('auth.login.welcomeBack')}
+              Welcome Back
             </h1>
             <h2 className="gx-sub">
-              {t('auth.login.loginTo')} <span className='gx-get-started'>{t('auth.login.yourAccount')}</span>
+              Login to <span className='gx-get-started'>your account</span>
             </h2>
           </div>
 
@@ -109,7 +102,7 @@ const Login = () => {
             {/* Email Field */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1.5 ml-1">
-                {t('auth.login.emailAddress')}
+                Email Address
               </label>
               <div className="relative group">
                 <div className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 group-focus-within:text-brand-secondary">
@@ -137,11 +130,8 @@ const Login = () => {
             <div>
               <div className="flex items-center justify-between px-1 mb-1.5">
                 <label className="block text-sm font-medium text-gray-700">
-                  {t('auth.login.password')}
+                  Password
                 </label>
-                <Link to="/reset-password" className="text-xs text-brand-primary hover:text-gray-700 font-medium">
-                  {t('auth.login.forgotPassword')}
-                </Link>
               </div>
               <div className="relative group">
                 <div className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 group-focus-within:text-brand-secondary">
@@ -181,7 +171,7 @@ const Login = () => {
               {loading ? (
                 <Loader className="h-5 w-5 animate-spin mx-auto text-white" />
               ) : (
-                t('auth.login.signIn')
+                "Sign In"
               )}
             </button>
           </form>
@@ -189,9 +179,9 @@ const Login = () => {
           {/* Footer Link */}
           <div className="mt-8 text-center text-sm">
             <p className="text-gray-600">
-              {t('auth.login.noAccount')}{' '}
+              Don't have an account?{' '}
               <Link to="/signup" className="text-brand-primary hover:text-gray-700 font-medium">
-                {t('auth.login.createOne')}
+                Create one now
               </Link>
             </p>
           </div>

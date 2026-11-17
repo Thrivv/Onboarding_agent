@@ -31,11 +31,9 @@ import { finalizeKeyIndividualLoop, selectSingleOwnerAuthorisedSignatory } from 
 import { assignMismatchRole, getConversationLogs, getOnboardingStatus, sendChatMessage, startConversation, uploadDocument, uploadDocumentsBulk } from '../../api/onboarding';
 import { getPackageStatus } from '../../api/products';
 import Sidebar from '../../components/layout/Sidebar';
-import LanguageToggle from '../../components/common/LanguageToggle';
 import { useAuth } from '../../context/AuthContext';
-import { useLanguage } from '../../context/LanguageContext';
 import { AnimatePresence, motion } from 'framer-motion';
-import { AlertCircle, Building, CheckCircle, ChevronRight, Clock, Eye, File, FileText, History, Home, Package, Paperclip, Phone, RefreshCw, Send, ShieldCheck, Upload, User, Users, X } from 'lucide-react';
+import { AlertCircle, Building, CheckCircle, ChevronRight, Clock, Eye, File, FileText, Globe, History, Home, Package, Paperclip, Phone, RefreshCw, Send, ShieldCheck, Upload, User, Users, X } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { AsKiManagementCard } from './components/cards/AsKiManagementCard';
 import { KiDetailsCard } from './components/cards/KiDetailsCard';
@@ -57,34 +55,10 @@ import { FinalSuccessModal } from './components/modals/FinalSuccessModal';
 import { RoleMismatchSelector } from './components/modals/RoleMismatchSelector';
 import { SuccessConfetti } from './components/status/SuccessDisplay';
 import { getUserInitials, stripFormatting } from './utils/formatters';
-import { logicText, stripMemberLists } from './utils/i18nText';
-import { deriveCardState } from './utils/cardState';
-import { translateDocName } from './utils/reportI18n';
-import logger from '../../utils/logger';
-
-// Unified Report section ids (English, used for colours/logic) -> translation keys.
-const REPORT_SECTION_KEYS = {
-  'Business Details': 'business',
-  'User Details': 'user',
-  'Additional Details': 'additional',
-  'Declaration': 'declaration',
-};
 
 // Module-level so the reference is stable across every render. See the note at
 // its use site.
 const EMPTY_COMPLIANCE_HISTORY = Object.freeze([]);
-
-// Display names for the "Translated from X" caption — Phase 1 of
-// docs/language-mirroring-verdict.html. Backend language values are always
-// the lowercase "english" | "arabic" | "spanish" strings (see
-// app/utils/language.py::SUPPORTED_LANGUAGES); "unknown" covers the rare
-// case detect_and_translate_input() couldn't confidently name the language.
-const TRANSLATED_FROM_KEY = Object.freeze({
-  english: 'langEnglish',
-  arabic: 'langArabic',
-  spanish: 'langSpanish',
-  unknown: 'langUnknown',
-});
 
 // DocumentPreviewModal picks its PDF/image render branch off document.type,
 // which needs to be an actual MIME type ("application/pdf") — not a semantic
@@ -105,14 +79,6 @@ const inferMimeTypeFromFilename = (filename) => {
 
 const AIAssistant = () => {
   const { user } = useAuth();
-  const { language: globalLanguage, t: tContext, syncFromAccount } = useLanguage();
-  // Stable-identity t() that always reads the CURRENT language. Many handlers
-  // below are useCallback'd with deps that don't include t; with the context
-  // t they'd keep translating into the language active when they were
-  // created (e.g. a toast in English right after switching to Arabic).
-  const tRef = useRef(tContext);
-  tRef.current = tContext;
-  const t = useCallback((key, vars) => tRef.current(key, vars), []);
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -139,19 +105,11 @@ const AIAssistant = () => {
   // already waiting for Srini.
   const showMemberInput = false;
 
-  // LANGUAGE — read straight from LanguageContext (single source of truth).
-  // This used to be a separate useState mirrored from globalLanguage via a
-  // useEffect, which lagged one render behind every toggle: a chat/upload
-  // request fired in that window went out in the OLD language. The name
-  // `selectedLanguage` is kept so its ~15 existing call sites don't change.
-  // (api/client.js also stamps every request with the current language.)
-  const selectedLanguage = globalLanguage;
-  // Phase 2 (docs/language-mirroring-verdict.html): true while already-sent
-  // chat history is being re-fetched/re-translated after a toggle switch.
-  // Drives the small "Translating conversation..." banner above the message
-  // list — see the re-fetch effect further down, right after the
-  // preferredLanguage localStorage effect.
-  const [isTranslatingHistory, setIsTranslatingHistory] = useState(false);
+  // LANGUAGE STATE WITH LOCALSTORAGE PERSISTENCE
+  const [selectedLanguage, setSelectedLanguage] = useState(() => {
+    const saved = localStorage.getItem('preferredLanguage');
+    return saved || 'english';
+  });
   // Dynamic Required Documents Tracking
   const [requiredDocKeys, setRequiredDocKeys] = useState(['commercial_license', 'moa', 'coi', 'emirates_id', 'ejari']);
 
@@ -339,7 +297,7 @@ const AIAssistant = () => {
     const isCorporateDocsComplete = corpKeys.length > 0 && corpKeys.every(k => status[k] === 'success');
 
     if (corpKeys.length > 0) {
-      logger.log('[COMPLETION] Corporate Check:', {
+      console.log('[COMPLETION] Corporate Check:', {
         requiredKeys: corpKeys,
         status: corpKeys.reduce((acc, k) => ({ ...acc, [k]: status[k] }), {}),
         isComplete: isCorporateDocsComplete
@@ -366,9 +324,7 @@ const AIAssistant = () => {
     if (msg.sectionOverride) return msg.sectionOverride;
 
     const type = (msg.documentType || msg.stage || '').toLowerCase();
-    // logicText: English rendering when known + EN aliases for AR/ES keywords,
-    // so the keyword fallbacks below work in every language (utils/i18nText.js).
-    const content = logicText(msg);
+    const content = (msg.content || '').toLowerCase();
 
     // 1b. Self-Declaration takes priority — check BEFORE product package
     // A message that has both productPackageTrigger and selfDeclTrigger (from onConfirmed)
@@ -564,7 +520,7 @@ const AIAssistant = () => {
 
     let finalSection = bRank >= cRank ? currentBestSection : chatBestSection;
 
-    logger.log('[FLOW] Section Calculation:', {
+    console.log('[FLOW] Section Calculation:', {
       backendStage,
       currentBestSection,
       chatBestSection,
@@ -592,21 +548,30 @@ const AIAssistant = () => {
       'additional', 'compliance', 'fatca', 'pep', 'product_package',
       'declaration', 'summary', 'self_declaration', 'complete',
     ];
-    // 'identification' is ambiguous on the backend: it covers both "still
-    // collecting corporate docs" AND "corporate docs done, AS/KI card
-    // pending" (see key_individuals.py so-as-selection). Only treat it as
-    // post-corporate once a message has actually carried the AS/KI trigger
-    // flag — otherwise fall back to the plain whitelist check.
+    // 'identification' is genuinely ambiguous, unlike every other stage
+    // name above: the backend keeps document_stage === 'identification'
+    // for the WHOLE corporate-docs + identity-docs phase and only moves
+    // off it once the AS/KI role-selection card is answered (see
+    // so-as-selection in key_individuals.py) — it does not introduce a
+    // distinct stage name the instant corporate docs finish. So the
+    // stage string alone can't tell "still uploading corporate docs"
+    // apart from "corporate docs done, AS/KI card pending". Use the
+    // AS/KI trigger message (asKiTrigger/moaAsTrigger) — the same signal
+    // the chat already uses to render that card — to break the tie only
+    // for that one value, instead of whitelisting 'identification'
+    // outright (which reopens the original "brand-new user jumps
+    // straight to Identity" bug, since a fresh account's stage is also
+    // 'identification').
     const _hasAsKiTrigger = messages.some(m => m.asKiTrigger || m.moaAsTrigger);
     const _stillCollectingCorporateDocs = bStage === 'identification'
       ? !_hasAsKiTrigger
       : !_KNOWN_POST_CORPORATE_STAGES.includes(bStage);
     if (finalSection === 'user' && _stillCollectingCorporateDocs) {
-      logger.log('[FLOW] Guard: Reverting to corporate — backend stage says corporate docs not complete');
+      console.log('[FLOW] Guard: Reverting to corporate — backend stage says corporate docs not complete');
       return 'corporate';
     }
     if (finalSection === 'additional' && _stillCollectingCorporateDocs) {
-      logger.log('[FLOW] Guard: Reverting to corporate — backend stage says corporate docs not complete');
+      console.log('[FLOW] Guard: Reverting to corporate — backend stage says corporate docs not complete');
       return 'corporate';
     }
 
@@ -646,7 +611,7 @@ const AIAssistant = () => {
         });
 
         if (found) {
-          logger.log(`[HEAL] Restored extractedData for message: ${msg.id} (${msg.documentType})`);
+          console.log(`[HEAL] Restored extractedData for message: ${msg.id} (${msg.documentType})`);
           return {
             ...msg,
             extractedData: found.extracted_fields || found.extracted_data || found.data,
@@ -729,7 +694,7 @@ const AIAssistant = () => {
     let currentTopicIdx = 0.5; // Starts with intro messages
     const prioritized = filteredMessages.map((m, idx) => {
       const type = (m.documentType || m.stage || '').toLowerCase();
-      const content = logicText(m);
+      const content = (m.content || '').toLowerCase();
       let p = -1;
 
       // Determine the topic priority for this message (Hardcoded Sequence: FATCA -> PEP -> Package)
@@ -776,9 +741,9 @@ const AIAssistant = () => {
   // here rather than multi-tab/refresh usage. Safe to remove once confirmed.
   const mountIdRef = useRef(Math.random().toString(36).slice(2, 8));
   useEffect(() => {
-    logger.log(`[INIT-DIAG] AIAssistant mounted — mountId=${mountIdRef.current} at ${new Date().toISOString()}`);
+    console.log(`[INIT-DIAG] AIAssistant mounted — mountId=${mountIdRef.current} at ${new Date().toISOString()}`);
     return () => {
-      logger.log(`[INIT-DIAG] AIAssistant unmounted — mountId=${mountIdRef.current}`);
+      console.log(`[INIT-DIAG] AIAssistant unmounted — mountId=${mountIdRef.current}`);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -788,7 +753,7 @@ const AIAssistant = () => {
     try {
       const statusRes = await getDocumentStatus(user.email);
 
-      logger.log('[BACKEND-DEBUG] /document-status/ response:', statusRes.data);
+      console.log('[BACKEND-DEBUG] /document-status/ response:', statusRes.data);
 
       if (statusRes.data?.members_info) {
         setMembersInfo(statusRes.data.members_info);
@@ -806,16 +771,16 @@ const AIAssistant = () => {
 
       if (statusRes.data?.stage || statusRes.data?.document_stage) {
         const newStage = statusRes.data.stage || statusRes.data.document_stage;
-        logger.log('[GROUND_TRUTH] Backend Stage:', newStage);
+        console.log('[GROUND_TRUTH] Backend Stage:', newStage);
         setBackendStage(newStage);
       }
 
       const docs = Array.isArray(statusRes.data) ? statusRes.data : (statusRes.data?.documents || []);
-      logger.log('[DEBUG-SYNC] Ground Truth MembersInfo:', statusRes.data?.members_info);
-      logger.log('[DEBUG-SYNC] Ground Truth Docs Count:', docs.length);
+      console.log('[DEBUG-SYNC] Ground Truth MembersInfo:', statusRes.data?.members_info);
+      console.log('[DEBUG-SYNC] Ground Truth Docs Count:', docs.length);
       if (docs.length > 0) {
-        logger.log('[GROUND_TRUTH] Documents Sync:', docs.length, 'files');
-        logger.log('[GROUND_TRUTH-DEBUG] First Doc Sample:', JSON.stringify(docs[0]).substring(0, 200));
+        console.log('[GROUND_TRUTH] Documents Sync:', docs.length, 'files');
+        console.log('[GROUND_TRUTH-DEBUG] First Doc Sample:', JSON.stringify(docs[0]).substring(0, 200));
         setBackendSubmittedDocs(docs);
       }
 
@@ -824,7 +789,7 @@ const AIAssistant = () => {
       const statusRequiredKeys = statusRes.data?.required_document_types || statusRes.data?.status_details?.required_documents || [];
 
       if (statusRequiredKeys.length > 0) {
-        logger.log('[REQUIREMENTS] Syncing from Status API:', statusRequiredKeys);
+        console.log('[REQUIREMENTS] Syncing from Status API:', statusRequiredKeys);
         setRequiredDocKeys(prev => {
           const nextArr = [...statusRequiredKeys].sort();
           const currentArr = [...prev].sort();
@@ -833,7 +798,7 @@ const AIAssistant = () => {
         });
       }
     } catch (e) {
-      logger.warn('[GROUND_TRUTH] Failed to fetch member status:', e);
+      console.warn('[GROUND_TRUTH] Failed to fetch member status:', e);
     }
   }, [user?.email]);
 
@@ -873,21 +838,18 @@ const AIAssistant = () => {
       'additional', 'compliance', 'fatca', 'pep', 'product_package',
       'declaration', 'summary', 'self_declaration', 'complete',
     ];
-    // 'identification' is ambiguous on the backend: it covers both "still
-    // collecting corporate docs" AND "corporate docs done, AS/KI card
-    // pending" (see key_individuals.py so-as-selection). Only treat it as
-    // post-corporate once a message has actually carried the AS/KI trigger
-    // flag — otherwise fall back to the plain whitelist check.
-    const _bStageForCorporateCheck = (backendStage || '').toLowerCase();
+    // Same 'identification'-is-ambiguous tie-break as getCurrentLiveSection
+    // above — see the comment there. Keep these two in sync.
+    const _autoJumpBStage = (backendStage || '').toLowerCase();
     const _hasAsKiTrigger = messages.some(m => m.asKiTrigger || m.moaAsTrigger);
-    const _stillCollectingCorporateDocs = _bStageForCorporateCheck === 'identification'
+    const _stillCollectingCorporateDocs = _autoJumpBStage === 'identification'
       ? !_hasAsKiTrigger
-      : !_KNOWN_POST_CORPORATE_STAGES.includes(_bStageForCorporateCheck);
+      : !_KNOWN_POST_CORPORATE_STAGES.includes(_autoJumpBStage);
 
     // ⚡️ AUTO-JUMP CORPORATE -> IDENTITY
     // Trigger automatically if the section is complete and we are currently following the live flow
     if (activeChatFilter === null && liveSection === 'corporate' && !_stillCollectingCorporateDocs) {
-      logger.log('[FLOW] Corporate complete (backend-confirmed). Auto-advancing to Identity tab.');
+      console.log('[FLOW] Corporate complete (backend-confirmed). Auto-advancing to Identity tab.');
       setActiveChatFilter('user');
       lastLiveSectionRef.current = 'user';
       return;
@@ -901,7 +863,7 @@ const AIAssistant = () => {
     // We only auto-jump if the user is currently "following" (activeChatFilter is null)
     // Manual navigation is handled by the "Standard follow logic" below which only triggers once.
     if (activeChatFilter === null && (liveSection === 'additional' || backendStage === 'additional') && isIdentityVerified && !_stillCollectingCorporateDocs) {
-      logger.log('[FLOW] Identity complete. Advancing to Additional tab.');
+      console.log('[FLOW] Identity complete. Advancing to Additional tab.');
       setActiveChatFilter('additional');
       lastLiveSectionRef.current = 'additional';
       return;
@@ -921,13 +883,13 @@ const AIAssistant = () => {
         const userIsFollowing = activeChatFilter === null;
 
         if (userIsFollowing || userIsLookingAtOldSection) {
-          logger.log(`[FLOW] Advancing: ${lastLiveSectionRef.current} -> ${liveSection}. Resetting filter.`);
+          console.log(`[FLOW] Advancing: ${lastLiveSectionRef.current} -> ${liveSection}. Resetting filter.`);
           setActiveChatFilter(null);
         } else {
-          logger.log(`[FLOW] Advanced to ${liveSection}, but keeping user's manual filter: ${activeChatFilter}`);
+          console.log(`[FLOW] Advanced to ${liveSection}, but keeping user's manual filter: ${activeChatFilter}`);
         }
       } else {
-        logger.log(`[FLOW] Suppressing backward jump: ${lastLiveSectionRef.current} -> ${liveSection}`);
+        console.log(`[FLOW] Suppressing backward jump: ${lastLiveSectionRef.current} -> ${liveSection}`);
       }
     }
 
@@ -956,18 +918,15 @@ const AIAssistant = () => {
       'additional', 'compliance', 'fatca', 'pep', 'product_package',
       'declaration', 'summary', 'self_declaration', 'complete',
     ];
-    // 'identification' is ambiguous on the backend: it covers both "still
-    // collecting corporate docs" AND "corporate docs done, AS/KI card
-    // pending" (see key_individuals.py so-as-selection). Only treat it as
-    // post-corporate once a message has actually carried the AS/KI trigger
-    // flag — otherwise fall back to the plain whitelist check.
+    // Same 'identification'-is-ambiguous tie-break as getCurrentLiveSection
+    // above — see the comment there. Keep these in sync.
     const _hasAsKiTrigger = messages.some(m => m.asKiTrigger || m.moaAsTrigger);
-    const _stillCollectingCorporateDocs = bStage === 'identification'
+    const _stageStillCollecting = bStage === 'identification'
       ? !_hasAsKiTrigger
       : !_KNOWN_POST_CORPORATE_STAGES.includes(bStage);
     const waitingOnBackend = activeChatFilter === null &&
       isCorporateDocsComplete &&
-      _stillCollectingCorporateDocs;
+      _stageStillCollecting;
 
     if (!waitingOnBackend) return undefined;
 
@@ -979,7 +938,7 @@ const AIAssistant = () => {
     }, 2000);
 
     return () => clearInterval(id);
-  }, [isCorporateDocsComplete, backendStage, activeChatFilter, fetchGroundTruth, messages]);
+  }, [isCorporateDocsComplete, backendStage, activeChatFilter, fetchGroundTruth]);
 
 
 
@@ -990,7 +949,7 @@ const AIAssistant = () => {
     const isPackageFinalized = !!productPackageData;
 
     if (!isIdentityVerified || !isPackageFinalized) {
-      logger.log('[COMPLETE] Suppressed: Verification or package pending', { isIdentityVerified, isPackageFinalized });
+      console.log('[COMPLETE] Suppressed: Verification or package pending', { isIdentityVerified, isPackageFinalized });
       return;
     }
 
@@ -1002,7 +961,7 @@ const AIAssistant = () => {
     const completionMsg = {
       id: 'onboarding-complete-final', // Use a stable ID to help preventing duplicates
       role: 'assistant',
-      content: t('chat.submittedWithRef', { ref: currentRef || 'XXXX' }),
+      content: `Your registration documents have been submitted successfully and are now being processed.\n\nNote: This is your reference number: ${currentRef || 'XXXX'}`,
       type: 'text',
       timestamp: new Date().toISOString(),
       isSuccess: true,
@@ -1111,7 +1070,7 @@ const AIAssistant = () => {
   useEffect(() => {
     const prereqsMet = !!productPackageData;
     if (!isDeclarationEnabled && !isOnboardingComplete && prereqsMet) {
-      logger.log('[FLOW] Auto-enabling Self Declaration phase (productPackage confirmed)');
+      console.log('[FLOW] Auto-enabling Self Declaration phase (productPackage confirmed)');
       setIsDeclarationEnabled(true);
       setActiveChatFilter('declaration');
       // Automatically open sidebar for declaration
@@ -1255,7 +1214,7 @@ const AIAssistant = () => {
           if (targetIdx === -1) return prev;
 
           newMsgs[targetIdx] = { ...newMsgs[targetIdx], ownershipTypeTrigger: true };
-          logger.log('[INIT] Restored pending OwnershipTypeCard from ground-truth status');
+          console.log('[INIT] Restored pending OwnershipTypeCard from ground-truth status');
           return newMsgs;
         });
       }
@@ -1295,7 +1254,7 @@ const AIAssistant = () => {
             }
           }
           newMsgs[targetIdx] = patch;
-          logger.log('[INIT] Restored pending AS/KI role card from ground-truth status:', source, members);
+          console.log('[INIT] Restored pending AS/KI role card from ground-truth status:', source, members);
           return newMsgs;
         });
       }
@@ -1310,7 +1269,7 @@ const AIAssistant = () => {
           if (targetIdx === -1) return prev;
 
           newMsgs[targetIdx] = { ...newMsgs[targetIdx], productPackageTrigger: true };
-          logger.log('[INIT] Restored pending Product Package card from ground-truth status');
+          console.log('[INIT] Restored pending Product Package card from ground-truth status');
           return newMsgs;
         });
       }
@@ -1328,7 +1287,7 @@ const AIAssistant = () => {
           if (targetIdx === -1) return prev;
 
           newMsgs[targetIdx] = { ...newMsgs[targetIdx], kiLoopPrompt: true };
-          logger.log('[INIT] Restored pending KiLoopCard from ground-truth status');
+          console.log('[INIT] Restored pending KiLoopCard from ground-truth status');
           return newMsgs;
         });
       }
@@ -1353,7 +1312,7 @@ const AIAssistant = () => {
             aiKiDocumentId: rd.document_id,
             aiKiCaptured: false,
           };
-          logger.log('[INIT] Restored pending KiRoleAssignCard from ground-truth status');
+          console.log('[INIT] Restored pending KiRoleAssignCard from ground-truth status');
           return newMsgs;
         });
       }
@@ -1378,7 +1337,7 @@ const AIAssistant = () => {
             kiDetailsRole: dd.role,
             kiDetailsCaptured: false,
           };
-          logger.log('[INIT] Restored pending KiDetailsCard from ground-truth status');
+          console.log('[INIT] Restored pending KiDetailsCard from ground-truth status');
           return newMsgs;
         });
       }
@@ -1400,7 +1359,7 @@ const AIAssistant = () => {
             extractedBiz: md.extracted_business || null,
             open: true,
           }));
-          logger.log('[INIT] Restored pending mismatch role modal from ground-truth status');
+          console.log('[INIT] Restored pending mismatch role modal from ground-truth status');
         }
       }
 
@@ -1464,7 +1423,7 @@ const AIAssistant = () => {
         pendingData_?.self_declaration_pending
       );
     } catch (e) {
-      logger.error('[INIT] Failed to restore compliance state', e);
+      console.error('[INIT] Failed to restore compliance state', e);
       // Not "nothing pending" — "we do not know". Returning false keeps the
       // poll alive so a transient network failure does not end it early.
       return false;
@@ -1484,160 +1443,10 @@ const AIAssistant = () => {
     // polling effect on every render.
   }, [user?.email, mismatch.roleConfirmed]);
 
-  // (preferredLanguage persistence now lives in LanguageContext.setLanguage)
-
-  // ── Phase 2 (docs/language-mirroring-verdict.html): re-translate history
-  // on an actual toggle switch ─────────────────────────────────────────────
-  // Phase 0/1 only cover messages from this point forward (the user's next
-  // send, and every new AI reply); this is what makes switching mid-
-  // conversation flip everything already on screen too. Guarded so it never
-  // fires on mount or before the initial history has loaded — only on a
-  // real change to globalLanguage after that.
-  //
-  // Re-fetches conversation-logs with `?language=` and rebuilds `messages`
-  // via transformLogToMessage() — the same function initializeChat() uses to
-  // build the message list on resume/reload — rather than patching messages
-  // in place, since that function already reconstructs every card/trigger
-  // flag from each row's metadata and this keeps both paths in sync by
-  // construction.
-  //
-  // BUGFIX (previously: "left untouched here"): the rebuilt array was
-  // originally swapped in as-is, leaving currentStepId/validatedDocs/
-  // isOnboardingComplete pointing at the discarded pre-switch message
-  // objects, and dropping each message's UI-only completion flags
-  // (asSelectionCompleted, kiLoopCompleted, kiLoopChoice, aiKiCaptured,
-  // isFatcaConfirmed). That was the root cause of "KI cards break after
-  // switching language mid-flow, including back in English" — the flow
-  // wasn't actually broken, it was reading stale/incomplete state pointed
-  // at message objects that no longer existed. Both are now carried
-  // forward / re-derived below, by id, using the same rule initializeChat()
-  // uses on first load.
-  const previousGlobalLanguageRef = useRef(globalLanguage);
-  // A request that was already in flight when the user switched language
-  // (uploads take 20–40 s) answers in the language it was SENT in. The api
-  // client flags that (event 'i18n:stale-response', see api/client.js); we
-  // then re-run this same history re-sync once so the late reply is shown in
-  // the current language too (catalog rows swap instantly).
-  const [staleResyncNonce, setStaleResyncNonce] = useState(0);
-  const lastStaleNonceRef = useRef(0);
   useEffect(() => {
-    let timer = null;
-    const onStale = () => {
-      clearTimeout(timer);
-      // debounce: a bulk upload can finish several calls back to back
-      timer = setTimeout(() => setStaleResyncNonce((x) => x + 1), 600);
-    };
-    window.addEventListener('i18n:stale-response', onStale);
-    return () => { clearTimeout(timer); window.removeEventListener('i18n:stale-response', onStale); };
-  }, []);
-  useEffect(() => {
-    const previousLanguage = previousGlobalLanguageRef.current;
-    previousGlobalLanguageRef.current = globalLanguage;
-    const staleResync = staleResyncNonce !== lastStaleNonceRef.current;
-    lastStaleNonceRef.current = staleResyncNonce;
-
-    if (previousLanguage === globalLanguage && !staleResync) return; // mount, not a real switch
-    if (!hasInitialized.current || !user?.email) return; // history not loaded yet
-    if (messages.length === 0) return; // nothing to re-translate
-
-    let cancelled = false;
-
-    (async () => {
-      setIsTranslatingHistory(true);
-      try {
-        logger.log('[LANGUAGE] History switch:', previousLanguage, '->', globalLanguage);
-        const historyResp = await getConversationLogs(user.email, {
-          limit: 100,
-          channel: 'chat',
-          language: globalLanguage,
-        }, { skipAuthRedirect: true });
-        if (cancelled) return;
-
-        const logs = historyResp.data?.logs || [];
-        if (logs.length > 0) {
-          const rebuilt = logs.slice().reverse().map(log => transformLogToMessage(log));
-
-          // BUGFIX (language-switch state desync): transformLogToMessage()
-          // rebuilds each message fresh from its raw stored log/metadata —
-          // it does not know about the UI-only completion flags
-          // (asSelectionCompleted, kiLoopCompleted, kiLoopChoice,
-          // aiKiCaptured, isFatcaConfirmed) that initializeChat's healing
-          // pass or later interactions attached to the *previous* message
-          // objects by id. Dropping them here is what made the KI/AS/FATCA
-          // cards re-render as if incomplete right after a language switch,
-          // even though nothing about onboarding progress actually changed —
-          // only the display language did. Carry them forward by id.
-          const prevById = new Map(messages.map(m => [m.id, m]));
-          const mergedById = rebuilt.map((m) => {
-            const prev = prevById.get(m.id);
-            if (!prev) return m;
-            return {
-              ...m,
-              // `||`: never let a missing in-memory flag erase one the rebuilt
-              // message already restored from its stored metadata.
-              asSelectionCompleted: prev.asSelectionCompleted || m.asSelectionCompleted,
-              kiLoopCompleted: prev.kiLoopCompleted || m.kiLoopCompleted,
-              kiLoopChoice: prev.kiLoopChoice || m.kiLoopChoice,
-              aiKiCaptured: prev.aiKiCaptured || m.aiKiCaptured,
-              isFatcaConfirmed: prev.isFatcaConfirmed || m.isFatcaConfirmed,
-            };
-          });
-          // Id-merge alone misses cards completed moments ago: those were
-          // live messages with client-side ids that never match their stored
-          // rows. deriveCardState re-derives completion from the history.
-          const merged = deriveCardState(mergedById);
-
-          setMessages(merged);
-
-          // Re-derive progression state from the merged (correctly-flagged)
-          // messages, using the exact same rule initializeChat() uses on
-          // first load (see RESTORE ONBOARDING PROGRESSION STATE above).
-          // Without this, currentStepId/isOnboardingComplete/validatedDocs
-          // kept pointing at the pre-switch message objects this effect just
-          // replaced — the active card stopped matching currentStepId and
-          // the flow silently froze on the current step until a full reload.
-          const lastProgressionId = [...merged]
-            .reverse()
-            .find(m => m.nextDocument || m.remainingDocuments || m.onboardingComplete)?.id;
-          if (lastProgressionId) {
-            setCurrentStepId(lastProgressionId);
-          }
-          if (merged.length > 0 && merged[merged.length - 1].onboardingComplete) {
-            setIsOnboardingComplete(true);
-          }
-          const historicalValidatedDocs = merged
-            .filter(msg => msg.documentMetadata && msg.tamperingStatus === 'ACCEPT')
-            .map(msg => ({
-              id: msg.id,
-              type: msg.documentType || 'unknown',
-              name: msg.documentMetadata.name,
-              timestamp: msg.timestamp,
-              filePath: msg.documentMetadata.filePath,
-              extractedData: msg.extractedData,
-              previewUrl: msg.documentMetadata.previewUrl
-            }));
-          setValidatedDocs(historicalValidatedDocs);
-
-          logger.log('[LANGUAGE] History re-rendered in', globalLanguage);
-        }
-      } catch (error) {
-        // Fail open — leave the conversation exactly as it was rather than
-        // clearing it over a translation hiccup. Same convention as the
-        // backend's own detect_and_translate_input()/translate_stored_message().
-        logger.error('[LANGUAGE] Failed to re-fetch history at', globalLanguage, error);
-      } finally {
-        if (!cancelled) setIsTranslatingHistory(false);
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-    };
-    // Deliberately only watches globalLanguage — messages/user are read from
-    // the closure at fire time, not depended on, or every new message would
-    // re-trigger this.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [globalLanguage, staleResyncNonce]);
+    localStorage.setItem('preferredLanguage', selectedLanguage);
+    console.log('[LANGUAGE] Saved to localStorage:', selectedLanguage);
+  }, [selectedLanguage]);
 
   const successDocs = useMemo(() => {
     // Collect all unique validated documents from messages, keeping only the latest of each type
@@ -1667,7 +1476,7 @@ const AIAssistant = () => {
           return dType.includes(mType) || mType.includes(dType);
         });
         if (found) {
-          logger.log(`[DEBUG-SUCCESS-DOCS] Healed ${msg.documentType} using filename/type match`);
+          console.log(`[DEBUG-SUCCESS-DOCS] Healed ${msg.documentType} using filename/type match`);
           effectiveExtracted = found.extracted_fields || found.extracted_data;
         }
       }
@@ -1686,7 +1495,7 @@ const AIAssistant = () => {
           return dType.includes(mType) || mType.includes(dType);
         });
         if (found) {
-          logger.log(`[DEBUG-SUCCESS-DOCS] Healed Metadata for ${msg.documentType}`);
+          console.log(`[DEBUG-SUCCESS-DOCS] Healed Metadata for ${msg.documentType}`);
           effectiveMetadata = {
             name: found.filename || found.name || 'Document',
             type: found.document_type,
@@ -1771,7 +1580,7 @@ const AIAssistant = () => {
     // 🛡️ HEALING: Reconstruct members list from history if membersInfo is missing or incomplete
     let effectiveMembersInfo = membersInfo;
     if (!effectiveMembersInfo?.all_members || effectiveMembersInfo.all_members.length === 0) {
-      logger.log('[DEBUG-HEAL] Scanning', messages.length, 'messages for historical member lists...');
+      console.log('[DEBUG-HEAL] Scanning', messages.length, 'messages for historical member lists...');
       const historyMsg = [...messages].reverse().find(m => {
         const hasList = (m.moaMembers && m.moaMembers.length > 0) ||
           (m.membersList && m.membersList.length > 0) ||
@@ -1796,7 +1605,7 @@ const AIAssistant = () => {
           historyMsg.extractedData?.directors_and_shareholders ||
           historyMsg.extractedData?.partners || [];
 
-        logger.log('[DEBUG-HEAL] FOUND LIST in message:', historyMsg.id, 'Count:', healedList.length);
+        console.log('[DEBUG-HEAL] FOUND LIST in message:', historyMsg.id, 'Count:', healedList.length);
 
         effectiveMembersInfo = {
           ...(effectiveMembersInfo || {}),
@@ -1819,7 +1628,7 @@ const AIAssistant = () => {
             return ext.full_name || ext.fullName || ext.Name || ext.name || 'Individual';
           });
 
-          logger.log('[DEBUG-HEAL] DERIVED list from verified identity documents. Count:', derivedList.length);
+          console.log('[DEBUG-HEAL] DERIVED list from verified identity documents. Count:', derivedList.length);
 
           effectiveMembersInfo = {
             ...(effectiveMembersInfo || {}),
@@ -1829,13 +1638,13 @@ const AIAssistant = () => {
             verified_members: derivedList
           };
         } else {
-          logger.log('[DEBUG-HEAL] No historical member list OR identity documents found');
+          console.log('[DEBUG-HEAL] No historical member list OR identity documents found');
         }
       }
     }
 
     if (effectiveMembersInfo && effectiveMembersInfo.all_members && effectiveMembersInfo.all_members.length > 0) {
-      logger.log('[SIDEBAR-DEBUG] Registered Individuals Healed Data:', effectiveMembersInfo);
+      console.log('[SIDEBAR-DEBUG] Registered Individuals Healed Data:', effectiveMembersInfo);
       // ✅ ROBUST SYNC: Build a combined ownership map scanning message history (Multiple + Single Owner)
 
       const ownershipMap = {};
@@ -1929,8 +1738,8 @@ const AIAssistant = () => {
         }
       });
 
-      logger.log('[DEBUG-HISTORY-ROLES] Aggregated roles:', messageRoles);
-      logger.log('[DEBUG-KI-CONTACT-MAP] Aggregated contact map:', kiContactMap);
+      console.log('[DEBUG-HISTORY-ROLES] Aggregated roles:', messageRoles);
+      console.log('[DEBUG-KI-CONTACT-MAP] Aggregated contact map:', kiContactMap);
 
       items.push({
         id: 'registered-individuals-report',
@@ -1971,9 +1780,9 @@ const AIAssistant = () => {
     const hasPackageInReport = allReportItems.some(i => (i.documentType || '').toLowerCase() === 'product_package');
     const declarationItems = (isDeclarationEnabled || hasPackageInReport) ? [{ documentType: 'SUMMARY_DECLARATION', isVirtual: true }] : [];
 
-    logger.log('[DEBUG-CATEGORIES] Corporate:', corporateItems.length, 'User:', userItems.length, 'Additional:', additionalItems.length);
-    logger.log('[DEBUG-CATEGORIES] User Items DocumentTypes:', userItems.map(i => i.documentType));
-    logger.log('[DEBUG-CATEGORIES] Declaration:', declarationItems.length, '(isDeclarationEnabled:', isDeclarationEnabled, ', hasPackageInReport:', hasPackageInReport, ')');
+    console.log('[DEBUG-CATEGORIES] Corporate:', corporateItems.length, 'User:', userItems.length, 'Additional:', additionalItems.length);
+    console.log('[DEBUG-CATEGORIES] User Items DocumentTypes:', userItems.map(i => i.documentType));
+    console.log('[DEBUG-CATEGORIES] Declaration:', declarationItems.length, '(isDeclarationEnabled:', isDeclarationEnabled, ', hasPackageInReport:', hasPackageInReport, ')');
 
     return [
       { title: 'Business Details', items: corporateItems, icon: Building },
@@ -2005,9 +1814,9 @@ const AIAssistant = () => {
     return (
       <div className="mb-8 px-1">
         <div className="flex items-center justify-between mb-4">
-          <h3 className="text-[11px] font-black text-slate-400 uppercase tracking-[0.2em]">{t('ui.verificationHub')}</h3>
+          <h3 className="text-[11px] font-black text-slate-400 uppercase tracking-[0.2em]">Verification Hub</h3>
           <span className="text-[11px] font-black text-brand-primary bg-blue-50 px-3 py-1 rounded-full border border-blue-100/50">
-            {t('ui.categoriesComplete', { count: totalVerifiedCount, total: items.length })}
+            {totalVerifiedCount}/{items.length} CATEGORIES COMPLETE
           </span>
         </div>
         <div className="grid grid-cols-1 gap-2.5">
@@ -2033,7 +1842,7 @@ const AIAssistant = () => {
                     </div>
                     <div>
                       <h4 className={`text-[13px] font-black tracking-tight mb-0.5 ${isDone ? 'text-slate-900' : 'text-slate-700'}`}>
-                        {t(`report.checklist.${item.key}`) || item.label}
+                        {item.label}
                       </h4>
                       <div className="flex items-center gap-2">
                         {isDone ? (
@@ -2041,29 +1850,29 @@ const AIAssistant = () => {
                             <CheckCircle className="h-3 w-3" />
                             {isIdentity ? (() => {
                               if (membersInfo) {
-                                return t('report.checklist.membersVerified', { count: isDone ? membersInfo.total : membersInfo.verified, total: membersInfo.total });
+                                return `${isDone ? membersInfo.total : membersInfo.verified}/${membersInfo.total} Members Verified`;
                               }
                               const moaMessage = [...messages].reverse().find(m => (m.moaMembers && m.moaMembers.length > 0) || (m.membersList && m.membersList.length > 0));
                               const total = moaMessage?.moaMembers?.length || moaMessage?.membersList?.length || 1;
                               const count = isDone ? total : Math.min(idCount, total);
-                              return total > 1 ? t('report.checklist.membersVerified', { count, total }) : t('report.verified');
-                            })() : t('report.verified')}
+                              return total > 1 ? `${count}/${total} Members Verified` : 'Verified';
+                            })() : 'Verified'}
                           </span>
                         ) : status[item.key] === 'progress' ? (
                           <span className="text-[10px] font-black text-brand-primary uppercase tracking-widest flex items-center gap-1">
                             <Clock className="h-3 w-3 animate-pulse" />
                             {isIdentity ? (() => {
                               if (membersInfo) {
-                                return t('report.checklist.members', { count: membersInfo.verified, total: membersInfo.total });
+                                return `${membersInfo.verified}/${membersInfo.total} Members`;
                               }
                               const moaMessage = [...messages].reverse().find(m => (m.moaMembers && m.moaMembers.length > 0) || (m.membersList && m.membersList.length > 0));
                               const total = moaMessage?.moaMembers?.length || moaMessage?.membersList?.length || 1;
-                              return total > 1 ? t('report.checklist.members', { count: idCount, total }) : t('report.checklist.inProgress');
-                            })() : t('report.checklist.inProgress')}
+                              return total > 1 ? `${idCount}/${total} Members` : 'In Progress';
+                            })() : 'In Progress'}
                           </span>
                         ) : (
                           <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                            {t('report.checklist.pendingSubmission')}
+                            Pending Submission
                           </span>
                         )}
                       </div>
@@ -2105,24 +1914,18 @@ const AIAssistant = () => {
         ? JSON.parse(log.metadata)
         : (log.metadata || {});
     } catch (e) {
-      logger.error('[TRANSFORM] Metadata parse error:', e);
+      console.error('[TRANSFORM] Metadata parse error:', e);
     }
 
     const message = {
       id: log.id, // Add log ID to message
       role: log.role === 'agent' ? 'assistant' : 'user',
       content: log.message,
-      // Stable text for routing/parsing logic, independent of display language:
-      // the catalog's English rendering, else the stored original (the backend
-      // returns it next to a translated `message`), else the message itself.
-      logicText: metadata.i18n?.english || log.original_message || log.message,
       timestamp: log.timestamp
     };
 
     if (log.role === 'agent') {
-      // Parse ownership shares from the untranslated text (names/percentages
-      // are data; an LLM translation could reshape the list lines).
-      let rawMsg = log.original_message || log.message || '';
+      let rawMsg = log.message || '';
       let ownershipMap = {};
 
       const ownershipRegex = /\d+\.\s+(?:\*\*)?(.+?)(?:\*\*)?\s*[-—–]\s*([0-9.]+%)/gi;
@@ -2138,10 +1941,17 @@ const AIAssistant = () => {
         message.ownershipMap = ownershipMap;
       }
 
-      // Strip the Registered Individuals / Final Members / beneficial-owner
-      // lists (any language) — utils/i18nText.js. The lists are shown from
-      // data by the cards.
-      message.content = stripMemberLists(message.content, t('chat.membersListedBelow'));
+      // Also clean "Registered Individuals" list if present
+      const registeredListRegex = /(?:\*\*)?Registered Individuals:(?:\*\*)?[\s\S]*?(?=\n\r?\n|Please complete|enough other|$)/gi;
+      if (registeredListRegex.test(message.content)) {
+        message.content = message.content.replace(registeredListRegex, '\n').replace(/\n{3,}/g, '\n\n').trim();
+      }
+
+      // Also clean MOA beneficial owners list if present
+      const moaListRegex = /verification is required for the following beneficial owners:[\s\S]*?(?=\n\r?\n|Please confirm|$)/gi;
+      if (moaListRegex.test(message.content)) {
+        message.content = message.content.replace(moaListRegex, 'verification is required for the members listed below:').replace(/\n{3,}/g, '\n\n').trim();
+      }
     }
 
     const messageType = metadata.message_type;
@@ -2182,16 +1992,16 @@ const AIAssistant = () => {
         // Remove any trailing newlines or whitespace
         cleanedContent = cleanedContent.replace(/\n\s*$/, '').trim();
 
-        logger.log('[TRANSFORM] ✅ Extracted and cleaned reference ID from message');
+        console.log('[TRANSFORM] ✅ Extracted and cleaned reference ID from message');
       }
 
       // Update message content with cleaned version
       message.content = cleanedContent;
     }
 
-    logger.log(`[TRANSFORM] Message ID: ${log.id}, Role: ${log.role}, Type: ${messageType}, Metadata Keys: ${Object.keys(metadata).join(', ')}`);
+    console.log(`[TRANSFORM] Message ID: ${log.id}, Role: ${log.role}, Type: ${messageType}, Metadata Keys: ${Object.keys(metadata).join(', ')}`);
     if (metadata.extracted_fields || metadata.extracted_data) {
-      logger.log(`[TRANSFORM] ✅ Extracted data found in metadata for ID: ${log.id}`);
+      console.log(`[TRANSFORM] ✅ Extracted data found in metadata for ID: ${log.id}`);
     }
 
 
@@ -2400,16 +2210,16 @@ const AIAssistant = () => {
 
   const initializeChat = useCallback(async () => {
     if (hasInitialized.current) {
-      logger.log('[INIT] Chat already initialized, skipping');
+      console.log('[INIT] Chat already initialized, skipping');
       return;
     }
 
-    logger.log(`[INIT] Starting chat initialization (mountId=${mountIdRef.current})`);
-    logger.log('[INIT] User email:', user?.email);
-    logger.log('[INIT] Selected language:', selectedLanguage);
+    console.log(`[INIT] Starting chat initialization (mountId=${mountIdRef.current})`);
+    console.log('[INIT] User email:', user?.email);
+    console.log('[INIT] Selected language:', selectedLanguage);
 
     if (!user?.email) {
-      logger.log('[INIT] No user email');
+      console.log('[INIT] No user email');
       return;
     }
 
@@ -2417,24 +2227,15 @@ const AIAssistant = () => {
       hasInitialized.current = true;
       setIsLoading(true);
 
-      // First login on this browser (no local choice): adopt the language
-      // saved on the account before the conversation starts, so the welcome
-      // and history arrive in it. No-op when a local choice exists.
-      let initLanguage = selectedLanguage;
-      try {
-        const accountLanguage = syncFromAccount ? await syncFromAccount(user.email) : null;
-        if (accountLanguage) initLanguage = accountLanguage;
-      } catch (e) { /* fail open */ }
-
-      logger.log('[INIT] Calling start-conversation with language:', initLanguage);
+      console.log('[INIT] Calling start-conversation with language:', selectedLanguage);
 
       const startResp = await startConversation({
         email: user.email,
-        language: initLanguage
+        language: selectedLanguage
       });
 
-      logger.log('[INIT] Backend response received');
-      logger.log('[INIT] should_resume:', startResp.data.should_resume);
+      console.log('[INIT] Backend response received');
+      console.log('[INIT] should_resume:', startResp.data.should_resume);
 
       // Update backend state tracking
       if (startResp.data.stage) setBackendStage(startResp.data.stage);
@@ -2449,27 +2250,19 @@ const AIAssistant = () => {
         // reload/relogin, including anything the user sent after completion. Loading
         // history the same way as should_resume fixes that; it does not yet do anything
         // extra with existing_ref/ref_prompt itself.
-        logger.log('[INIT] Returning user - loading history');
+        console.log('[INIT] Returning user - loading history');
 
-        // BUGFIX: this passed `{ params: {...} }`, but getConversationLogs()
-        // already wraps its 2nd argument in `params`, so limit/channel went
-        // out as params[limit]=... and were ignored — and no `language` was
-        // sent at all, so a reload / re-login in Arabic or Spanish got the
-        // history back in whatever language each row was stored in.
         const historyResp = await getConversationLogs(user.email, {
-          limit: 100, channel: 'chat', language: initLanguage,
+          params: { limit: 100, channel: 'chat' }
         });
 
-        logger.log('[BACKEND-DEBUG] /conversation-logs/ response:', historyResp.data);
+        console.log('[BACKEND-DEBUG] /conversation-logs/ response:', historyResp.data);
 
         if (historyResp.data?.logs && historyResp.data.logs.length > 0) {
 
-          // deriveCardState: card completion (AS card, "Add More
-          // Individuals?", FATCA) comes from the stored history itself, so a
-          // reload / re-login in any language restores the same card state.
-          const loadedMessages = deriveCardState(historyResp.data.logs
+          const loadedMessages = historyResp.data.logs
             .reverse()
-            .map(log => transformLogToMessage(log)));
+            .map(log => transformLogToMessage(log));
 
           setMessages(loadedMessages);
 
@@ -2507,7 +2300,7 @@ const AIAssistant = () => {
             .reverse()
             .find(m => m.nextDocument || m.remainingDocuments || m.onboardingComplete)?.id;
           if (lastProgressionId) {
-            logger.log('[INIT] Restoring currentStepId:', lastProgressionId);
+            console.log('[INIT] Restoring currentStepId:', lastProgressionId);
             setCurrentStepId(lastProgressionId);
           }
 
@@ -2534,10 +2327,10 @@ const AIAssistant = () => {
               previewUrl: msg.documentMetadata.previewUrl
             }));
           setValidatedDocs(historicalValidatedDocs);
-          logger.log('[INIT] History loaded successfully');
+          console.log('[INIT] History loaded successfully');
         }
       } else {
-        logger.log('[INIT] New user - displaying welcome message');
+        console.log('[INIT] New user - displaying welcome message');
 
         const welcomeMessage = {
           id: 'welcome-' + Date.now(), // Assign a unique ID
@@ -2548,22 +2341,24 @@ const AIAssistant = () => {
         };
 
         setMessages([welcomeMessage]);
-        logger.log('[INIT] Welcome displayed');
+        console.log('[INIT] Welcome displayed');
       }
 
     } catch (error) {
-      logger.error('[INIT] Error:', error);
+      console.error('[INIT] Error:', error);
 
       const fallbackWelcome = {
         id: 'fallback-welcome-' + Date.now(), // Assign a unique ID
         role: 'assistant',
-        content: t('chat.welcomeFallback'),
+        content: selectedLanguage === 'spanish'
+          ? `Bienvenido.\n\nSoy tu asistente de IA para la incorporación de documentos.\n\nComencemos.`
+          : `Welcome.\n\nI am your AI assistant for document onboarding.\n\nLet's get started.`,
         timestamp: new Date().toISOString(),
         isWelcome: true
       };
 
       setMessages([fallbackWelcome]);
-      toast.error(t('chat.couldNotLoadHistory'));
+      toast.error('Could not load chat history');
 
     } finally {
       setIsLoading(false);
@@ -2638,13 +2433,13 @@ const AIAssistant = () => {
         changed = await syncPendingActions();
       } catch (err) {
         // A failed sync must not kill the loop; the next pass may succeed.
-        logger.warn('[SYNC] pending-action poll failed, will retry', err);
+        console.warn('[SYNC] pending-action poll failed, will retry', err);
       }
 
       if (cancelled) return;
       if (changed) return;                              // found it, stop
       if (Date.now() - startedAt > POLL_BUDGET_MS) {    // give up, do not spin
-        logger.warn('[SYNC] no pending action surfaced within budget');
+        console.warn('[SYNC] no pending action surfaced within budget');
         return;
       }
 
@@ -2707,7 +2502,7 @@ const AIAssistant = () => {
 
     setUploadedFiles(valid);
     setUploadedFile(valid[0]);
-    toast.success(valid.length === 1 ? t('ui.fileSelected', { name: valid[0].name }) : t('ui.filesSelected', { count: valid.length }));
+    toast.success(valid.length === 1 ? `File selected: ${valid[0].name}` : `${valid.length} files selected`);
   };
 
   // ============================================================================
@@ -2716,7 +2511,7 @@ const AIAssistant = () => {
 
   const handleUploadDocument = async () => {
     if (!uploadedFile) {
-      toast.error(t('chat.selectFileFirst'));
+      toast.error('Please select a file first');
       return;
     }
 
@@ -2724,7 +2519,7 @@ const AIAssistant = () => {
     setIsLoading(true);
 
     if (showMemberInput && !memberName.trim()) {
-      toast.error(t('chat.enterMemberName'));
+      toast.error('Please enter the member name before uploading');
       return;
     }
 
@@ -2735,7 +2530,7 @@ const AIAssistant = () => {
     try {
       base64Data = await fileToBase64(uploadedFile);
     } catch (error) {
-      logger.error('[UPLOAD] Base64 conversion error:', error);
+      console.error('[UPLOAD] Base64 conversion error:', error);
     }
 
     const filename = uploadedFile.name.toLowerCase();
@@ -2755,16 +2550,14 @@ const AIAssistant = () => {
 
     // ✅ LOCK TAB: Ensure the user stays in the correct tab for the document they are uploading
     if (activeChatFilter !== inferredStage) {
-      logger.log(`[UPLOAD] Locking tab filter to: ${inferredStage}`);
+      console.log(`[UPLOAD] Locking tab filter to: ${inferredStage}`);
       setActiveChatFilter(inferredStage);
     }
 
     const userMessage = {
       id: userMessageId,
       role: 'user',
-      content: memberName
-        ? t('chat.uploadedForMember', { name: uploadedFile.name, member: memberName })
-        : t('chat.uploaded', { name: uploadedFile.name }),
+      content: `Uploaded: ${uploadedFile.name}${memberName ? ` (for ${memberName})` : ''}`,
       timestamp: new Date().toISOString(),
       isUpload: true,
       documentType: pendingReuploadType,
@@ -2796,7 +2589,7 @@ const AIAssistant = () => {
     setMessages(prev => [...prev, {
       id: progressMessageId,
       role: 'assistant',
-      content: t('chat.authenticating'),
+      content: 'Authenticating document security features...',
       timestamp: new Date().toISOString(),
       isProgress: true,
       documentType: pendingReuploadType,
@@ -2829,19 +2622,19 @@ const AIAssistant = () => {
         setPendingReuploadType(null);
       }
 
-      logger.log('[UPLOAD] Sending request with language:', selectedLanguage);
+      console.log('[UPLOAD] Sending request with language:', selectedLanguage);
 
       const response = await uploadDocument(formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
         timeout: 140000
       });
 
-      logger.log('[UPLOAD] Response received');
-      logger.log('[UPLOAD-DEBUG] response.data keys:', Object.keys(response.data));
+      console.log('[UPLOAD] Response received');
+      console.log('[UPLOAD-DEBUG] response.data keys:', Object.keys(response.data));
       if (response.data.extracted_fields || response.data.extracted_data) {
-        logger.log('[UPLOAD-DEBUG] ✅ Extracted data present in response');
+        console.log('[UPLOAD-DEBUG] ✅ Extracted data present in response');
       } else {
-        logger.log('[UPLOAD-DEBUG] ❌ Extracted data MISSING in response');
+        console.log('[UPLOAD-DEBUG] ❌ Extracted data MISSING in response');
       }
 
       setMessages(prev => prev.filter(msg => msg.id !== progressMessageId));
@@ -2851,11 +2644,11 @@ const AIAssistant = () => {
       // FIX #1: Handle REJECT (Tampering - already correct, but confirm)
       // ====================================================================
       if (response.data.tampering_detected || response.data.decision === 'REJECT') {
-        logger.log('[UPLOAD] Document REJECTED - Tampering detected');
+        console.log('[UPLOAD] Document REJECTED - Tampering detected');
 
         const reasoningMessage = response.data.message ||
           response.data.llm_analysis ||
-          t('ui.rejectedSecurity');
+          'Document rejected due to security verification failure';
 
         setMessages(prev => [...prev, {
           id: 'reject-' + Date.now(),
@@ -2868,7 +2661,7 @@ const AIAssistant = () => {
           tamperingScore: response.data.tampering_score
         }]);
 
-        toast.error(t('chat.docRejectedSecurity'));
+        toast.error('Document rejected - security verification failed');
         setUploadedFile(null);
         setUploadedFiles([]);
         if (fileInputRef.current) fileInputRef.current.value = '';
@@ -2879,11 +2672,11 @@ const AIAssistant = () => {
       // FIX #2: Handle ESCALATE (Tampering - already correct, but confirm)
       // ====================================================================
       if (response.data.manual_review_required || response.data.decision === 'ESCALATE') {
-        logger.log('[UPLOAD] Document ESCALATED - Manual review required');
+        console.log('[UPLOAD] Document ESCALATED - Manual review required');
 
         const reasoningMessage = response.data.message ||
           response.data.llm_analysis ||
-          t('ui.manualVerification');
+          'Your document requires manual verification by our security team';
 
         setMessages(prev => [...prev, {
           id: 'escalate-' + Date.now(),
@@ -2896,7 +2689,7 @@ const AIAssistant = () => {
           tamperingScore: response.data.tampering_score
         }]);
 
-        toast.warning(t('ui.manualReviewToast'));
+        toast.warning('Document requires manual review');
         setUploadedFile(null);
         setUploadedFiles([]);
         if (fileInputRef.current) fileInputRef.current.value = '';
@@ -2907,11 +2700,11 @@ const AIAssistant = () => {
       // ✅ FIX #5: Handle EXPIRY validation (NEW)
       // ====================================================================
       if (response.data.expiry_failed === true || response.data.decision === 'EXPIRED') {
-        logger.log('[UPLOAD] Document EXPIRED - validation failed');
+        console.log('[UPLOAD] Document EXPIRED - validation failed');
 
         const expiryMessage = response.data.message ||
           response.data.ai_reasoning ||
-          t('ui.expiredMsg');
+          'This document has expired. Please upload a valid document with a current expiry date.';
 
         setMessages(prev => [...prev, {
           id: 'expired-' + Date.now(),
@@ -2924,7 +2717,7 @@ const AIAssistant = () => {
           canRetry: true
         }]);
 
-        toast.error(t('chat.docExpired'));
+        toast.error('Document expired - please upload a valid document');
         setUploadedFile(null);
         setUploadedFiles([]);
         if (fileInputRef.current) fileInputRef.current.value = '';
@@ -2935,10 +2728,10 @@ const AIAssistant = () => {
       // FIX #3: Handle WRONG DOCUMENT TYPE (NEW - IMMEDIATE RED)
       // ====================================================================
       if (response.data.wrong_document_type === true) {
-        logger.log('[UPLOAD] WRONG document type uploaded');
+        console.log('[UPLOAD] WRONG document type uploaded');
 
         const errorMessage = response.data.message ||
-          t('ui.notNeededMsg');
+          `Document type not needed for your account. Please upload a required document.`;
 
         setMessages(prev => [...prev, {
           id: 'wrong-type-' + Date.now(),
@@ -2953,7 +2746,7 @@ const AIAssistant = () => {
           remainingDocuments: response.data.remaining_documents
         }]);
 
-        toast.error(t('chat.wrongDocType', { type: response.data.document_type?.toUpperCase() || '' }));
+        toast.error(`Wrong document type: ${response.data.document_type?.toUpperCase()}`);
         setUploadedFile(null);
         setUploadedFiles([]);
         if (fileInputRef.current) fileInputRef.current.value = '';
@@ -2964,10 +2757,10 @@ const AIAssistant = () => {
       // FIX #4: Handle UNKNOWN DOCUMENT TYPE (MAIN FIX - IMMEDIATE RED)
       // ====================================================================
       if (response.data.document_type === 'unknown' || (!response.data.success && !response.data.tampering_detected)) {
-        logger.log('[UPLOAD] UNKNOWN document type or processing failure');
+        console.log('[UPLOAD] UNKNOWN document type or processing failure');
 
         const errorMessage = response.data.message ||
-          t('ui.unidentifiedMsg');
+          'Document could not be identified. Please upload a required document.';
 
         setMessages(prev => [...prev, {
           id: 'unknown-doc-' + Date.now(),
@@ -2981,7 +2774,7 @@ const AIAssistant = () => {
           severity: response.data.severity || 'high'
         }]);
 
-        toast.error(t('chat.docNotIdentified'));
+        toast.error('Document could not be identified');
         setUploadedFile(null);
         setUploadedFiles([]);
         if (fileInputRef.current) fileInputRef.current.value = '';
@@ -2991,7 +2784,7 @@ const AIAssistant = () => {
       // ====================================================================
       // SUCCESS: Document processed and valid
       // ====================================================================
-      logger.log('[UPLOAD] SUCCESS - Document processed');
+      console.log('[UPLOAD] SUCCESS - Document processed');
 
       const successMessageId = 'success-' + Date.now();
 
@@ -3006,7 +2799,7 @@ const AIAssistant = () => {
       // (Ejari/MOA verified). See the ground-truth restoration block below,
       // mirrored on the same pattern as the AS/KI role card.
 
-      let rawMsg = (response.data.response || response.data.message || response.data.acknowledgment || t('ui.processedOk'));
+      let rawMsg = (response.data.response || response.data.message || response.data.acknowledgment || 'Document processed successfully');
       let cleanedMsg = rawMsg;
       let ownershipMap = {};
 
@@ -3037,12 +2830,21 @@ const AIAssistant = () => {
       const listRegex = /\n?\s*\d+\.\s+(?:\*\*)?[^-]+?(?:\(UBO\))?(?:\*\*)?\s*[-—–]\s*.*?(?:[0-9.]+%|effective ownership|verified|pending).*?(?=\n\d+\.|\n\r?\n|Please complete|Please confirm|All identity|$)/gi;
       cleanedMsg = rawMsg.replace(listRegex, '\n').replace(/\n{3,}/g, '\n\n').trim();
 
-      // Strip member lists in any language (utils/i18nText.js).
-      cleanedMsg = stripMemberLists(cleanedMsg, t('chat.membersListedBelow'));
+      // Also clean "Registered Individuals" list if present
+      const registeredListRegex = /(?:\*\*)?Registered Individuals:(?:\*\*)?[\s\S]*?(?=\n\r?\n|Please complete|enough other|Please confirm|All identity|$)/gi;
+      cleanedMsg = cleanedMsg.replace(registeredListRegex, '\n').replace(/\n{3,}/g, '\n\n').trim();
 
-      logger.log('[MOA-Clean] Raw Message:', rawMsg);
-      logger.log('[MOA-Clean] Extracted Ownership:', ownershipMap);
-      logger.log('[MOA-Clean] Cleaned Message:', cleanedMsg);
+      // Also clean "Final Members List" if present
+      const finalMembersListRegex = /(?:\*\*)?Final Members List:(?:\*\*)?[\s\S]*?(?=\n\r?\n|Please complete|enough other|Please confirm|All identity|$)/gi;
+      cleanedMsg = cleanedMsg.replace(finalMembersListRegex, '\n').replace(/\n{3,}/g, '\n\n').trim();
+
+      // Also clean MOA beneficial owners list if present
+      const moaListRegex = /verification is required for the following beneficial owners:[\s\S]*?(?=\n\r?\n|Please confirm|Please complete|All identity|$)/gi;
+      cleanedMsg = cleanedMsg.replace(moaListRegex, 'verification is required for the members listed below:').replace(/\n{3,}/g, '\n\n').trim();
+
+      console.log('[MOA-Clean] Raw Message:', rawMsg);
+      console.log('[MOA-Clean] Extracted Ownership:', ownershipMap);
+      console.log('[MOA-Clean] Cleaned Message:', cleanedMsg);
 
       const successMsg = {
         id: successMessageId,
@@ -3126,7 +2928,7 @@ const AIAssistant = () => {
           const idTransitionMsg = {
             id: 'id-transition-' + Date.now(),
             role: 'assistant',
-            content: t('chat.businessDocsVerified'),
+            content: 'Your business documents are verified. Please confirm Authorised Signatories to begin Identity Verification.',
             timestamp: new Date().toISOString(),
             isStageTransition: true,
             fromStage: 'corporate_shareholder_docs',
@@ -3204,7 +3006,7 @@ const AIAssistant = () => {
 
 
 
-      toast.success(t('chat.uploadSuccess'));
+      toast.success('Document uploaded and processed successfully');
       window.dispatchEvent(new Event('compliance-updated')); // Trigger Sidebar refresh
 
       if (showMemberInput) {
@@ -3216,8 +3018,8 @@ const AIAssistant = () => {
       if (fileInputRef.current) fileInputRef.current.value = '';
 
     } catch (error) {
-      logger.error('[UPLOAD] Error:', error);
-      logger.error('[UPLOAD] Error details:', error.response?.data);
+      console.error('[UPLOAD] Error:', error);
+      console.error('[UPLOAD] Error details:', error.response?.data);
 
       // Remove progress indicator
       setMessages(prev => prev.filter(msg => msg.id !== progressMessageId));
@@ -3239,8 +3041,8 @@ const AIAssistant = () => {
       const isTimeout = error.code === 'ECONNABORTED' || /timeout/i.test(error.message || '');
       const backendDetail = error.response?.data?.detail || error.response?.data?.message;
       const errorText = isTimeout
-        ? t('ui.timeoutOne')
-        : (backendDetail || t('ui.uploadFailedOne'));
+        ? 'The document is taking longer than expected to process and the request timed out. Please try uploading it again.'
+        : (backendDetail || 'Something went wrong while uploading this document. Please try again.');
 
       toast.error(errorText);
 
@@ -3267,7 +3069,7 @@ const AIAssistant = () => {
   // happens because the file input above now allows multi-select.
   const handleBulkUpload = async () => {
     if (uploadedFiles.length < 2) {
-      toast.error(t('chat.selectMultiple'));
+      toast.error('Select more than one file to use bulk upload');
       return;
     }
 
@@ -3287,7 +3089,7 @@ const AIAssistant = () => {
     setMessages(prev => [...prev, {
       id: userMessageId,
       role: 'user',
-      content: t('chat.uploadedN', { count: filesToSend.length }),
+      content: `Uploaded: ${filesToSend.length} documents`,
       timestamp: new Date().toISOString(),
       isUpload: true,
       stage: bulkStage,
@@ -3302,7 +3104,7 @@ const AIAssistant = () => {
     setMessages(prev => [...prev, {
       id: progressMessageId,
       role: 'assistant',
-      content: t('chat.processingN', { count: filesToSend.length }),
+      content: `Processing ${filesToSend.length} documents...`,
       timestamp: new Date().toISOString(),
       isProgress: true,
       stage: bulkStage,
@@ -3338,7 +3140,7 @@ const AIAssistant = () => {
       const _identityDocTypes = ['eid', 'passport', 'identity'];
       const resultMessages = results.map((r, i) => {
         const label = r.member_name
-          ? t('chat.docLabelForMember', { type: (r.document_type || 'document').toUpperCase(), member: r.member_name })
+          ? `${(r.document_type || 'document').toUpperCase()} for ${r.member_name}`
           : (r.filename || 'document');
         let content;
         if (r.is_valid) {
@@ -3347,14 +3149,14 @@ const AIAssistant = () => {
           // back to the generic label only if that's somehow missing, rather
           // than r.message, which for a valid result is the full N/A field
           // dump this whole bulk feature deliberately keeps out of chat.
-          content = r.display_message || t('chat.docVerifiedGeneric', { label });
+          content = r.display_message || `✅ ${label} verified.`;
           if (r.name_matches_expected === false) {
-            content += ` ${t('chat.nameMismatch', { member: r.member_name })}`;
+            content += ` This file's name didn't clearly match ${r.member_name} — double check it's the right person.`;
           }
         } else if (r.duplicate_in_batch) {
           content = `↷ ${r.filename}: ${r.message}`;
         } else {
-          content = `❌ ${r.filename || label}: ${r.message || t('chat.couldNotBeVerified')}`;
+          content = `❌ ${r.filename || label}: ${r.message || 'could not be verified'}`;
         }
         const isPrematureIdentityDoc =
           bulkStage === 'corporate' && _identityDocTypes.includes((r.document_type || '').toLowerCase());
@@ -3410,7 +3212,7 @@ const AIAssistant = () => {
       setMessages(prev => [...prev, ...resultMessages]);
 
       const validCount = results.filter(r => r.is_valid).length;
-      toast.success(t('chat.nOfMVerified', { valid: validCount, total: results.length }));
+      toast.success(`${validCount} of ${results.length} document(s) verified`);
       window.dispatchEvent(new Event('compliance-updated'));
 
       // Ground-truth refresh — the same mechanism the single-file path and
@@ -3421,15 +3223,15 @@ const AIAssistant = () => {
       await syncPendingActions();
 
     } catch (error) {
-      logger.error('[BULK-UPLOAD] Error:', error);
+      console.error('[BULK-UPLOAD] Error:', error);
 
       setMessages(prev => prev.filter(msg => msg.id !== progressMessageId));
 
       const isTimeout = error.code === 'ECONNABORTED' || /timeout/i.test(error.message || '');
       const backendDetail = error.response?.data?.detail || error.response?.data?.message;
       const errorText = isTimeout
-        ? t('ui.timeoutMany')
-        : (backendDetail || t('ui.uploadFailedMany'));
+        ? 'These documents are taking longer than expected to process and the request timed out. Please try again.'
+        : (backendDetail || 'Something went wrong while uploading these documents. Please try again.');
 
       toast.error(errorText);
 
@@ -3452,7 +3254,7 @@ const AIAssistant = () => {
 
   const handleSendMessage = useCallback(async () => {
     if (!input.trim()) {
-      toast.error(t('chat.enterMessage'));
+      toast.error('Please enter a message');
       return;
     }
 
@@ -3469,7 +3271,7 @@ const AIAssistant = () => {
     setIsLoading(true);
 
     try {
-      logger.log('[CHAT] Sending message in language:', selectedLanguage);
+      console.log('[CHAT] Sending message in language:', selectedLanguage);
 
       const response = await sendChatMessage({
         email: user.email,
@@ -3481,27 +3283,13 @@ const AIAssistant = () => {
           timestamp: msg.timestamp
         }))
       });
-      logger.log('[BACKEND-DEBUG] /chat-conversational/ response:', response.data);
+      console.log('[BACKEND-DEBUG] /chat-conversational/ response:', response.data);
 
 
       const rd = response.data;
-      logger.log('[CHAT-DEBUG] rd keys:', Object.keys(rd || {}));
+      console.log('[CHAT-DEBUG] rd keys:', Object.keys(rd || {}));
       if (rd && (rd.extracted_fields || rd.extracted_data)) {
-        logger.log('[CHAT-DEBUG] ✅ Extracted data present in rd');
-      }
-
-      // ── Phase 1 (chat-language-mirroring-plan.html / language-mirroring-verdict.html):
-      // the backend may have detected the user actually typed in a different
-      // language than the active toggle and translated it before answering.
-      // Patch the bubble we already rendered optimistically, in place, by id
-      // — rather than re-sending the message or rebuilding the send flow.
-      if (rd && rd.was_translated && rd.translated_message) {
-        logger.log('[CHAT] User message translated:', rd.detected_language, '->', selectedLanguage);
-        setMessages(prev => prev.map(m => (
-          m.id === userMessageId
-            ? { ...m, content: rd.translated_message, wasTranslated: true, detectedLanguage: rd.detected_language }
-            : m
-        )));
+        console.log('[CHAT-DEBUG] ✅ Extracted data present in rd');
       }
 
       const agentMessageId = 'agent-msg-' + Date.now();
@@ -3538,7 +3326,7 @@ const AIAssistant = () => {
 
 
 
-        logger.log('[CHAT] Verification response received');
+        console.log('[CHAT] Verification response received');
         return;
       }
 
@@ -3575,12 +3363,21 @@ const AIAssistant = () => {
         const listRegex = /\n?\s*\d+\.\s+(?:\*\*)?[^-]+?(?:\(UBO\))?(?:\*\*)?\s*[-—–]\s*.*?(?:[0-9.]+%|effective ownership|verified|pending).*?(?=\n\d+\.|\n\r?\n|Please complete|Please confirm|All identity|$)/gi;
         cleanedMsg = rawMsg.replace(listRegex, '\n').replace(/\n{3,}/g, '\n\n').trim();
 
-        // Strip member lists in any language (utils/i18nText.js).
-        cleanedMsg = stripMemberLists(cleanedMsg, t('chat.membersListedBelow'));
+        // Also clean "Registered Individuals" list if present
+        const registeredListRegex = /(?:\*\*)?Registered Individuals:(?:\*\*)?[\s\S]*?(?=\n\r?\n|Please complete|enough other|Please confirm|All identity|$)/gi;
+        cleanedMsg = cleanedMsg.replace(registeredListRegex, '\n').replace(/\n{3,}/g, '\n\n').trim();
 
-        logger.log('[CHAT-Clean] Raw Message:', rawMsg);
-        logger.log('[CHAT-Clean] Extracted Ownership:', ownershipMap);
-        logger.log('[CHAT-Clean] Cleaned Message:', cleanedMsg);
+        // Also clean "Final Members List" if present
+        const finalMembersListRegex = /(?:\*\*)?Final Members List:(?:\*\*)?[\s\S]*?(?=\n\r?\n|Please complete|enough other|Please confirm|All identity|$)/gi;
+        cleanedMsg = cleanedMsg.replace(finalMembersListRegex, '\n').replace(/\n{3,}/g, '\n\n').trim();
+
+        // Also clean MOA beneficial owners list if present
+        const moaListRegex = /verification is required for the following beneficial owners:[\s\S]*?(?=\n\r?\n|Please confirm|Please complete|All identity|$)/gi;
+        cleanedMsg = cleanedMsg.replace(moaListRegex, 'verification is required for the members listed below:').replace(/\n{3,}/g, '\n\n').trim();
+
+        console.log('[CHAT-Clean] Raw Message:', rawMsg);
+        console.log('[CHAT-Clean] Extracted Ownership:', ownershipMap);
+        console.log('[CHAT-Clean] Cleaned Message:', cleanedMsg);
 
         const agentMessage = {
           id: agentMessageId,
@@ -3609,7 +3406,7 @@ const AIAssistant = () => {
           agentMessage.isStageTransition = true;
           agentMessage.fromStage = 'identification';
           agentMessage.toStage = 'corporate_shareholder_docs';
-          logger.log('[CHAT] Stage transition → corporate_shareholder_docs');
+          console.log('[CHAT] Stage transition → corporate_shareholder_docs');
         }
 
         // ── Stage transition: any → member_eids ──────────────────────────
@@ -3630,7 +3427,7 @@ const AIAssistant = () => {
           agentMessage.moaAsTrigger = true;
           agentMessage.moaMembers = membersList;
           agentMessage.uboNames = rd.ubo_names || [];
-          logger.log('[CHAT] Stage transition →', agentMessage.fromStage, '→ member_eids,',
+          console.log('[CHAT] Stage transition →', agentMessage.fromStage, '→ member_eids,',
             membersList.length, 'members, UBOs:', rd.ubo_names);
           // FATCA trigger fires for Type-2 after COI+MOA analysis
           // Suppressed for Corporate accounts — inline FatcaInlineCard handles it
@@ -3642,13 +3439,15 @@ const AIAssistant = () => {
         setMessages(prev => [...prev, agentMessage]);
         setCurrentStepId(agentMessageId);
         // Removed auto-reset of filter to respect user manual selection
-        logger.log('[CHAT] Response received in', selectedLanguage);
+        console.log('[CHAT] Response received in', selectedLanguage);
       }
     } catch (error) {
-      logger.error('[CHAT] Error:', error);
-      toast.error(t('chat.sendFailed'));
+      console.error('[CHAT] Error:', error);
+      toast.error('Failed to send message');
 
-      const errorMessage = t('chat.errorTryAgain');
+      const errorMessage = selectedLanguage === 'spanish'
+        ? 'Encontré un error. Por favor, intenta de nuevo.'
+        : 'I encountered an error. Please try again.';
 
       setMessages(prev => [...prev, {
         id: 'error-msg-' + Date.now(),
@@ -3696,7 +3495,7 @@ const AIAssistant = () => {
     const confirmMsg = {
       id: confirmMsgId,
       role: 'assistant',
-      content: message || t('ui.fatcaSavedFallback'),
+      content: message || 'Your FATCA details have been saved successfully. Please proceed with uploading the remaining required documents.',
       timestamp: new Date().toISOString(),
       isFatcaConfirmed: true,
       stage: stage,
@@ -3724,7 +3523,7 @@ const AIAssistant = () => {
         {
           id: 'ownership-type-confirm-' + Date.now(),
           role: 'assistant',
-          content: ai_message || t('ui.ownershipNoted', { type: ownership_type === 'Single Owner' ? t('ui.soleProprietorship') : t('ui.jointOwnership') }),
+          content: ai_message || `Thanks — noted as ${ownership_type}. Let's continue.`,
           timestamp: new Date().toISOString(),
           stage: 'user',
         },
@@ -3781,7 +3580,7 @@ const AIAssistant = () => {
         });
         asSelectionMessage = soResp?.data?.message || null;
       } catch (e) {
-        logger.warn('[handleAsSelection] so-as-selection API call failed:', e);
+        console.warn('[handleAsSelection] so-as-selection API call failed:', e);
       }
     } else if (moaResponseData) {
       asSelectionMessage = moaResponseData.message || null;
@@ -3821,7 +3620,7 @@ const AIAssistant = () => {
       id: 'as-confirm-' + Date.now(),
       role: 'assistant',
       content: asSelectionMessage
-        || t('chat.asConfirmedFallback'),
+        || 'Authorised Signatories confirmed. Please proceed with the identity verification for each member as outlined above.',
       timestamp: new Date().toISOString(),
       stage: 'user', // Explicitly trigger the next section
       // Everyone already has a verified ID on file (reconciled from an
@@ -3875,14 +3674,19 @@ const AIAssistant = () => {
     try {
       resp = await finalizeKeyIndividualLoop({ email: user?.email });
     } catch (e) {
-      logger.warn('[KiLoop] loop-finalize failed:', e);
+      console.warn('[KiLoop] loop-finalize failed:', e);
     }
 
     const rd = resp?.data || {};
-    let displayMsg = rd.message || t('chat.allRecordedFallback');
+    let displayMsg = rd.message || 'All individuals have been recorded. Proceeding with compliance checks…';
 
-    // Strip member lists in any language (utils/i18nText.js).
-    displayMsg = stripMemberLists(displayMsg, t('chat.membersListedBelow'));
+    // Clean "Registered Individuals" list if present
+    const registeredListRegex = /(?:\*\*)?Registered Individuals:(?:\*\*)?[\s\S]*?(?=\n\r?\n|Please complete|enough other|$)/gi;
+    displayMsg = displayMsg.replace(registeredListRegex, '\n').replace(/\n{3,}/g, '\n\n').trim();
+
+    // Also clean MOA beneficial owners list if present
+    const moaListRegex = /verification is required for the following beneficial owners:[\s\S]*?(?=\n\r?\n|Please confirm|$)/gi;
+    displayMsg = displayMsg.replace(moaListRegex, 'verification is required for the members listed below:').replace(/\n{3,}/g, '\n\n').trim();
 
     const loopDoneMsg = {
       id: 'ki-loop-done-' + Date.now(),
@@ -4038,7 +3842,7 @@ const AIAssistant = () => {
 
   // eslint-disable-next-line no-unused-vars
   const handleClearChat = () => {
-    if (window.confirm(t('ui.clearChatConfirm'))) {
+    if (window.confirm('Are you sure you want to clear the chat history?')) {
       setMessages([]);
       setValidatedDocs([]); // Clear validated docs too
       setActiveDocData(null); // Clear active doc data
@@ -4073,7 +3877,7 @@ const AIAssistant = () => {
       });
 
       const confirmMsgId = 'mismatch-confirm-' + Date.now();
-      const content = res.data?.message || t('ui.mismatchAdded', { name: mismatch.extractedName, role: role === 'authorized_signatory' ? t('ui.authorizedSignatory') : t('ui.keyIndividual') });
+      const content = res.data?.message || `${mismatch.extractedName} was added to your account as an ${role.replace(/_/g, ' ')}. Please proceed with uploading their documents.`;
 
       setMessages(prev => [...prev, {
         id: confirmMsgId,
@@ -4083,10 +3887,10 @@ const AIAssistant = () => {
       }]);
       setCurrentStepId(confirmMsgId);
       setMismatch(m => ({ ...m, open: false, roleConfirmed: true }));
-      toast.success(t('chat.roleAssigned'));
+      toast.success('Member role assigned');
     } catch (e) {
-      logger.warn('[MISMATCH] Failed to assign role:', e);
-      toast.error(t('chat.roleAssignFailed'));
+      console.warn('[MISMATCH] Failed to assign role:', e);
+      toast.error('Failed to assign role');
     }
   };
 
@@ -4095,10 +3899,10 @@ const AIAssistant = () => {
   // ============================================================================
 
   const openPreview = async (doc) => {
-    logger.log('[PREVIEW] Opening document:', doc);
+    console.log('[PREVIEW] Opening document:', doc);
 
     if (doc.previewUrl && doc.previewUrl.startsWith('blob:')) {
-      logger.log('[PREVIEW] Using active session JSON blob URL');
+      console.log('[PREVIEW] Using active session JSON blob URL');
       setPreviewDocument(doc);
       setSidebarMode('preview');
       return;
@@ -4130,7 +3934,7 @@ const AIAssistant = () => {
 
     if (endpoint) {
       try {
-        logger.log('[PREVIEW] Fetching document via:', endpoint);
+        console.log('[PREVIEW] Fetching document via:', endpoint);
 
         const response = await api.get(endpoint, {
           responseType: 'blob'
@@ -4144,13 +3948,13 @@ const AIAssistant = () => {
           type: response.data.type || doc.type
         };
 
-        logger.log('[PREVIEW] Document fetched successfully');
+        console.log('[PREVIEW] Document fetched successfully');
         setPreviewDocument(previewDoc);
         setSidebarMode('preview');
 
       } catch (error) {
-        logger.error('[PREVIEW] Failed to fetch document:', error);
-        toast.error(t('chat.previewFailed'));
+        console.error('[PREVIEW] Failed to fetch document:', error);
+        toast.error('Failed to load document preview');
       }
     }
   };
@@ -4160,10 +3964,23 @@ const AIAssistant = () => {
     setPreviewDocument(null);
   };
 
-  // Language is now changed via <LanguageToggle /> (writes straight to
-  // LanguageContext); selectedLanguage above just mirrors it. The old
-  // handleLanguageChange handler that used to live here was never wired to
-  // any element — see docs/multilingual-support-plan.html, Finding 1.
+  // ============================================================================
+  // LANGUAGE CHANGE HANDLER
+  // ============================================================================
+
+  // eslint-disable-next-line no-unused-vars
+  const handleLanguageChange = (e) => {
+    const newLanguage = e.target.value;
+    console.log('[LANGUAGE] Changing from', selectedLanguage, 'to', newLanguage);
+
+    setSelectedLanguage(newLanguage);
+
+    toast.success(
+      newLanguage === 'spanish'
+        ? 'Language changed to Spanish'
+        : 'Language changed to English'
+    );
+  };
 
   // successDocs memo was here, now moved up to fix ReferenceError
 
@@ -4198,28 +4015,28 @@ const AIAssistant = () => {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-brand-primary bg-opacity-50 p-4" onClick={() => setMismatch(m => ({ ...m, open: false }))}>
           <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full overflow-hidden" onClick={e => e.stopPropagation()}>
             <div className="bg-brand-primary px-6 py-4">
-              <h2 className="text-white font-bold text-lg">{t('ui.mismatchTitle')}</h2>
-              <p className="text-amber-100 text-sm mt-0.5">{t('ui.mismatchBody')}</p>
+              <h2 className="text-white font-bold text-lg">Document Details Mismatch</h2>
+              <p className="text-amber-100 text-sm mt-0.5">Uploaded document details do not fully match your registered information.</p>
             </div>
             <div className="p-6 space-y-4">
               <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-sm space-y-1">
                 {mismatch.extractedName && (
-                  <p><span className="font-medium text-gray-700">{t('ui.extractedName')}</span> <span className="text-gray-900">{mismatch.extractedName}</span></p>
+                  <p><span className="font-medium text-gray-700">Extracted Name:</span> <span className="text-gray-900">{mismatch.extractedName}</span></p>
                 )}
                 {mismatch.extractedBiz && (
-                  <p><span className="font-medium text-gray-700">{t('ui.extractedBusiness')}</span> <span className="text-gray-900">{mismatch.extractedBiz}</span></p>
+                  <p><span className="font-medium text-gray-700">Extracted Business:</span> <span className="text-gray-900">{mismatch.extractedBiz}</span></p>
                 )}
               </div>
-              <p className="text-gray-700 text-sm font-medium">{t('ui.addIndividualAs')}</p>
+              <p className="text-gray-700 text-sm font-medium">Would you like to add this individual as:</p>
               <div className="space-y-2">
                 {[
-                  { value: 'authorized_signatory', label: t('ui.authorizedSignatory'), desc: t('ui.authorizedSignatoryDesc') },
-                  { value: 'key_individual', label: t('ui.keyIndividual'), desc: t('ui.keyIndividualDesc') },
+                  { value: 'authorized_signatory', label: 'Authorized Signatory', desc: 'Can sign on behalf of the company' },
+                  { value: 'key_individual', label: 'Key Individual', desc: 'Relevant person in the business structure' },
                 ].map(opt => (
                   <button
                     key={opt.value}
                     onClick={() => handleMismatchRoleSelected(opt.value)}
-                    className="w-full flex items-start gap-3 p-3 rounded-lg border-2 border-gray-200 hover:border-indigo-300 text-start transition-colors hover:bg-indigo-50"
+                    className="w-full flex items-start gap-3 p-3 rounded-lg border-2 border-gray-200 hover:border-indigo-300 text-left transition-colors hover:bg-indigo-50"
                   >
                     <div className="w-4 h-4 rounded-full border-2 border-gray-400 mt-0.5 flex-shrink-0" />
                     <div>
@@ -4230,14 +4047,14 @@ const AIAssistant = () => {
                 ))}
               </div>
               <button onClick={() => setMismatch(m => ({ ...m, open: false }))} className="w-full py-2.5 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50">
-                {t('ui.cancel')}
+                Cancel
               </button>
             </div>
           </div>
         </div>
       )}
 
-      <div className={`flex-1 ml-64 rtl:ml-0 rtl:mr-64 flex bg-white relative`}>
+      <div className={`flex-1 ml-64 flex bg-white relative`}>
         {/* LEFT: Chat Section */}
         <div className={`flex flex-col h-full bg-white transition-all duration-500 ease-in-out border-r border-gray-100 ${activeDocData ? (isFinalDeclarationStep ? 'w-0 opacity-0 overflow-hidden border-none' : 'w-full lg:w-[50%]') : 'w-full'}`}>
           <div className="w-full flex flex-col h-full relative">
@@ -4245,10 +4062,13 @@ const AIAssistant = () => {
             <header className="px-8 py-6 border-b border-gray-50 flex items-center justify-between bg-white z-10">
               <div className="flex items-center gap-3">
                 <div className="p-1 px-2 bg-gray-900 text-[10px] font-black text-white rounded italic">R</div>
-                <h1 className="text-sm font-bold text-gray-800 tracking-tight">{t('onboarding.needHelp')}</h1>
+                <h1 className="text-sm font-bold text-gray-800 tracking-tight">Need help?</h1>
               </div>
               <div className="flex items-center gap-3">
-                <LanguageToggle />
+                <div className="flex items-center gap-2 px-3 py-1.5 bg-indigo-50 border-2 border-blue-100 rounded-xl text-[10px] font-black text-indigo-700 shadow-sm shadow-indigo-100/40">
+                  <Globe className="h-3.5 w-3.5 text-brand-primary" />
+                  <span className="tracking-[0.15em] uppercase">{selectedLanguage}</span>
+                </div>
                 <div className="w-8 h-8 rounded-full bg-gray-900 flex items-center justify-center text-[10px] font-black text-white shadow-lg shadow-gray-200 border-2 border-white ring-1 ring-gray-100">
                   {getUserInitials(user)}
                 </div>
@@ -4260,24 +4080,11 @@ const AIAssistant = () => {
               className="flex-1 overflow-y-auto bg-gray-50/40 custom-scrollbar"
             >
               <div className="px-8 py-6 space-y-4">
-                {/* Phase 2 (docs/language-mirroring-verdict.html): brief banner
-                    while history is being re-fetched/re-translated after a
-                    toggle switch. On a cache hit (already translated once
-                    this conversation) the backend answers fast enough that
-                    this barely flashes -- the "instant after the first time"
-                    behaviour the plan calls for falls naturally out of that,
-                    rather than being tracked as a separate cache-hit signal. */}
-                {isTranslatingHistory && (
-                  <div className="flex items-center justify-center gap-2 text-xs text-gray-400 py-2">
-                    <RefreshCw className="h-3.5 w-3.5 animate-spin" />
-                    <span>{t('chat.translatingConversation')}</span>
-                  </div>
-                )}
                 <AnimatePresence initial={false}>
                   {sortedFilteredMessages.map((msg, fIdx) => {
                     const isAssistant = msg.role === 'assistant';
                     if (isAssistant && isIdentityTab) {
-                      logger.log(`[RENDER-DEBUG] Msg ID: ${msg.id}, hasExtractedData: ${!!msg.extractedData}, docType: ${msg.documentType}, content: ${msg.content?.substring(0, 30)}...`);
+                      console.log(`[RENDER-DEBUG] Msg ID: ${msg.id}, hasExtractedData: ${!!msg.extractedData}, docType: ${msg.documentType}, content: ${msg.content?.substring(0, 30)}...`);
                     }
 
                     const originalIndex = processedMessages.indexOf(msg);
@@ -4318,24 +4125,13 @@ const AIAssistant = () => {
                                       openPreview(msg.documentMetadata);
                                     }}
                                     className="flex-shrink-0 flex items-center justify-center p-2 bg-white/20 hover:bg-white/30 text-white rounded-xl transition-all border border-white/10 group shadow-sm"
-                                    title={t('ui.previewDocument')}
+                                    title="Preview Document"
                                   >
                                     <Eye className="h-4 w-4 group-hover:scale-110 transition-transform" />
                                   </button>
                                 )}
                               </div>
                             </div>
-                          )}
-
-                          {/* "Translated from X" caption -- Phase 1 polish, the
-                              same honest convention LinkedIn/X use so patching
-                              a user's own words in place doesn't read as a
-                              glitch. Only ever set on role:'user' messages,
-                              by the was_translated patch in handleSendMessage. */}
-                          {msg.role === 'user' && msg.wasTranslated && (
-                            <span className="text-[11px] text-gray-400 px-1">
-                              {t('ui.translatedFrom', { lang: t(`ui.${TRANSLATED_FROM_KEY[msg.detectedLanguage] || TRANSLATED_FROM_KEY.unknown}`) })}
-                            </span>
                           )}
 
                           {/* Interactive Triggers (Outside the bubble) */}
@@ -4461,7 +4257,7 @@ const AIAssistant = () => {
                                 <ProductPackageCard
                                   userEmail={user?.email}
                                   onConfirmed={(pkgData) => {
-                                    logger.log('[ProductPackage] Selected:', pkgData);
+                                    console.log('[ProductPackage] Selected:', pkgData);
                                     setProductPackageData(pkgData);
                                     setActiveDocData({
                                       id: 'product-package-report',
@@ -4543,14 +4339,14 @@ const AIAssistant = () => {
                               <div className="mt-3">
                                 <RoleMismatchSelector
                                   options={[
-                                    { label: t('ui.primaryMember'), value: 'primary', desc: t('ui.primaryMemberDesc') },
-                                    { label: t('ui.secondaryMember'), value: 'secondary', desc: t('ui.secondaryMemberDesc') },
-                                    { label: t('ui.generalEmployee'), value: 'employee', desc: t('ui.generalEmployeeDesc') }
+                                    { label: 'Primary Member', value: 'primary', desc: 'Main partner or business lead' },
+                                    { label: 'Secondary Member', value: 'secondary', desc: 'Additional partner or stake holder' },
+                                    { label: 'General Employee', value: 'employee', desc: 'Non-owner staff member' }
                                   ]}
                                   onSelect={(role) => {
                                     setMessages(prev => [...prev, {
                                       role: 'assistant',
-                                      content: t('chat.roleUpdated', { role }),
+                                      content: `Role updated to ${role}. Proceeding with KI matching...`,
                                       kiLoopPrompt: true,
                                     }]);
                                   }}
@@ -4578,10 +4374,10 @@ const AIAssistant = () => {
                                   documentId={msg.aiKiDocumentId}
                                   onSaved={(savedKi) => {
                                     handleKISaved({ ki: savedKi });
-                                    const _savedName = savedKi?.display_name || t('report.roles.individual');
+                                    const _savedName = savedKi?.display_name || 'Individual';
                                     const _savedRole = savedKi?.ki?.is_authorised_signatory
-                                      ? t('report.roles.as')
-                                      : t('report.roles.member');
+                                      ? 'Authorised Signatory'
+                                      : 'Member';
                                     setMessages(prev => {
                                       const newMsgs = [...prev];
                                       // Mark the capture message as handled so card doesn't re-render
@@ -4597,7 +4393,7 @@ const AIAssistant = () => {
                                       return [...newMsgs, {
                                         id: 'ki-details-trigger-' + Date.now(),
                                         role: 'assistant',
-                                        content: t('chat.kiAddedComplete', { name: _savedName, role: _savedRole }),
+                                        content: `**${_savedName}** has been added as ${_savedRole}. Please complete the contact details below.`,
                                         timestamp: new Date().toISOString(),
                                         kiDetailsTrigger: true,
                                         kiDetailsName: _savedName,
@@ -4637,7 +4433,7 @@ const AIAssistant = () => {
                                       return [...newMsgs, {
                                         id: 'ki-loop-prompt-' + Date.now(),
                                         role: 'assistant',
-                                        content: details.message || t('ui.addAnotherAsKi'),
+                                        content: details.message || `Would you like to add another Authorised Signatory or Key Individual to this account?`,
                                         timestamp: new Date().toISOString(),
                                         kiLoopPrompt: true,
                                         ownershipMap: details.ownershipMap || {},
@@ -4683,8 +4479,8 @@ const AIAssistant = () => {
                             >
                               <ShieldCheck className="h-3 w-3" />
                               {msg.documentType
-                                ? t('ui.verificationInsights', { doc: translateDocName(t, msg.documentType) })
-                                : t('ui.securityReportAttached')}
+                                ? `${msg.documentType.replace(/_/g, ' ')}: Verification Insights`
+                                : 'Security Report Attached'}
                             </button>
                           )}
                         </div>
@@ -4696,17 +4492,17 @@ const AIAssistant = () => {
                 {/* ✅ Task 10: Fallback for empty Additional tab after completion */}
                 {isOnboardingComplete && isAdditionalTab && (
                   <div className="space-y-6 mt-4">
-                    {!sortedFilteredMessages.some(m => m.fatcaTrigger || m.isFatcaConfirmed || logicText(m).includes('fatca')) && fatcaData && (
+                    {!sortedFilteredMessages.some(m => m.fatcaTrigger || m.isFatcaConfirmed || (m.content && m.content.toLowerCase().includes('fatca'))) && fatcaData && (
                       <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
                         <FATCAReportBlock data={fatcaData} isCompleted={true} onEdit={() => setShowFatcaModal(true)} />
                       </div>
                     )}
-                    {!sortedFilteredMessages.some(m => m.pepTrigger || m.isPepConfirmed || logicText(m).includes('pep')) && pepData && (
+                    {!sortedFilteredMessages.some(m => m.pepTrigger || m.isPepConfirmed || (m.content && m.content.toLowerCase().includes('pep'))) && pepData && (
                       <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 delay-150">
                         <PEPReportBlock data={pepData} />
                       </div>
                     )}
-                    {!sortedFilteredMessages.some(m => m.productPackageTrigger || m.isProductPackageConfirmed || logicText(m).includes('package')) && productPackageData && (
+                    {!sortedFilteredMessages.some(m => m.productPackageTrigger || m.isProductPackageConfirmed || (m.content && m.content.toLowerCase().includes('package'))) && productPackageData && (
                       <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 delay-300">
                         <ProductPackageReportBlock data={productPackageData} />
                       </div>
@@ -4768,7 +4564,7 @@ const AIAssistant = () => {
                       value={input}
                       onChange={(e) => setInput(e.target.value)}
                       onKeyPress={handleKeyPress}
-                      placeholder={uploadedFiles.length > 0 ? t('ui.addMessage') : t('ui.typeResponse')}
+                      placeholder={uploadedFiles.length > 0 ? "Add a message..." : "Type your response here..."}
                       className="flex-1 bg-transparent border-none focus:ring-0 py-6 text-[15px] font-medium text-gray-800 placeholder:text-gray-300"
                     />
 
@@ -4776,7 +4572,7 @@ const AIAssistant = () => {
                       <button
                         onClick={() => fileInputRef.current?.click()}
                         className="flex items-center justify-center h-10 w-10 text-gray-400 hover:text-brand-primary hover:bg-blue-50 rounded-xl transition-all group"
-                        title={t('ui.uploadFileTitle')}
+                        title="Upload file — select more than one for bulk upload"
                       >
                         <Paperclip className="h-5 w-5 group-hover:scale-110 transition-transform" />
                       </button>
@@ -4814,14 +4610,14 @@ const AIAssistant = () => {
                     className={`px-3 py-1.5 text-[10px] font-black uppercase rounded-lg transition-all ${sidebarMode === 'data' ? 'bg-brand-primary shadow-lg shadow-indigo-900/40' : 'text-gray-400 hover:text-white'
                       }`}
                   >
-                    {t('ui.tabDetails')}
+                    Details
                   </button>
                   <button
                     onClick={() => setSidebarMode('vault')}
                     className={`px-3 py-1.5 text-[10px] font-black uppercase rounded-lg transition-all ${sidebarMode === 'vault' ? 'bg-brand-primary shadow-lg shadow-indigo-900/40' : 'text-gray-400 hover:text-white'
                       }`}
                   >
-                    {t('ui.tabVault')}
+                    Vault
                   </button>
                   <button
                     onClick={() => {
@@ -4833,14 +4629,14 @@ const AIAssistant = () => {
                     className={`px-3 py-1.5 text-[10px] font-black uppercase rounded-lg transition-all ${sidebarMode === 'preview' ? 'bg-brand-primary shadow-lg shadow-indigo-900/40' : 'text-gray-400 hover:text-white'
                       }`}
                   >
-                    {t('ui.tabFileView')}
+                    File View
                   </button>
                   <button
                     onClick={() => setSidebarMode('reupload')}
                     className={`px-3 py-1.5 text-[10px] font-black uppercase rounded-lg transition-all ${sidebarMode === 'reupload' ? 'bg-brand-primary shadow-lg shadow-indigo-900/40' : 'text-gray-400 hover:text-white'
                       }`}
                   >
-                    {t('ui.tabReupload')}
+                    Reupload
                   </button>
                 </div>
                 <button
@@ -4869,7 +4665,7 @@ const AIAssistant = () => {
                         {/* Report Header */}
                         <div className="flex items-center justify-between mb-4 px-1">
                           <div>
-                            <h3 className="text-sm font-black text-slate-800 tracking-tight leading-none mb-1 text-blue-900 uppercase">{t('report.title')}</h3>
+                            <h3 className="text-sm font-black text-slate-800 tracking-tight leading-none mb-1 text-blue-900 uppercase">UNIFIED REPORT</h3>
                             {/* <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest italic">Verification Hub · {categories.length}/4 Categories Verified</p> */}
                           </div>
                         </div>
@@ -4880,7 +4676,7 @@ const AIAssistant = () => {
                               return (
                                 <div className="flex flex-col items-center justify-center p-12 opacity-40 border-2 border-dashed border-slate-100 rounded-[40px]">
                                   <AlertCircle className="h-10 w-10 text-slate-300 mb-4" />
-                                  <p className="text-[11px] font-black text-slate-400 uppercase tracking-widest text-center">{t('report.awaiting')}</p>
+                                  <p className="text-[11px] font-black text-slate-400 uppercase tracking-widest text-center">Awaiting document verification...</p>
                                 </div>
                               );
                             }
@@ -4900,58 +4696,57 @@ const AIAssistant = () => {
                                     <div className={`h-6 w-6 rounded-lg flex items-center justify-center ${dividerColor.replace('bg-', 'bg-')}/10`}>
                                       <cat.icon className={`h-3.5 w-3.5 ${dividerColor.replace('bg-', 'text-')}`} />
                                     </div>
-                                    {/* cat.title stays an English id (it keys categoryColors); only the heading is translated */}
-                                    <h4 className="text-[11px] font-black text-slate-400 uppercase tracking-[0.2em]">{t(`report.sections.${REPORT_SECTION_KEYS[cat.title] || 'business'}`)}</h4>
+                                    <h4 className="text-[11px] font-black text-slate-400 uppercase tracking-[0.2em]">{cat.title}</h4>
                                   </div>
 
                                   <div className="border border-slate-200 rounded-3xl shadow-sm overflow-hidden bg-white mb-2">
                                     <div className="divide-y divide-slate-50">
                                       {cat.items.map((doc, idx) => {
                                         const type = (doc.documentType || '').toLowerCase();
-                                        let label = doc.documentType?.replace(/_/g, ' ') || t('report.document');
+                                        let label = doc.documentType?.replace(/_/g, ' ') || 'Document';
                                         let Icon = FileText;
                                         let isDeclaration = doc.isVirtual && type === 'summary_declaration';
                                         let accentColor = 'bg-slate-800';
-                                        logger.log('[SIDEBAR-ROUTING] Item:', { type, docType: doc.documentType });
+                                        console.log('[SIDEBAR-ROUTING] Item:', { type, docType: doc.documentType });
 
                                         if (type.includes('coi') || type.includes('incorporation')) {
-                                          label = t('report.docs.coi'); // Changed priority to check COI first
+                                          label = 'Certificate of Inc.'; // Changed priority to check COI first
                                           Icon = ShieldCheck;
                                           accentColor = 'bg-brand-secondary-dark';
                                         } else if (type.includes('commercial') || type.includes('license')) {
-                                          label = t('report.docs.commercial');
+                                          label = 'Commercial License';
                                           Icon = Building;
                                           accentColor = 'bg-brand-primary';
                                         } else if (type.includes('eid') || type.includes('passport') || type.includes('id')) {
-                                          label = t('report.docs.emiratesId');
+                                          label = 'Emirates ID';
                                           Icon = User;
                                           accentColor = 'bg-teal-600';
                                         } else if (type.includes('ejari') || type.includes('tenancy')) {
-                                          label = t('report.docs.ejari');
+                                          label = 'Ejari';
                                           Icon = Home;
                                           accentColor = 'bg-brand-primary';
                                         } else if (type.includes('moa')) {
-                                          label = t('report.docs.moa');
+                                          label = 'MOA';
                                           Icon = FileText;
                                           accentColor = 'bg-indigo-600';
                                         } else if (type === 'fatca_declaration') {
-                                          label = t('report.docs.fatca');
+                                          label = 'FATCA Declaration';
                                           Icon = ShieldCheck;
                                           accentColor = 'bg-blue-900';
                                         } else if (type === 'pep_declaration') {
-                                          label = t('report.docs.pep');
+                                          label = 'PEP Declaration';
                                           Icon = ShieldCheck;
                                           accentColor = 'bg-blue-900';
                                         } else if (type === 'product_package') {
-                                          label = t('report.docs.productPackage');
+                                          label = 'Product Package';
                                           Icon = Package;
                                           accentColor = 'bg-blue-900';
                                         } else if (type === 'registered_individuals') {
-                                          label = t('report.docs.registeredIndividuals');
+                                          label = 'Registered Individuals';
                                           Icon = Users;
                                           accentColor = 'bg-brand-primary';
                                         } else if (type === 'summary_declaration') {
-                                          label = t('report.docs.summaryDeclaration');
+                                          label = 'Summary Declaration';
                                           Icon = CheckCircle;
                                           accentColor = 'bg-emerald-600';
                                         }
@@ -4965,7 +4760,7 @@ const AIAssistant = () => {
                                               <div className="flex-1 min-w-0">
                                                 <h4 className="text-[12px] font-black text-slate-800 tracking-tight uppercase leading-none mb-0.5">{label}</h4>
                                                 <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest truncate">
-                                                  {isDeclaration ? t('report.selfCertified') : t('report.verifiedFile', { name: doc.name || t('report.document') })}
+                                                  {isDeclaration ? 'Self-Certified' : `Verified \u00b7 ${doc.name || 'Document'}`}
                                                 </p>
                                               </div>
                                               <div className={`flex items-center gap-1 px-2 py-1 rounded-lg border flex-shrink-0 transition-colors ${(isDeclaration ? isOnboardingComplete : true)
@@ -4979,7 +4774,7 @@ const AIAssistant = () => {
                                                 )}
                                                 <span className={`text-[8px] font-black uppercase tracking-widest ${(isDeclaration ? isOnboardingComplete : true) ? 'text-emerald-600' : 'text-white'
                                                   }`}>
-                                                  {isDeclaration ? (isOnboardingComplete ? t('report.completed') : t('report.pending')) : t('report.verified')}
+                                                  {isDeclaration ? (isOnboardingComplete ? 'Completed' : 'Pending') : 'Verified'}
                                                 </span>
                                               </div>
                                             </div>
@@ -5040,8 +4835,8 @@ const AIAssistant = () => {
                     <div className="space-y-6">
                       <div className="flex items-center justify-between px-1">
                         <div>
-                          <h3 className="text-sm font-black text-slate-800 tracking-tight leading-none mb-1 text-blue-900 uppercase">{t('report.documentManager')}</h3>
-                          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest italic">{t('report.documentManagerSub')}</p>
+                          <h3 className="text-sm font-black text-slate-800 tracking-tight leading-none mb-1 text-blue-900 uppercase">DOCUMENT MANAGER</h3>
+                          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest italic">Select a verified document to replace it</p>
                         </div>
                         <div className="w-10 h-10 rounded-2xl bg-indigo-50 flex items-center justify-center shadow-sm">
                           <RefreshCw className="h-5 w-5 text-indigo-500" />
@@ -5051,14 +4846,14 @@ const AIAssistant = () => {
                       <div className="grid grid-cols-1 gap-4">
                         {allReportItems.filter(i => !i.isVirtual).map((doc, idx) => {
                           const type = (doc.documentType || '').toLowerCase();
-                          let label = doc.documentType?.replace(/_/g, ' ') || t('report.document');
+                          let label = doc.documentType?.replace(/_/g, ' ') || 'Document';
                           let Icon = FileText;
 
-                          if (type.includes('commercial')) { label = t('report.docs.commercial'); Icon = Building; }
-                          else if (type.includes('eid') || type.includes('id')) { label = t('report.docs.emiratesId'); Icon = User; }
-                          else if (type.includes('ejari')) { label = t('report.docs.ejari'); Icon = Home; }
-                          else if (type.includes('moa')) { label = t('report.docs.moa'); Icon = FileText; }
-                          else if (type.includes('coi')) { label = t('report.docs.coi'); Icon = ShieldCheck; }
+                          if (type.includes('commercial')) { label = 'Commercial License'; Icon = Building; }
+                          else if (type.includes('eid') || type.includes('id')) { label = 'Emirates ID'; Icon = User; }
+                          else if (type.includes('ejari')) { label = 'Ejari'; Icon = Home; }
+                          else if (type.includes('moa')) { label = 'MOA'; Icon = FileText; }
+                          else if (type.includes('coi')) { label = 'Certificate of Inc.'; Icon = ShieldCheck; }
 
                           return (
                             <div
@@ -5072,7 +4867,7 @@ const AIAssistant = () => {
                                   </div>
                                   <div>
                                     <h4 className="text-[13px] font-black text-slate-800 uppercase tracking-tight mb-0.5">{label}</h4>
-                                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{t('ui.currentlyVerified')}</p>
+                                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Currently Verified</p>
                                   </div>
                                 </div>
                                 <button
@@ -5082,7 +4877,7 @@ const AIAssistant = () => {
                                   }}
                                   className="px-5 py-2.5 bg-indigo-600 text-white text-[10px] font-black uppercase tracking-widest rounded-xl shadow-lg shadow-indigo-200 hover:bg-indigo-700 transition-all hover:-translate-y-0.5 active:translate-y-0"
                                 >
-                                  {t('ui.replace')}
+                                  REPLACE
                                 </button>
                               </div>
                               {/* Background Pattern */}
@@ -5099,14 +4894,14 @@ const AIAssistant = () => {
                   <div className="flex-1 overflow-y-auto custom-scrollbar p-8 bg-slate-50/50">
                     <div className="space-y-6">
                       <div className="flex items-center justify-between px-1">
-                        <h3 className="text-[11px] font-black text-slate-400 uppercase tracking-[0.2em]">{t('ui.verifiedVault')}</h3>
-                        <span className="text-[10px] font-black text-slate-400">{t('ui.artifactsCount', { count: successDocs.length })}</span>
+                        <h3 className="text-[11px] font-black text-slate-400 uppercase tracking-[0.2em]">Verified Vault</h3>
+                        <span className="text-[10px] font-black text-slate-400">{successDocs.length} ARTIFACTS</span>
                       </div>
 
                       {successDocs.length === 0 ? (
                         <div className="p-12 text-center border-2 border-dashed border-slate-100 rounded-[40px] opacity-40">
                           <Building className="h-10 w-10 text-slate-300 mx-auto mb-4" />
-                          <p className="text-[11px] font-black text-slate-400 uppercase tracking-widest">{t('ui.noDocsVerifiedYet')}</p>
+                          <p className="text-[11px] font-black text-slate-400 uppercase tracking-widest">No documents verified yet</p>
                         </div>
                       ) : (
                         <div className="grid grid-cols-1 gap-3">
@@ -5124,9 +4919,9 @@ const AIAssistant = () => {
                               </div>
                               <div className="flex-1 min-w-0">
                                 <p className="text-[11px] font-black text-slate-700 uppercase tracking-wider truncate">
-                                  {doc.documentType ? translateDocName(t, doc.documentType) : t('report.document')}
+                                  {doc.documentType?.replace(/_/g, ' ') || 'Document'}
                                 </p>
-                                <p className="text-[10px] text-slate-400 font-medium mt-0.5">{t('ui.verifiedCheck')}</p>
+                                <p className="text-[10px] text-slate-400 font-medium mt-0.5">Verified \u2713</p>
                               </div>
                               <ChevronRight className="h-4 w-4 text-slate-300 group-hover:text-indigo-400 transition-colors flex-shrink-0" />
                             </div>
@@ -5192,7 +4987,7 @@ const AIAssistant = () => {
                             <div className="flex-1 flex items-center justify-center text-center p-12">
                               <div className="opacity-40">
                                 <FileText className="h-10 w-10 text-slate-300 mx-auto mb-3" />
-                                <p className="text-[11px] font-black text-slate-400 uppercase tracking-widest">{t('ui.noPreviewAvailable')}</p>
+                                <p className="text-[11px] font-black text-slate-400 uppercase tracking-widest">No preview available</p>
                               </div>
                             </div>
                           );
@@ -5203,7 +4998,7 @@ const AIAssistant = () => {
                             <iframe
                               src={previewUrl}
                               className="flex-1 w-full border-0"
-                              title={t('ui.documentPreview')}
+                              title="Document Preview"
                             />
                           );
                         }
@@ -5212,7 +5007,7 @@ const AIAssistant = () => {
                           <div className="flex-1 overflow-hidden flex items-center justify-center p-4 lg:p-10 bg-slate-900/5 min-h-0">
                             <img
                               src={previewUrl}
-                              alt={t('ui.documentPreview')}
+                              alt="Document Preview"
                               className="w-full h-full object-contain rounded-xl shadow-2xl ring-1 ring-brand-primary/10 transition-transform duration-500 hover:scale-[1.01] animate-in fade-in zoom-in-95 duration-500"
                             />
                           </div>

@@ -6,8 +6,7 @@
     "module": "auth",
     "params": [
       "request",
-      "body",
-      "response"
+      "body"
     ],
     "path": "/onboarding/ai/api/auth/login"
   },
@@ -17,33 +16,9 @@
     "method": "POST",
     "module": "auth",
     "params": [
-      "body",
-      "response",
-      "session_id_cookie"
+      "request"
     ],
     "path": "/onboarding/ai/api/auth/logout"
-  },
-  {
-    "handler": "request_password_reset",
-    "is_async": true,
-    "method": "POST",
-    "module": "auth",
-    "params": [
-      "request",
-      "body"
-    ],
-    "path": "/onboarding/ai/api/auth/request-password-reset"
-  },
-  {
-    "handler": "reset_password",
-    "is_async": true,
-    "method": "POST",
-    "module": "auth",
-    "params": [
-      "request",
-      "body"
-    ],
-    "path": "/onboarding/ai/api/auth/reset-password"
   },
   {
     "handler": "signup",
@@ -62,7 +37,6 @@
     "method": "GET",
     "module": "auth",
     "params": [
-      "session_id_cookie",
       "x_session_id"
     ],
     "path": "/onboarding/ai/api/auth/verify-session"
@@ -165,7 +139,7 @@
     "handler": "chat_conversational",
     "is_async": true,
     "method": "POST",
-    "module": "onboarding/conversation",
+    "module": "chatupload",
     "params": [
       "request"
     ],
@@ -175,7 +149,7 @@
     "handler": "clear_welcome_message",
     "is_async": true,
     "method": "DELETE",
-    "module": "onboarding/conversation",
+    "module": "chatupload",
     "params": [
       "user_email"
     ],
@@ -185,7 +159,7 @@
     "handler": "get_conversation_logs",
     "is_async": true,
     "method": "GET",
-    "module": "onboarding/conversation",
+    "module": "chatupload",
     "params": [
       "email",
       "limit",
@@ -198,7 +172,7 @@
     "handler": "run_cross_validation",
     "is_async": true,
     "method": "POST",
-    "module": "onboarding/upload",
+    "module": "chatupload",
     "params": [
       "req"
     ],
@@ -208,7 +182,7 @@
     "handler": "fatca_not_applicable",
     "is_async": true,
     "method": "POST",
-    "module": "onboarding/compliance",
+    "module": "chatupload",
     "params": [
       "req"
     ],
@@ -218,7 +192,7 @@
     "handler": "fatca_status",
     "is_async": true,
     "method": "GET",
-    "module": "onboarding/compliance",
+    "module": "chatupload",
     "params": [
       "user_email"
     ],
@@ -228,7 +202,7 @@
     "handler": "fatca_submit",
     "is_async": true,
     "method": "POST",
-    "module": "onboarding/compliance",
+    "module": "chatupload",
     "params": [
       "req"
     ],
@@ -238,7 +212,7 @@
     "handler": "get_document_for_preview",
     "is_async": true,
     "method": "GET",
-    "module": "onboarding/upload",
+    "module": "chatupload",
     "params": [
       "email",
       "doc_type",
@@ -251,7 +225,7 @@
     "handler": "get_onboarding_status_endpoint",
     "is_async": true,
     "method": "GET",
-    "module": "onboarding/conversation",
+    "module": "chatupload",
     "params": [
       "email"
     ],
@@ -261,7 +235,7 @@
     "handler": "health_check",
     "is_async": true,
     "method": "GET",
-    "module": "onboarding/conversation",
+    "module": "chatupload",
     "params": [],
     "path": "/onboarding/ai/api/chatupload/health"
   },
@@ -269,7 +243,7 @@
     "handler": "ki_add",
     "is_async": true,
     "method": "POST",
-    "module": "onboarding/key_individuals",
+    "module": "chatupload",
     "params": [
       "req"
     ],
@@ -279,7 +253,7 @@
     "handler": "ki_add_ai",
     "is_async": true,
     "method": "POST",
-    "module": "onboarding/key_individuals",
+    "module": "chatupload",
     "params": [
       "req"
     ],
@@ -289,7 +263,7 @@
     "handler": "ki_contact_info",
     "is_async": true,
     "method": "POST",
-    "module": "onboarding/key_individuals",
+    "module": "chatupload",
     "params": [
       "req"
     ],
@@ -299,7 +273,7 @@
     "handler": "ki_list",
     "is_async": true,
     "method": "GET",
-    "module": "onboarding/key_individuals",
+    "module": "chatupload",
     "params": [
       "user_email"
     ],
@@ -309,7 +283,7 @@
     "handler": "ki_loop_finalize",
     "is_async": true,
     "method": "POST",
-    "module": "onboarding/key_individuals",
+    "module": "chatupload",
     "params": [
       "req"
     ],
@@ -319,7 +293,7 @@
     "handler": "ki_moa_as_selection",
     "is_async": true,
     "method": "POST",
-    "module": "onboarding/key_individuals",
+    "module": "chatupload",
     "params": [
       "req"
     ],
@@ -329,7 +303,7 @@
     "handler": "ki_so_as_selection",
     "is_async": true,
     "method": "POST",
-    "module": "onboarding/key_individuals",
+    "module": "chatupload",
     "params": [
       "req"
     ],
@@ -339,7 +313,7 @@
     "handler": "ki_verify",
     "is_async": true,
     "method": "POST",
-    "module": "onboarding/key_individuals",
+    "module": "chatupload",
     "params": [
       "req"
     ],
@@ -349,7 +323,7 @@
     "handler": "get_member_progress",
     "is_async": true,
     "method": "GET",
-    "module": "onboarding/upload",
+    "module": "chatupload",
     "params": [
       "email"
     ],
@@ -359,7 +333,7 @@
     "handler": "member_ubo_confirm",
     "is_async": true,
     "method": "POST",
-    "module": "onboarding/ownership",
+    "module": "chatupload",
     "params": [
       "req"
     ],
@@ -369,7 +343,7 @@
     "handler": "member_ubo_status",
     "is_async": true,
     "method": "GET",
-    "module": "onboarding/ownership",
+    "module": "chatupload",
     "params": [
       "user_email"
     ],
@@ -379,7 +353,7 @@
     "handler": "mismatch_assign_role",
     "is_async": true,
     "method": "POST",
-    "module": "onboarding/ownership",
+    "module": "chatupload",
     "params": [
       "req"
     ],
@@ -389,7 +363,7 @@
     "handler": "save_ownership_type",
     "is_async": true,
     "method": "POST",
-    "module": "onboarding/ownership",
+    "module": "chatupload",
     "params": [
       "req"
     ],
@@ -399,7 +373,7 @@
     "handler": "pep_not_applicable",
     "is_async": true,
     "method": "POST",
-    "module": "onboarding/compliance",
+    "module": "chatupload",
     "params": [
       "req"
     ],
@@ -409,7 +383,7 @@
     "handler": "pep_status",
     "is_async": true,
     "method": "GET",
-    "module": "onboarding/compliance",
+    "module": "chatupload",
     "params": [
       "user_email"
     ],
@@ -419,7 +393,7 @@
     "handler": "pep_submit",
     "is_async": true,
     "method": "POST",
-    "module": "onboarding/compliance",
+    "module": "chatupload",
     "params": [
       "req"
     ],
@@ -429,7 +403,7 @@
     "handler": "preview_document",
     "is_async": true,
     "method": "GET",
-    "module": "onboarding/upload",
+    "module": "chatupload",
     "params": [
       "email",
       "filename"
@@ -440,7 +414,7 @@
     "handler": "get_product_package_recommendation",
     "is_async": true,
     "method": "GET",
-    "module": "onboarding/products",
+    "module": "chatupload",
     "params": [
       "email"
     ],
@@ -450,7 +424,7 @@
     "handler": "save_product_package",
     "is_async": true,
     "method": "POST",
-    "module": "onboarding/products",
+    "module": "chatupload",
     "params": [
       "req"
     ],
@@ -460,7 +434,7 @@
     "handler": "get_product_package_status",
     "is_async": true,
     "method": "GET",
-    "module": "onboarding/products",
+    "module": "chatupload",
     "params": [
       "user_email"
     ],
@@ -470,7 +444,7 @@
     "handler": "resume_conversation",
     "is_async": true,
     "method": "GET",
-    "module": "onboarding/conversation",
+    "module": "chatupload",
     "params": [
       "user_email"
     ],
@@ -480,7 +454,7 @@
     "handler": "self_declaration_confirm",
     "is_async": true,
     "method": "POST",
-    "module": "onboarding/compliance",
+    "module": "chatupload",
     "params": [
       "req"
     ],
@@ -490,7 +464,7 @@
     "handler": "self_declaration_status",
     "is_async": true,
     "method": "GET",
-    "module": "onboarding/compliance",
+    "module": "chatupload",
     "params": [
       "user_email"
     ],
@@ -500,7 +474,7 @@
     "handler": "self_declaration_summary",
     "is_async": true,
     "method": "GET",
-    "module": "onboarding/compliance",
+    "module": "chatupload",
     "params": [
       "user_email"
     ],
@@ -510,7 +484,7 @@
     "handler": "start_conversation",
     "is_async": true,
     "method": "POST",
-    "module": "onboarding/conversation",
+    "module": "chatupload",
     "params": [
       "request"
     ],
@@ -520,7 +494,7 @@
     "handler": "download_summary_pdf",
     "is_async": true,
     "method": "GET",
-    "module": "onboarding/upload",
+    "module": "chatupload",
     "params": [
       "user_email"
     ],
@@ -530,7 +504,7 @@
     "handler": "upload_conversational",
     "is_async": true,
     "method": "POST",
-    "module": "onboarding/upload",
+    "module": "chatupload",
     "params": [
       "email",
       "language",
@@ -541,22 +515,10 @@
     "path": "/onboarding/ai/api/chatupload/upload-conversational"
   },
   {
-    "handler": "upload_conversational_bulk",
-    "is_async": true,
-    "method": "POST",
-    "module": "onboarding/upload",
-    "params": [
-      "email",
-      "language",
-      "files"
-    ],
-    "path": "/onboarding/ai/api/chatupload/upload-conversational-bulk"
-  },
-  {
     "handler": "validate_ref",
     "is_async": true,
     "method": "POST",
-    "module": "onboarding/conversation",
+    "module": "chatupload",
     "params": [
       "req"
     ],
@@ -566,7 +528,7 @@
     "handler": "check_confirmation_status",
     "is_async": true,
     "method": "GET",
-    "module": "documents/status",
+    "module": "documentpage",
     "params": [
       "email"
     ],
@@ -576,7 +538,7 @@
     "handler": "debug_document_data",
     "is_async": true,
     "method": "GET",
-    "module": "documents/core",
+    "module": "documentpage",
     "params": [
       "email",
       "doc_type"
@@ -587,7 +549,7 @@
     "handler": "get_document_history_endpoint",
     "is_async": true,
     "method": "GET",
-    "module": "documents/preview",
+    "module": "documentpage",
     "params": [
       "email",
       "document_type",
@@ -599,7 +561,7 @@
     "handler": "get_document_status",
     "is_async": true,
     "method": "GET",
-    "module": "documents/status",
+    "module": "documentpage",
     "params": [
       "email"
     ],
@@ -609,7 +571,7 @@
     "handler": "download_document",
     "is_async": true,
     "method": "GET",
-    "module": "documents/preview",
+    "module": "documentpage",
     "params": [
       "email",
       "doc_type",
@@ -621,7 +583,7 @@
     "handler": "get_document_preview",
     "is_async": true,
     "method": "GET",
-    "module": "documents/preview",
+    "module": "documentpage",
     "params": [
       "email",
       "doc_type",
@@ -633,7 +595,7 @@
     "handler": "get_document_requirements",
     "is_async": true,
     "method": "POST",
-    "module": "documents/core",
+    "module": "documentpage",
     "params": [
       "request"
     ],
@@ -643,7 +605,7 @@
     "handler": "get_document_file",
     "is_async": true,
     "method": "GET",
-    "module": "documents/preview",
+    "module": "documentpage",
     "params": [
       "email",
       "doc_type",
@@ -656,7 +618,7 @@
     "handler": "get_extracted_data",
     "is_async": false,
     "method": "GET",
-    "module": "documents/preview",
+    "module": "documentpage",
     "params": [
       "user_email",
       "doc_type"
@@ -667,7 +629,7 @@
     "handler": "health_check",
     "is_async": true,
     "method": "GET",
-    "module": "documents/core",
+    "module": "documentpage",
     "params": [],
     "path": "/onboarding/ai/api/documentupload/health"
   },
@@ -675,7 +637,7 @@
     "handler": "get_member_list",
     "is_async": true,
     "method": "GET",
-    "module": "documents/status",
+    "module": "documentpage",
     "params": [
       "email"
     ],
@@ -685,7 +647,7 @@
     "handler": "send_completion_email_endpoint",
     "is_async": true,
     "method": "POST",
-    "module": "documents/status",
+    "module": "documentpage",
     "params": [
       "request"
     ],
@@ -695,7 +657,7 @@
     "handler": "upload_document",
     "is_async": true,
     "method": "POST",
-    "module": "documents/core",
+    "module": "documentpage",
     "params": [
       "email",
       "member_name",
@@ -707,7 +669,7 @@
     "handler": "validate_before_confirmation",
     "is_async": true,
     "method": "POST",
-    "module": "documents/status",
+    "module": "documentpage",
     "params": [
       "request"
     ],
@@ -717,11 +679,99 @@
     "handler": "get_validation_status",
     "is_async": true,
     "method": "GET",
-    "module": "documents/status",
+    "module": "documentpage",
     "params": [
       "email"
     ],
     "path": "/onboarding/ai/api/documentupload/validation-status/{email}"
+  },
+  {
+    "handler": "ping_growx_apis",
+    "is_async": true,
+    "method": "GET",
+    "module": "growx_integration",
+    "params": [],
+    "path": "/onboarding/ai/api/growx/ping"
+  },
+  {
+    "handler": "preview_api1_user_create",
+    "is_async": true,
+    "method": "GET",
+    "module": "growx_integration",
+    "params": [
+      "email"
+    ],
+    "path": "/onboarding/ai/api/growx/preview/api1_user_create/{email}"
+  },
+  {
+    "handler": "preview_api2_set_password",
+    "is_async": true,
+    "method": "GET",
+    "module": "growx_integration",
+    "params": [
+      "email"
+    ],
+    "path": "/onboarding/ai/api/growx/preview/api2_set_password/{email}"
+  },
+  {
+    "handler": "preview_api3_sme_create",
+    "is_async": true,
+    "method": "GET",
+    "module": "growx_integration",
+    "params": [
+      "email"
+    ],
+    "path": "/onboarding/ai/api/growx/preview/api3_sme_create/{email}"
+  },
+  {
+    "handler": "preview_growx_payloads",
+    "is_async": true,
+    "method": "GET",
+    "module": "growx_integration",
+    "params": [
+      "email"
+    ],
+    "path": "/onboarding/ai/api/growx/preview/{email}"
+  },
+  {
+    "handler": "growx_set_password",
+    "is_async": true,
+    "method": "POST",
+    "module": "growx_integration",
+    "params": [
+      "req"
+    ],
+    "path": "/onboarding/ai/api/growx/set-password"
+  },
+  {
+    "handler": "growx_sme_create",
+    "is_async": true,
+    "method": "POST",
+    "module": "growx_integration",
+    "params": [
+      "req"
+    ],
+    "path": "/onboarding/ai/api/growx/sme-create"
+  },
+  {
+    "handler": "submit_to_growx",
+    "is_async": true,
+    "method": "POST",
+    "module": "growx_integration",
+    "params": [
+      "req"
+    ],
+    "path": "/onboarding/ai/api/growx/submit"
+  },
+  {
+    "handler": "growx_user_create",
+    "is_async": true,
+    "method": "POST",
+    "module": "growx_integration",
+    "params": [
+      "req"
+    ],
+    "path": "/onboarding/ai/api/growx/user-create"
   },
   {
     "handler": "log_frontend_error",

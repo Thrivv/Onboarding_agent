@@ -14,41 +14,28 @@ from xml.etree import ElementTree as ET
 from app import config
 
 # API Configuration
-API_KEY = config.AWS_BEARER_TOKEN_BEDROCK or ""
+# NOTE: "sk-or-v1-..." is a 12-char REDACTION placeholder, not a credential.
+# See the matching note in ejari_extractor.py.
+API_KEY = config.OPENROUTER_API_KEY or "sk-or-v1-..."
 # Model names + endpoint come from llm_client (env-driven via .env.docker).
 # Do not redeclare them here — see the LLM MODEL ROUTING block in .env.docker.
 from app.services.llm_client import (
-    LLM_API_URL,
+    OPENROUTER_API_URL,
     TEXT_PRIMARY,
     TEXT_FALLBACK,
     VISION_PRIMARY,
 )
-from app.services import bedrock_client
-from app.services.specialized_ocr.extraction_schema import validate_and_coerce
 import logging
 from app.utils.retry import retry_with_backoff
 
 logger = logging.getLogger(__name__)
 
-API_URL = LLM_API_URL
+API_URL = OPENROUTER_API_URL
 # Configurable via MOA_API_TIMEOUT_SECONDS in .env.docker — change + restart
 # the container to raise/lower this without editing code.
 API_TIMEOUT_SECONDS = config.MOA_API_TIMEOUT_SECONDS
-# Model tiering (prompt-remediation Phase 2, opt-in via
-# config.MODEL_TIERING_ENABLED): MOA extraction is the other task
-# dumps/docs/bedrock-final-recommendation.md singles out for a stronger
-# model -- bilingual EN/AR structured extraction with an explicit
-# validation pass, same reasoning-load tier as trade license. Both
-# LLAMA_MODEL_NAME and QWEN_MODEL_NAME below move to the reasoning tier
-# together so the double-pass extraction (see extract_with_ai) doesn't
-# end up comparing a stronger-model pass against a weaker-model pass --
-# both names already resolve to the same single Bedrock model today
-# regardless (see llm_client.py's module docstring), a leftover from the
-# pre-Bedrock multi-provider era. Falls back to the default model
-# automatically at the bedrock_client.post() level if the reasoning-tier
-# call itself fails -- see that module's _resolve_invoke_url().
-LLAMA_MODEL_NAME = config.BEDROCK_REASONING_MODEL_ID if config.MODEL_TIERING_ENABLED else TEXT_PRIMARY
-QWEN_MODEL_NAME = config.BEDROCK_REASONING_MODEL_ID if config.MODEL_TIERING_ENABLED else TEXT_FALLBACK
+LLAMA_MODEL_NAME = TEXT_PRIMARY
+QWEN_MODEL_NAME = TEXT_FALLBACK
 # Fields expected for MOA extraction (34 fields)
 ENGLISH_FIELDS = [
     "document_type",
@@ -127,6 +114,8 @@ ARABIC_FIELDS = [
 EXPECTED_FIELD_COUNT = 34
 
 
+
+
 class MOAExtractor:
     """MOA extractor with bilingual support and enhanced regex"""
 
@@ -203,19 +192,54 @@ class MOAExtractor:
                 except Exception:
                     pass
 
-    # PROMPT CACHING (prompt-remediation Phase 3): static instructions/schema/
-    # field-reference/validation-rules moved here as a system prompt so
-    # bedrock_client.py's existing ephemeral prompt caching (see
-    # _to_bedrock_payload) applies to them instead of being re-sent and
-    # re-processed as fresh input tokens on every single MOA extraction call.
-    # Content is UNCHANGED, character-for-character, from the previous
-    # extract_with_ai() prompt -- only its position moved (still an f-string,
-    # so the ENGLISH_FIELDS/ARABIC_FIELDS json.dumps() calls still interpolate
-    # correctly since those are module-level constants), so extraction
-    # behaviour is not expected to change.
-    _SYSTEM_PROMPT = f"""You are an expert AI specialized in extracting information from UAE Memorandum of Association (MOA) documents.
+    @retry_with_backoff(max_retries=3, base_delay=5, label="MOA API")
+    def call_ai_api(self, prompt: str, model_name: str = None) -> str:
+        """Call OpenRouter API with retry logic"""
+        if not self.api_key:
+            return "API key not configured"
 
+        model = model_name or LLAMA_MODEL_NAME
+
+        headers = {
+            "Authorization": f"Bearer {self.api_key}",
+            "Content-Type": "application/json",
+        }
+
+        data = {
+            "model": model,
+            "messages": [{"role": "user", "content": prompt}],
+            "temperature": 0.0,  # Changed to 0.0 for maximum consistency
+            "max_tokens": 4500,
+        }
+
+        try:
+            response = requests.post(self.api_url, headers=headers, json=data, timeout=API_TIMEOUT_SECONDS)
+
+            if response.status_code in [502, 503, 504]:
+                raise RuntimeError(f"MOA API failed: {response.status_code} Server temporarily unavailable")
+
+            if response.status_code == 429:
+                raise RuntimeError(f"MOA API failed: {response.status_code} Rate limit exceeded")
+
+            response.raise_for_status()
+            result = response.json()
+            return result["choices"][0]["message"]["content"]
+
+        except requests.exceptions.Timeout:
+            raise RuntimeError(f"MOA API failed: Request timeout after {API_TIMEOUT_SECONDS} seconds")
+        except requests.exceptions.RequestException as e:
+            raise RuntimeError(f"MOA API failed: {response.status_code if 'response' in locals() else 'Network error'} {str(e)}")
+
+    @retry_with_backoff(max_retries=3, base_delay=5, label="MOA API")
+    def extract_with_ai(self, raw_text: str, model_choice: str = "llama") -> Tuple[Dict, Dict]:
+        """Extract bilingual MOA fields using AI - DOUBLE-PASS EXTRACTION WITH VALIDATION"""
+        model_name = QWEN_MODEL_NAME if model_choice == "qwen" else LLAMA_MODEL_NAME
+
+        prompt = f"""You are an expert AI specialized in extracting information from UAE Memorandum of Association (MOA) documents.
+
+    =============================================================================
     🔴 CRITICAL INSTRUCTION: ARTICLE-BY-ARTICLE + DOCUMENT-WIDE DUAL EXTRACTION
+    =============================================================================
 
     You MUST perform extraction using TWO INDEPENDENT METHODS to ensure 100% accuracy:
 
@@ -254,7 +278,9 @@ class MOAExtractor:
     5. Validate against format requirements
     6. If still uncertain → Return the most complete and format-valid value
 
+    =============================================================================
     📋 MANDATORY FIELD-BY-FIELD FORMAT VALIDATION
+    =============================================================================
 
     Before accepting ANY field value, it MUST pass these validation rules:
 
@@ -279,14 +305,14 @@ class MOAExtractor:
     ▪ MUST be complete legal company name
     ▪ MUST be at least 5 characters
     ▪ MUST appear consistently across articles
-    ▪ Example: "SAMPLE COMPANY NAME L.L.C"
+    ▪ Example: "THRIVV GROWTH TECHNOLOGY SERVICES L.L.C"
     ▪ Location: Article 1 "company name" clause
     ▪ If invalid: Re-extract from Article 1 opening statement
 
     ✅ **owner_name** (اسم_المالك):
     ▪ MUST be complete full name with title
     ▪ MUST be at least 3 characters
-    ▪ Example: "Ms. SAMPLE OWNER NAME"
+    ▪ Example: "Ms. VARSHA BALAJI BALAJI"
     ▪ Location: Article 1, Article 2, or owner section
     ▪ Include title if present: Mr., Ms., Mrs., Dr.
     ▪ If invalid: Re-extract from owner/shareholder clause
@@ -295,7 +321,7 @@ class MOAExtractor:
     ▪ MUST be complete full name with title
     ▪ MUST be at least 3 characters
     ▪ Often same as owner_name in single-owner companies
-    ▪ Example: "Ms. SAMPLE OWNER NAME"
+    ▪ Example: "Ms. VARSHA BALAJI BALAJI"
     ▪ Location: Article 8 manager appointment
     ▪ If invalid: Re-extract from Article 8
 
@@ -485,7 +511,9 @@ class MOAExtractor:
     ▪ Location: Document header
     ▪ If invalid: Use standard value
 
+    =============================================================================
     🎯 ARTICLE-SPECIFIC EXTRACTION GUIDE
+    =============================================================================
 
     **Article 1 - Company Formation:**
     → company_name, company_type, date_of_execution, owner_name
@@ -534,7 +562,15 @@ class MOAExtractor:
     → balance_sheet_submission
     → profit_loss_distribution
 
+    =============================================================================
+    📄 DOCUMENT TEXT TO EXTRACT FROM:
+    =============================================================================
+
+    {raw_text[:20000]}
+
+    =============================================================================
     📚 FIELD REFERENCE (USE EXACT NAMES):
+    =============================================================================
 
     ENGLISH FIELDS (ALL 34 REQUIRED):
     {json.dumps(ENGLISH_FIELDS, indent=2)}
@@ -542,7 +578,9 @@ class MOAExtractor:
     ARABIC FIELDS (ALL 34 REQUIRED):
     {json.dumps(ARABIC_FIELDS, ensure_ascii=False, indent=2)}
 
+    =============================================================================
     ✅ VALIDATION REQUIREMENTS BEFORE OUTPUT
+    =============================================================================
 
     Your extraction is ONLY valid if ALL of these conditions are met:
 
@@ -579,15 +617,17 @@ class MOAExtractor:
     ✗ Wrong formats: "2024-12-30" (for dates), "1 January" (missing ordinal)
     ✗ Partial addresses: "P.O. Box No. , Dubai" (missing number)
 
+    =============================================================================
     📤 OUTPUT FORMAT (STRICT JSON)
+    =============================================================================
 
     {{
     "english": {{
         "document_type": "MEMORANDUM OF ASSOCIATION",
-        "company_name": "SAMPLE COMPANY NAME L.L.C",
+        "company_name": "THRIVV GROWTH TECHNOLOGY SERVICES L.L.C",
         "company_type": "ONE PERSON LIMITED LIABILITY COMPANY",
         "date_of_execution": "30/12/2024",
-        "owner_name": "Ms. SAMPLE OWNER NAME",
+        "owner_name": "Ms. VARSHA BALAJI BALAJI",
         "owner_nationality": "India",
         "passport_number": "Z5434257",
         "date_of_birth": "10/10/1999",
@@ -604,7 +644,7 @@ class MOAExtractor:
         "value_per_share": "1000",
         "share_type": "cash shares",
         "payment_status": "fully paid up in cash",
-        "manager_name": "Ms. SAMPLE OWNER NAME",
+        "manager_name": "Ms. VARSHA BALAJI BALAJI",
         "manager_nationality": "India",
         "manager_residence": "Dubai, United Arab Emirates",
         "manager_address": "P.O. Box No. 3999, Dubai, United Arab Emirates",
@@ -620,10 +660,10 @@ class MOAExtractor:
     }},
     "arabic": {{
         "نوع_الوثيقة": "عقد تأسيس",
-        "اسم_الشركة": "اسم الشركة النموذجية ش.ذ.م.م",
+        "اسم_الشركة": "ثريف جروث لخدمات التقنية ش.ذ.م.م",
         "نوع_الشركة": "شركة الشخص الواحد ذات مسؤولية محدودة",
         "تاريخ_التنفيذ": "30/12/2024",
-        "اسم_المالك": "السيدة. الاسم النموذجي للمالك",
+        "اسم_المالك": "السيدة. فارشا بالجى بالجى",
         "جنسية_المالك": "الهند",
         "رقم_الجواز": "Z5434257",
         "تاريخ_الميلاد": "10/10/1999",
@@ -640,7 +680,7 @@ class MOAExtractor:
         "قيمة_كل_حصة": "1000",
         "نوع_الحصص": "حصة نقدية",
         "حالة_الدفع": "دفعت بالكامل",
-        "اسم_المدير": "السيدة. الاسم النموذجي للمالك",
+        "اسم_المدير": "السيدة. فارشا بالجى بالجى",
         "جنسية_المدير": "الهند",
         "إقامة_المدير": "دبي، الإمارات العربية المتحدة",
         "عنوان_المدير": "ص.ب. 3999، دبي، الإمارات العربية المتحدة",
@@ -667,7 +707,9 @@ class MOAExtractor:
     }}
     }}
 
+    =============================================================================
     ❌ FAILURE RESPONSE (If Extraction Fails After All Attempts)
+    =============================================================================
 
     If you CANNOT extract all 5 CRITICAL fields after re-extraction attempts, return:
 
@@ -680,7 +722,9 @@ class MOAExtractor:
     "recommendation": "Document may require manual review for critical fields"
     }}
 
+    =============================================================================
     🚀 FINAL INSTRUCTIONS
+    =============================================================================
 
     EXTRACTION SEQUENCE:
     1. Perform ARTICLE-BY-ARTICLE extraction → Store all 34 fields
@@ -707,54 +751,6 @@ class MOAExtractor:
     ⚠️ IMPORTANT: Return ONLY the JSON object. NO markdown formatting, NO ```json blocks, NO explanatory text before or after the JSON.
 
     BEGIN DUAL-METHOD EXTRACTION NOW."""
-
-    @retry_with_backoff(max_retries=3, base_delay=5, label="MOA API")
-    def call_ai_api(self, prompt: str, model_name: str = None) -> str:
-        """Call the Bedrock API with retry logic"""
-        if not self.api_key:
-            return "API key not configured"
-
-        model = model_name or LLAMA_MODEL_NAME
-
-        headers = {
-            "Authorization": f"Bearer {self.api_key}",
-            "Content-Type": "application/json",
-        }
-
-        data = {
-            "model": model,
-            "messages": [
-                {"role": "system", "content": self._SYSTEM_PROMPT},
-                {"role": "user", "content": prompt},
-            ],
-            "temperature": 0.0,  # Changed to 0.0 for maximum consistency
-            "max_tokens": 4500,
-        }
-
-        try:
-            response = bedrock_client.post(self.api_url, headers=headers, json=data, timeout=API_TIMEOUT_SECONDS)
-
-            if response.status_code in [502, 503, 504]:
-                raise RuntimeError(f"MOA API failed: {response.status_code} Server temporarily unavailable")
-
-            if response.status_code == 429:
-                raise RuntimeError(f"MOA API failed: {response.status_code} Rate limit exceeded")
-
-            response.raise_for_status()
-            result = response.json()
-            return result["choices"][0]["message"]["content"]
-
-        except requests.exceptions.Timeout:
-            raise RuntimeError(f"MOA API failed: Request timeout after {API_TIMEOUT_SECONDS} seconds")
-        except requests.exceptions.RequestException as e:
-            raise RuntimeError(f"MOA API failed: {response.status_code if 'response' in locals() else 'Network error'} {str(e)}")
-
-    @retry_with_backoff(max_retries=3, base_delay=5, label="MOA API")
-    def extract_with_ai(self, raw_text: str, model_choice: str = "llama") -> Tuple[Dict, Dict]:
-        """Extract bilingual MOA fields using AI - DOUBLE-PASS EXTRACTION WITH VALIDATION"""
-        model_name = QWEN_MODEL_NAME if model_choice == "qwen" else LLAMA_MODEL_NAME
-
-        prompt = f"Document Text:\n{raw_text[:20000]}"
 
         response = self.call_ai_api(prompt, model_name)
 
@@ -816,14 +812,11 @@ class MOAExtractor:
         )
 
     def ensure_all_fields(self, data: Dict, required_fields: list) -> Dict:
-        """Ensure all required fields exist in the dictionary, string-valued.
-
-        prompt-remediation Phase 4: delegates to extraction_schema.validate_and_coerce
-        (pydantic-backed) instead of a bare dict comprehension -- same shape in/out,
-        but a non-string field value now gets coerced and logged instead of
-        silently flowing downstream untyped.
-        """
-        return validate_and_coerce(data, required_fields, "MOAFields")
+        """Ensure all required fields exist in the dictionary"""
+        complete_data = {}
+        for field in required_fields:
+            complete_data[field] = data.get(field, "")
+        return complete_data
 
     def validate_field_formats(self, data: Dict) -> Dict:
         """Validate and warn about field format issues"""

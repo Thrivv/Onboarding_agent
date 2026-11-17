@@ -218,30 +218,6 @@ class ConversationRepository:
         )
 
     # ------------------------------------------------------------------
-    # Updates
-    # ------------------------------------------------------------------
-
-    @staticmethod
-    def update_metadata(message_id: Any, metadata: dict) -> Any:
-        """
-        Replace a row's `metadata` column outright.
-
-        Used by GET /conversation-logs's `?language=` cache-fill (Phase 2,
-        docs/language-mirroring-verdict.html) to persist a newly-computed
-        translation onto `metadata.translations.<language>` so a later
-        request for the same conversation + language is a plain read instead
-        of another LLM call.
-
-        Supabase's `.update()` only touches the columns given here — role,
-        message, timestamp etc. are untouched — but the `metadata` JSONB
-        column itself is replaced wholesale, not deep-merged server-side.
-        Callers must pass the *complete* metadata dict they want stored
-        (read the row, merge in the new key, then call this), not just the
-        new key on its own.
-        """
-        return supabase.table(TABLE).update({"metadata": metadata}).eq("id", message_id).execute()
-
-    # ------------------------------------------------------------------
     # Deletes
     # ------------------------------------------------------------------
 

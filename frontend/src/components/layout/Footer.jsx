@@ -2,10 +2,8 @@
 
 import React from 'react';
 import logo from '../../assets/logo-growx.svg';
-import { useLanguage } from '../../context/LanguageContext';
 
 const Footer = () => {
-  const { t } = useLanguage();
   return (
     <footer className="bg-white border-t border-gray-200 mt-auto">
       <div className="container mx-auto px-4 py-6">
@@ -14,10 +12,10 @@ const Footer = () => {
             <img src={logo} alt="GrowX Logo" className="h-8 w-auto opacity-80 hover:opacity-100 transition-opacity" />
           </div>
           <p className="text-sm text-gray-600 mb-2">
-            {t('footer.rights', { year: new Date().getFullYear() })}
+            © {new Date().getFullYear()} Thrivv.AI All rights reserved.
           </p>
           <p className="text-xs text-gray-500">
-            {t('footer.version')}
+            Version 2.0
           </p>
         </div>
       </div>
